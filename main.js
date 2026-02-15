@@ -6883,14 +6883,21 @@ function resolveTransformersDtypeFromFileName(fileName) {
 function resolveEffectiveTransformersDtype({ sourceFileName = "", modelFileNameHint = "" } = {}) {
     const sourceDtype = resolveTransformersDtypeFromFileName(sourceFileName);
     const hintedDtype = resolveTransformersDtypeFromFileName(modelFileNameHint);
-    // Prefer explicit quantization from the selected ONNX source file so transformers.js
-    // resolves the same variant (e.g. model_q4/model_fp16) as documented via `dtype`.
+
+    // If the selected ONNX filename already pins quantization (e.g. model_q4f16.onnx),
+    // prefer `auto` so transformers.js does not over-constrain dtype/device compatibility.
+    // This avoids load failures when fallback backends do not advertise the explicit dtype token.
+    const normalizedSource = String(sourceFileName || "").trim().toLowerCase();
+    if (/model_(?:fp16|fp32|quantized|q4|q4f16|q8|int4|int8|uint8|bnb4)\.onnx$/i.test(normalizedSource)) {
+        return "auto";
+    }
+
+    // Prefer explicit quantization from the selected ONNX source file when it is not already
+    // encoded in a variant filename.
     if (sourceDtype && sourceDtype !== "auto") {
         return sourceDtype;
     }
 
-    // Safety guard: if hint still contains an explicit quantization suffix, avoid duplicated
-    // filenames such as `*_fp16_fp16` by letting runtime auto-resolve the suffix.
     const normalizedHint = String(modelFileNameHint || "").trim().toLowerCase();
     if (
         hintedDtype !== "auto"
@@ -10497,16 +10504,11 @@ function normalizeTransformersModelFileNameHint(rawHint) {
     last = last.trim();
     if (!last || last.toLowerCase() === "onnx") return "";
 
-    // ONNX community naming often uses "model_<variant>" (e.g. model_fp16, model_quantized).
-    // Keep the stable base "model" so runtime can append only one target suffix.
-    const modelVariantPattern = /^model_(?:fp16|fp32|quantized|q4|q4f16|q8|int4|int8|uint8|bnb4)$/i;
-    if (modelVariantPattern.test(last)) {
-        last = "model";
-    }
+    // Keep explicit variant stems (e.g. model_q4f16) when present so local cache loading
+    // can pin the exact downloaded ONNX file regardless of backend dtype capability.
 
-    // transformers.js `model_file_name` should be a repo filename stem (e.g. "model"),
-    // not a nested path like "onnx/model", otherwise it can generate invalid paths
-    // such as `onnx/onnx/model_*` during dtype resolution.
+    // transformers.js `model_file_name` should be a repo filename stem,
+    // not a nested path like "onnx/model".
     return normalizeOpfsModelRelativePath(last);
 }
 
@@ -12730,6 +12732,11 @@ function collectRecentPromptMessages(userText) {
             content: String(item?.text || "").trim(),
         }))
         .filter((item) => !!item.content);
+
+    while (recentMessages.length > 0 && recentMessages[0]?.role === "assistant") {
+        recentMessages.shift();
+    }
+
     if (recentMessages.length > 0) {
         const lastMessage = recentMessages[recentMessages.length - 1];
         if (
@@ -13776,4 +13783,3 @@ async function runOpfsValidationSuite(options = {}) {
         summary,
     };
 }
-
