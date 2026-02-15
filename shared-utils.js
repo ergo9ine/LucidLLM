@@ -6,7 +6,7 @@ export function getErrorMessage(error) {
 }
 
 export function escapeHtml(value) {
-    return String(value || "")
+    return String(value ?? "")
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -45,26 +45,26 @@ export function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onerror = () => reject(new Error("파일을 읽는 중 오류가 발생했습니다."));
-        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onload = () => resolve(String(reader.result ?? ""));
         reader.readAsDataURL(file);
     });
 }
 
 export function countApproxTokens(text) {
-    const source = String(text || "").trim();
+    const source = String(text ?? "").trim();
     if (!source) return 0;
     const tokens = source.match(/\S+/g);
     return Array.isArray(tokens) ? tokens.length : 0;
 }
 
 export function normalizePromptText(value) {
-    return String(value || "")
+    return String(value ?? "")
         .trim()
         .replace(/\s+/g, " ");
 }
 
 export function calculateExponentialBackoffDelay(baseDelayMs, attempt, options = {}) {
-    const base = Math.max(0, Number(baseDelayMs) || 0);
+    const base = Math.max(0, Number(baseDelayMs) ?? 0);
     const step = Math.max(1, Math.trunc(Number(attempt) || 1));
     const maxDelay = Number.isFinite(Number(options.maxDelayMs))
         ? Math.max(0, Number(options.maxDelayMs))
@@ -75,12 +75,12 @@ export function calculateExponentialBackoffDelay(baseDelayMs, attempt, options =
 }
 
 export function isHttpsUrl(value, options = {}) {
-    const text = String(value || "").trim();
+    const text = String(value ?? "").trim();
     if (!text) return false;
 
     try {
         const parsed = new URL(text, "https://example.com");
-        const protocol = String(parsed.protocol || "").toLowerCase();
+        const protocol = String(parsed.protocol ?? "").toLowerCase();
         if (protocol === "https:") {
             return true;
         }
@@ -93,7 +93,7 @@ export function isHttpsUrl(value, options = {}) {
             return false;
         }
 
-        const host = String(parsed.hostname || "").toLowerCase();
+        const host = String(parsed.hostname ?? "").toLowerCase();
         return host === "localhost" || host === "127.0.0.1" || host === "::1";
     } catch (_) {
         return false;
@@ -101,7 +101,7 @@ export function isHttpsUrl(value, options = {}) {
 }
 
 export function resolveInferenceBackendChain(preferredDevice, capabilities = {}) {
-    const preferred = String(preferredDevice || "").trim().toLowerCase();
+    const preferred = String(preferredDevice ?? "").trim().toLowerCase();
     const hasWebGpu = capabilities.webgpu === true;
     const hasWebGl = capabilities.webgl === true;
     const hasWasm = capabilities.wasm !== false;

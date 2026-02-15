@@ -693,7 +693,7 @@ function ensureLlmGenerationControls() {
         </div>
     `;
 
-    const cards = Array.from(llmPanel.querySelectorAll("article"));
+    const cards = [...llmPanel.querySelectorAll("article")];
     const anchor = cards[1] || cards[0];
     if (anchor?.parentElement) {
         anchor.parentElement.insertBefore(card, anchor.nextSibling);
@@ -847,7 +847,7 @@ function scheduleBootstrapApplication() {
 scheduleBootstrapApplication();
 
 function canUseLocalSessionForChat() {
-    const activeFile = String(state.activeSessionFile || "").trim();
+    const activeFile = String(state.activeSessionFile ?? "").trim();
     if (!activeFile) return false;
     if (getSessionRowState(activeFile) !== "loaded") return false;
     return !!sessionStore.activeSession;
@@ -855,12 +855,12 @@ function canUseLocalSessionForChat() {
 
 function isLikelyRemoteUrl(url) {
     try {
-        const parsed = new URL(String(url || ""), window.location.origin);
-        const host = String(parsed.hostname || "").toLowerCase();
+        const parsed = new URL(String(url ?? ""), window.location.origin);
+        const host = String(parsed.hostname ?? "").toLowerCase();
         if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
             return false;
         }
-        if (host === String(window.location.hostname || "").toLowerCase()) {
+        if (host === String(window.location.hostname ?? "").toLowerCase()) {
             return false;
         }
         return true;
@@ -895,9 +895,9 @@ function recordNetworkEvent(payload) {
 function serializeErrorSummary(error) {
     return {
         message: getErrorMessage(error),
-        code: error?.code || "",
-        status: Number(error?.status || 0),
-        name: error?.name || "",
+        code: error?.code ?? "",
+        status: Number(error?.status ?? 0),
+        name: error?.name ?? "",
         details: error?.details || {},
         context: error?.context || {},
         stack: typeof error?.stack === "string" ? error.stack : "",
@@ -919,13 +919,13 @@ function recordChatErrorEvent(errorId, error, diagnostics = {}) {
 function createMonitoringSnapshot() {
     return {
         generated_at: new Date().toISOString(),
-        selected_model: selectedModel || "",
-        active_session_file: state.activeSessionFile || "",
+        selected_model: selectedModel ?? "",
+        active_session_file: state.activeSessionFile ?? "",
         local_chat_mode: canUseLocalSessionForChat(),
         counters: {
             chat_success: state.monitoring.chatSuccessCount,
             chat_failure: state.monitoring.chatFailureCount,
-            last_error_at: state.monitoring.lastChatErrorAt || "",
+            last_error_at: state.monitoring.lastChatErrorAt ?? "",
         },
         recent_network: state.monitoring.networkEvents.slice(-20),
         recent_chat_errors: state.monitoring.chatErrors.slice(-12),
@@ -941,7 +941,7 @@ function clearMonitoringSnapshot() {
 }
 
 function normalizeSidebarPanel(panelId) {
-    const value = String(panelId || "").trim().toLowerCase();
+    const value = String(panelId ?? "").trim().toLowerCase();
     if (value === "workspace" || value === "preferences") return "workspace";
     return "chat";
 }
@@ -987,7 +987,7 @@ function syncSidebarToggleButton() {
         ? t("sidebar.mobile_toggle_close", {}, "메뉴 닫기")
         : t("sidebar.mobile_toggle_open", {}, "메뉴 열기");
     const iconName = open ? "panel-left-close" : "panel-left-open";
-    const currentIcon = String(els.sidebarMobileToggle.dataset.icon || "").trim();
+    const currentIcon = String(els.sidebarMobileToggle.dataset.icon ?? "").trim();
 
     els.sidebarMobileToggle.setAttribute("aria-expanded", open ? "true" : "false");
     els.sidebarMobileToggle.setAttribute("aria-label", label);
@@ -1012,7 +1012,7 @@ function deleteActiveChatSessionFromSidebar() {
         showToast("응답 생성 중에는 세션을 삭제할 수 없습니다.", "error", 2200);
         return;
     }
-    const activeId = String(state.activeChatSessionId || "").trim();
+    const activeId = String(state.activeChatSessionId ?? "").trim();
     if (!activeId) {
         showToast(t("chat.export.empty"), "info", 1600);
         return;
@@ -1025,8 +1025,8 @@ function deleteActiveChatSessionFromSidebar() {
 }
 
 function exportActiveChatSessionToFile() {
-    const activeId = String(state.activeChatSessionId || "").trim();
-    const active = state.chatSessions.find((session) => session.id === activeId) || null;
+    const activeId = String(state.activeChatSessionId ?? "").trim();
+    const active = state.chatSessions.find((session) => session.id === activeId) ?? null;
     if (!active) {
         showToast(t("chat.export.empty"), "info", 1800);
         return;
@@ -1045,10 +1045,10 @@ function exportActiveChatSessionToFile() {
         },
     };
 
-    const safeTitle = String(active.title || "chat")
+    const safeTitle = String(active.title ?? "chat")
         .replace(/[^A-Za-z0-9가-힣._-]+/g, "-")
         .replace(/^-+|-+$/g, "")
-        .slice(0, 48) || "chat";
+        .slice(0, 48) ?? "chat";
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const fileName = `lucid-chat-${safeTitle}-${stamp}.json`;
 
@@ -1189,7 +1189,7 @@ function initializeNavigationSidebar() {
     // and must be re-cached before binding listeners.
     cacheElements();
     renderSidebarStaticText();
-    setSidebarPanel(state.ui.sidebarPanel || "chat");
+    setSidebarPanel(state.ui.sidebarPanel ?? "chat");
     setSidebarOpen(window.matchMedia("(min-width: 1025px)").matches);
 }
 
@@ -1267,30 +1267,30 @@ function readHeaderValue(headers, name) {
     if (!headers || !name) return "";
     const lowerName = String(name).toLowerCase();
     if (headers instanceof Headers) {
-        return String(headers.get(lowerName) || headers.get(name) || "").trim();
+        return String(headers.get(lowerName) ?? headers.get(name) ?? "").trim();
     }
     if (Array.isArray(headers)) {
         for (const pair of headers) {
             if (!Array.isArray(pair) || pair.length < 2) continue;
-            if (String(pair[0] || "").toLowerCase() !== lowerName) continue;
-            return String(pair[1] || "").trim();
+            if (String(pair[0] ?? "").toLowerCase() !== lowerName) continue;
+            return String(pair[1] ?? "").trim();
         }
         return "";
     }
     if (typeof headers === "object") {
         for (const [key, value] of Object.entries(headers)) {
-            if (String(key || "").toLowerCase() !== lowerName) continue;
-            return String(value || "").trim();
+            if (String(key ?? "").toLowerCase() !== lowerName) continue;
+            return String(value ?? "").trim();
         }
     }
     return "";
 }
 
 function getFetchMethod(input, init = {}) {
-    const fromInit = String(init?.method || "").trim().toUpperCase();
+    const fromInit = String(init?.method ?? "").trim().toUpperCase();
     if (fromInit) return fromInit;
     if (input instanceof Request) {
-        const fromRequest = String(input.method || "").trim().toUpperCase();
+        const fromRequest = String(input.method ?? "").trim().toUpperCase();
         if (fromRequest) return fromRequest;
     }
     return "GET";
@@ -1299,7 +1299,7 @@ function getFetchMethod(input, init = {}) {
 function getFetchUrl(input) {
     if (typeof input === "string") return input;
     if (input instanceof URL) return input.toString();
-    if (input instanceof Request) return String(input.url || "");
+    if (input instanceof Request) return String(input.url ?? "");
     if (input && typeof input === "object" && typeof input.url === "string") {
         return String(input.url);
     }
@@ -1307,12 +1307,12 @@ function getFetchUrl(input) {
 }
 
 function isHuggingFaceHostName(hostname) {
-    const host = String(hostname || "").toLowerCase();
+    const host = String(hostname ?? "").toLowerCase();
     return host === "huggingface.co" || host === "www.huggingface.co";
 }
 
 function isHuggingFaceRequestUrl(rawUrl) {
-    const text = String(rawUrl || "").trim();
+    const text = String(rawUrl ?? "").trim();
     if (!text) return false;
     try {
         const parsed = new URL(text, window.location.origin);
@@ -1323,7 +1323,7 @@ function isHuggingFaceRequestUrl(rawUrl) {
 }
 
 function shouldBypassOpfsInterceptorForDownload(rawUrl) {
-    const text = String(rawUrl || "").trim();
+    const text = String(rawUrl ?? "").trim();
     if (!text) return false;
     try {
         const parsed = new URL(text, window.location.origin);
@@ -1335,12 +1335,12 @@ function shouldBypassOpfsInterceptorForDownload(rawUrl) {
 }
 
 function parseHuggingFaceResolveRequestUrl(rawUrl) {
-    const text = String(rawUrl || "").trim();
+    const text = String(rawUrl ?? "").trim();
     if (!text) return null;
 
     try {
         const parsed = new URL(text, window.location.origin);
-        const host = String(parsed.hostname || "").toLowerCase();
+        const host = String(parsed.hostname ?? "").toLowerCase();
         if (host !== "huggingface.co" && host !== "www.huggingface.co") {
             return null;
         }
@@ -1364,7 +1364,7 @@ function parseHuggingFaceResolveRequestUrl(rawUrl) {
             return null;
         }
 
-        const revision = String(segments[resolveIndex + 1] || "main").trim() || "main";
+        const revision = String(segments[resolveIndex + 1] ?? "main").trim() ?? "main";
         const filePath = normalizeOpfsModelRelativePath(segments.slice(resolveIndex + 2).join("/"));
         if (!filePath) {
             return null;
@@ -1382,7 +1382,7 @@ function parseHuggingFaceResolveRequestUrl(rawUrl) {
 }
 
 function parseLocalModelRequestUrl(rawUrl) {
-    const text = String(rawUrl || "").trim();
+    const text = String(rawUrl ?? "").trim();
     if (!text) return null;
 
     try {
@@ -1392,11 +1392,11 @@ function parseLocalModelRequestUrl(rawUrl) {
             .filter(Boolean)
             .map((part) => decodeUriComponentSafe(part));
         if (segments.length < 4) return null;
-        if (String(segments[0] || "").toLowerCase() !== OPFS_MODELS_DIR) {
+        if (String(segments[0] ?? "").toLowerCase() !== OPFS_MODELS_DIR) {
             return null;
         }
 
-        const modelId = normalizeModelId(`${segments[1] || ""}/${segments[2] || ""}`);
+        const modelId = normalizeModelId(`${segments[1] ?? ""}/${segments[2] ?? ""}`);
         if (!isValidModelId(modelId)) {
             return null;
         }
@@ -1436,7 +1436,7 @@ function buildOpfsCandidatePathsForHfResolve(request) {
         }
     };
 
-    const primarySource = normalizeOpfsModelRelativePath(request?.filePath || "");
+    const primarySource = normalizeOpfsModelRelativePath(request?.filePath ?? "");
     if (!primarySource) return [];
     addSourcePath(primarySource);
     if (primarySource.includes("onnx/onnx/")) {
@@ -1455,10 +1455,10 @@ function buildOpfsCandidatePathsForHfResolve(request) {
     }
 
     if (primarySource.toLowerCase().endsWith(".onnx")) {
-        const activeFile = normalizeOnnxFileName(state.activeSessionFile || sessionStore.activeFileName || "");
+        const activeFile = normalizeOnnxFileName(state.activeSessionFile ?? sessionStore.activeFileName ?? "");
         if (activeFile) {
             const activeModelId = normalizeModelId(resolveModelIdForCachedSession(activeFile));
-            if (activeModelId && activeModelId === normalizeModelId(request.modelId || "")) {
+            if (activeModelId && activeModelId === normalizeModelId(request.modelId ?? "")) {
                 addCandidate(activeFile);
             }
         }
@@ -1468,21 +1468,21 @@ function buildOpfsCandidatePathsForHfResolve(request) {
 }
 
 function inferContentTypeFromModelPath(path) {
-    const lower = String(path || "").toLowerCase();
+    const lower = String(path ?? "").toLowerCase();
     if (lower.endsWith(".json")) return "application/json";
     if (lower.endsWith(".txt") || lower.endsWith(".md") || lower.endsWith(".jinja")) return "text/plain; charset=utf-8";
     return "application/octet-stream";
 }
 
 function parseSingleByteRangeHeader(rangeHeaderValue, totalSize) {
-    const total = Math.max(0, Number(totalSize || 0));
+    const total = Math.max(0, Number(totalSize ?? 0));
     if (!rangeHeaderValue || total <= 0) return null;
-    const value = String(rangeHeaderValue || "").trim();
+    const value = String(rangeHeaderValue ?? "").trim();
     const match = /^bytes=(\d*)-(\d*)$/i.exec(value);
     if (!match) return null;
 
-    const startText = String(match[1] || "").trim();
-    const endText = String(match[2] || "").trim();
+    const startText = String(match[1] ?? "").trim();
+    const endText = String(match[2] ?? "").trim();
     let start = 0;
     let end = total - 1;
 
@@ -1515,7 +1515,7 @@ async function readOpfsModelFileByRelativePath(path) {
     try {
         const handle = await getOpfsModelsFileHandleByRelativePath(normalized, { create: false });
         const file = await handle.getFile();
-        const size = Number(file?.size || 0);
+        const size = Number(file?.size ?? 0);
         if (!Number.isFinite(size) || size <= 0) return null;
         return file;
     } catch (_) {
@@ -1524,7 +1524,7 @@ async function readOpfsModelFileByRelativePath(path) {
 }
 
 function createOpfsFileResponse(file, path, method = "GET", options = {}) {
-    const totalSize = Math.max(0, Number(file?.size || 0));
+    const totalSize = Math.max(0, Number(file?.size ?? 0));
     const range = options?.range && typeof options.range === "object"
         ? options.range
         : null;
@@ -1533,13 +1533,13 @@ function createOpfsFileResponse(file, path, method = "GET", options = {}) {
     headers.set("x-lucid-opfs-cache", "hit");
 
     if (range) {
-        const start = Math.max(0, Math.min(totalSize - 1, Math.trunc(Number(range.start || 0))));
+        const start = Math.max(0, Math.min(totalSize - 1, Math.trunc(Number(range.start ?? 0))));
         const end = Math.max(start, Math.min(totalSize - 1, Math.trunc(Number(range.end || (totalSize - 1)))));
         const chunkLength = Math.max(0, (end - start) + 1);
         headers.set("accept-ranges", "bytes");
         headers.set("content-range", `bytes ${start}-${end}/${totalSize}`);
         headers.set("content-length", String(chunkLength));
-        const normalizedMethod = String(method || "GET").trim().toUpperCase();
+        const normalizedMethod = String(method ?? "GET").trim().toUpperCase();
         if (normalizedMethod === "HEAD") {
             return new Response(null, { status: 206, headers });
         }
@@ -1550,7 +1550,7 @@ function createOpfsFileResponse(file, path, method = "GET", options = {}) {
     }
 
     headers.set("content-length", String(totalSize));
-    const normalizedMethod = String(method || "GET").trim().toUpperCase();
+    const normalizedMethod = String(method ?? "GET").trim().toUpperCase();
     if (normalizedMethod === "HEAD") {
         return new Response(null, { status: 200, headers });
     }
@@ -1604,14 +1604,14 @@ async function tryResolveHfFileFromOpfs(input, init = {}) {
     for (const candidatePath of candidatePaths) {
         const file = await readOpfsModelFileByRelativePath(candidatePath);
         if (!file) continue;
-        const range = parseSingleByteRangeHeader(rangeHeader, Number(file?.size || 0));
+        const range = parseSingleByteRangeHeader(rangeHeader, Number(file?.size ?? 0));
         if (rangeHeader && !range) {
             console.warn("[LOCAL] invalid range request for OPFS cached file", {
                 request_url: resolvedRequest.url,
                 opfs_path: candidatePath,
-                range: String(rangeHeader || ""),
+                range: String(rangeHeader ?? ""),
             });
-            return createInvalidRangeResponse(Number(file?.size || 0));
+            return createInvalidRangeResponse(Number(file?.size ?? 0));
         }
         console.info("[LOCAL] served model request from OPFS cache", {
             request_url: resolvedRequest.url,
@@ -1620,7 +1620,7 @@ async function tryResolveHfFileFromOpfs(input, init = {}) {
             source_path: resolvedRequest.filePath,
             request_type: isLocalModelPathRequest ? "local_models_path" : "hf_resolve",
             opfs_path: candidatePath,
-            bytes: Number(file.size || 0),
+            bytes: Number(file.size ?? 0),
             range: range ? `${range.start}-${range.end}` : "",
         });
         return createOpfsFileResponse(file, candidatePath, method, { range });
@@ -1660,17 +1660,17 @@ function installMonitoringApi() {
 function logNetworkTrace(stage, context = {}) {
     const payload = {
         stage,
-        request_id: context.requestId || 0,
-        method: context.method || "",
-        url: context.url || "",
-        remote: isLikelyRemoteUrl(context.url || ""),
-        status: Number(context.status || 0),
-        mode: context.mode || "",
-        purpose: context.purpose || "",
+        request_id: context.requestId ?? 0,
+        method: context.method ?? "",
+        url: context.url ?? "",
+        remote: isLikelyRemoteUrl(context.url ?? ""),
+        status: Number(context.status ?? 0),
+        mode: context.mode ?? "",
+        purpose: context.purpose ?? "",
         local_chat_mode: canUseLocalSessionForChat(),
-        local_active_file: state.activeSessionFile || "",
+        local_active_file: state.activeSessionFile ?? "",
         timestamp: new Date().toISOString(),
-        error: context.error || "",
+        error: context.error ?? "",
     };
     recordNetworkEvent(payload);
     if (stage === "error") {
@@ -1682,9 +1682,9 @@ function logNetworkTrace(stage, context = {}) {
 
 async function trackedFetch(url, options = {}, context = {}) {
     const requestId = ++networkRequestSeq;
-    const method = String(options?.method || "GET").toUpperCase();
-    const purpose = String(context?.purpose || "");
-    const mode = String(context?.mode || "");
+    const method = String(options?.method ?? "GET").toUpperCase();
+    const purpose = String(context?.purpose ?? "");
+    const mode = String(context?.mode ?? "");
 
     logNetworkTrace("start", {
         requestId,
@@ -1729,9 +1729,9 @@ function cacheElements() {
         settingsWindow: document.getElementById("settings-window"),
         settingsDragHandle: document.getElementById("settings-drag-handle"),
         closeSettingsBtn: document.getElementById("close-settings-btn"),
-        settingsTabButtons: Array.from(document.querySelectorAll("[data-settings-tab-btn]")),
-        settingsPanels: Array.from(document.querySelectorAll("[data-settings-panel]")),
-        settingsResetTabButtons: Array.from(document.querySelectorAll("[data-action='reset-settings-tab']")),
+        settingsTabButtons: [...document.querySelectorAll("[data-settings-tab-btn]")],
+        settingsPanels: [...document.querySelectorAll("[data-settings-panel]")],
+        settingsResetTabButtons: [...document.querySelectorAll("[data-action='reset-settings-tab']")],
         profileIdentityChip: document.getElementById("profile-identity-chip"),
         profileChipAvatar: document.getElementById("profile-chip-avatar"),
         profileChipName: document.getElementById("profile-chip-name"),
@@ -1877,8 +1877,8 @@ function cacheElements() {
         sidebarTitleText: document.getElementById("sidebar-title-text"),
         sidebarMobileToggle: document.getElementById("sidebar-mobile-toggle"),
         sidebarBackdrop: document.getElementById("sidebar-backdrop"),
-        sidebarPanelButtons: Array.from(document.querySelectorAll("[data-sidebar-panel-btn]")),
-        sidebarPanels: Array.from(document.querySelectorAll("[data-sidebar-panel]")),
+        sidebarPanelButtons: [...document.querySelectorAll("[data-sidebar-panel-btn]")],
+        sidebarPanels: [...document.querySelectorAll("[data-sidebar-panel]")],
         sidebarChatActions: document.getElementById("sidebar-chat-actions"),
         sidebarChatTabsHost: document.getElementById("sidebar-chat-tabs-host"),
         sidebarDeleteChatBtn: document.getElementById("sidebar-delete-chat-btn"),
@@ -1946,7 +1946,7 @@ function handleSidebarOpenModelClick() {
 }
 
 function handleSidebarOpenSettingsClick() {
-    openSettingsToTab(state.settings.activeTab || "model");
+    openSettingsToTab(state.settings.activeTab ?? "model");
 }
 
 function handleSidebarOpenThemeClick() {
@@ -1976,7 +1976,7 @@ function handleThemeOptionOledChange() {
 }
 
 function handleLanguageSelectChange() {
-    applyLanguage(String(els.languageSelect?.value || ""));
+    applyLanguage(String(els.languageSelect?.value ?? ""));
 }
 
 function handleDriveAutoBackupToggleChange() {
@@ -2182,14 +2182,14 @@ function bindEvents() {
         els.chatTabsList.addEventListener("click", (event) => {
             const deleteBtn = event.target.closest("button[data-action='chat-tab-delete']");
             if (deleteBtn) {
-                const sessionId = String(deleteBtn.dataset.sessionId || "");
+                const sessionId = String(deleteBtn.dataset.sessionId ?? "");
                 deleteChatSession(sessionId);
                 return;
             }
 
             const tabBtn = event.target.closest("button[data-action='chat-tab-select']");
             if (tabBtn) {
-                const sessionId = String(tabBtn.dataset.sessionId || "");
+                const sessionId = String(tabBtn.dataset.sessionId ?? "");
                 activateChatSession(sessionId);
             }
         });
@@ -2198,7 +2198,7 @@ function bindEvents() {
     if (Array.isArray(els.settingsTabButtons) && els.settingsTabButtons.length > 0) {
         for (const button of els.settingsTabButtons) {
             button.addEventListener("click", () => {
-                const nextTab = String(button.dataset.settingsTabBtn || "");
+                const nextTab = String(button.dataset.settingsTabBtn ?? "");
                 if (!nextTab) return;
                 setSettingsTab(nextTab);
             });
@@ -2208,7 +2208,7 @@ function bindEvents() {
     if (Array.isArray(els.settingsResetTabButtons) && els.settingsResetTabButtons.length > 0) {
         for (const button of els.settingsResetTabButtons) {
             button.addEventListener("click", () => {
-                const tabId = String(button.dataset.tab || "").trim();
+                const tabId = String(button.dataset.tab ?? "").trim();
                 if (!tabId) return;
                 requestResetSettingsTab(tabId);
             });
@@ -2298,7 +2298,7 @@ function bindEvents() {
 
     document.addEventListener("keydown", (event) => {
         const accel = event.ctrlKey || event.metaKey;
-        const key = String(event.key || "").toLowerCase();
+        const key = String(event.key ?? "").toLowerCase();
         if (accel && event.shiftKey && key === "n") {
             event.preventDefault();
             createChatSession();
@@ -2446,7 +2446,7 @@ function bindEvents() {
 
     if (els.saveTokenBtn && els.hfTokenInput) {
         els.saveTokenBtn.addEventListener("click", () => {
-            const token = (els.hfTokenInput.value || "").trim();
+            const token = (els.hfTokenInput.value ?? "").trim();
             if (!token) {
                 showToast("토큰이 비어 있습니다.", "error");
                 return;
@@ -2467,14 +2467,14 @@ function bindEvents() {
     if (els.modelSelectForm && els.modelIdInput) {
         els.modelSelectForm.addEventListener("submit", async (event) => {
             event.preventDefault();
-            const modelId = (els.modelIdInput.value || "").trim();
+            const modelId = (els.modelIdInput.value ?? "").trim();
             await handleModelLookup(modelId, { throwOnError: false, origin: "manual_lookup" });
         });
 
         els.modelIdInput.addEventListener("keydown", async (event) => {
             if (event.key === "Enter") {
                 event.preventDefault();
-                const modelId = (els.modelIdInput.value || "").trim();
+                const modelId = (els.modelIdInput.value ?? "").trim();
                 await handleModelLookup(modelId, { throwOnError: false, origin: "manual_lookup" });
             }
         });
@@ -2559,9 +2559,9 @@ function bindEvents() {
         els.opfsExplorerBody.addEventListener("click", async (event) => {
             const row = event.target.closest("tr[data-entry-path]");
             if (row) {
-                const entryPath = String(row.dataset.entryPath || "");
-                const kind = String(row.dataset.entryKind || "");
-                const name = String(row.dataset.entryName || "");
+                const entryPath = String(row.dataset.entryPath ?? "");
+                const kind = String(row.dataset.entryKind ?? "");
+                const name = String(row.dataset.entryName ?? "");
                 setExplorerSelectedEntry(entryPath, kind, name);
             }
         });
@@ -2569,8 +2569,8 @@ function bindEvents() {
         els.opfsExplorerBody.addEventListener("dblclick", async (event) => {
             const row = event.target.closest("tr[data-entry-path]");
             if (!row) return;
-            if (String(row.dataset.entryKind || "") !== "directory") return;
-            const entryPath = String(row.dataset.entryPath || "");
+            if (String(row.dataset.entryKind ?? "") !== "directory") return;
+            const entryPath = String(row.dataset.entryPath ?? "");
             await openExplorerDirectoryByPath(entryPath);
         });
 
@@ -2578,9 +2578,9 @@ function bindEvents() {
             const row = event.target.closest("tr[data-entry-path]");
             if (!row) return;
             event.preventDefault();
-            const entryPath = String(row.dataset.entryPath || "");
-            const kind = String(row.dataset.entryKind || "");
-            const name = String(row.dataset.entryName || "");
+            const entryPath = String(row.dataset.entryPath ?? "");
+            const kind = String(row.dataset.entryKind ?? "");
+            const name = String(row.dataset.entryName ?? "");
             setExplorerSelectedEntry(entryPath, kind, name);
             openExplorerContextMenu({
                 x: event.clientX,
@@ -2596,7 +2596,7 @@ function bindEvents() {
         els.opfsTreeBody.addEventListener("click", async (event) => {
             const button = event.target.closest("button[data-action='opfs-tree-open']");
             if (!button) return;
-            const entryPath = String(button.dataset.entryPath || "");
+            const entryPath = String(button.dataset.entryPath ?? "");
             await openExplorerDirectoryByPath(entryPath);
         });
 
@@ -2604,8 +2604,8 @@ function bindEvents() {
             const button = event.target.closest("button[data-action='opfs-tree-open']");
             if (!button) return;
             event.preventDefault();
-            const entryPath = String(button.dataset.entryPath || "");
-            const name = String(button.dataset.entryName || "");
+            const entryPath = String(button.dataset.entryPath ?? "");
+            const name = String(button.dataset.entryName ?? "");
             openExplorerContextMenu({
                 x: event.clientX,
                 y: event.clientY,
@@ -2620,7 +2620,7 @@ function bindEvents() {
         els.opfsBreadcrumb.addEventListener("click", async (event) => {
             const crumb = event.target.closest("button[data-action='opfs-breadcrumb-open']");
             if (!crumb) return;
-            const entryPath = String(crumb.dataset.entryPath || "");
+            const entryPath = String(crumb.dataset.entryPath ?? "");
             await openExplorerDirectoryByPath(entryPath);
         });
     }
@@ -2643,7 +2643,7 @@ function bindEvents() {
         els.opfsContextMenu.addEventListener("click", async (event) => {
             const actionButton = event.target.closest("button[data-action]");
             if (!actionButton) return;
-            const action = String(actionButton.dataset.action || "");
+            const action = String(actionButton.dataset.action ?? "");
             if (!action.startsWith("opfs-context-")) return;
             closeExplorerContextMenu();
             try {
@@ -2677,7 +2677,7 @@ function bindEvents() {
         els.opfsDeleteBtn.addEventListener("click", () => {
             const path = state.opfs.explorer.selectedEntryPath;
             const name = state.opfs.explorer.selectedEntryName;
-            const kind = state.opfs.explorer.selectedEntryKind || "file";
+            const kind = state.opfs.explorer.selectedEntryKind ?? "file";
             if (!path) {
                 showToast("삭제할 항목을 먼저 선택하세요.", "error", 2200);
                 return;
@@ -2694,28 +2694,28 @@ function bindEvents() {
         els.sessionTableBody.addEventListener("click", async (event) => {
             const cardBtn = event.target.closest("button[data-action='session-model-card']");
             if (cardBtn) {
-                const fileName = String(cardBtn.dataset.fileName || "");
+                const fileName = String(cardBtn.dataset.fileName ?? "");
                 await onClickSessionModelCard(fileName);
                 return;
             }
 
             const loadBtn = event.target.closest("button[data-action='session-load-toggle']");
             if (loadBtn) {
-                const fileName = String(loadBtn.dataset.fileName || "");
+                const fileName = String(loadBtn.dataset.fileName ?? "");
                 await onClickSessionLoad(fileName);
                 return;
             }
 
             const updateBtn = event.target.closest("button[data-action='session-update']");
             if (updateBtn) {
-                const fileName = String(updateBtn.dataset.fileName || "");
+                const fileName = String(updateBtn.dataset.fileName ?? "");
                 await onClickSessionUpdate(fileName);
                 return;
             }
 
             const deleteBtn = event.target.closest("button[data-action='session-delete']");
             if (deleteBtn) {
-                const fileName = String(deleteBtn.dataset.fileName || "");
+                const fileName = String(deleteBtn.dataset.fileName ?? "");
                 openDeleteDialog(fileName, {
                     mode: "model",
                     targetPath: toAbsoluteOpfsPath([OPFS_MODELS_DIR, fileName]),
@@ -2778,7 +2778,7 @@ function bindEvents() {
         els.chatMessages.addEventListener("click", async (event) => {
             const copyBtn = event.target.closest("button[data-action='copy-message']");
             if (!copyBtn) return;
-            const messageId = Number(copyBtn.dataset.messageId || 0);
+            const messageId = Number(copyBtn.dataset.messageId ?? 0);
             if (!Number.isFinite(messageId) || messageId <= 0) return;
             await copyMessageById(messageId, copyBtn);
         });
@@ -2796,7 +2796,7 @@ function bindEvents() {
                 return;
             }
 
-            const messageId = Number(active.dataset.messageId || 0);
+            const messageId = Number(active.dataset.messageId ?? 0);
             if (!Number.isFinite(messageId) || messageId <= 0) return;
             event.preventDefault();
             await copyMessageById(messageId);
@@ -2825,7 +2825,7 @@ function detectNavigatorLanguage() {
 }
 
 function matchSupportedLanguage(value) {
-    const raw = String(value || "").trim();
+    const raw = String(value ?? "").trim();
     if (!raw) return "";
 
     const normalized = raw.replace(/_/g, "-");
@@ -2852,11 +2852,11 @@ function matchSupportedLanguage(value) {
 }
 
 function normalizeLanguage(value) {
-    return matchSupportedLanguage(value) || "en";
+    return matchSupportedLanguage(value) ?? "en";
 }
 
 function normalizeTheme(value) {
-    const candidate = String(value || "").trim().toLowerCase();
+    const candidate = String(value ?? "").trim().toLowerCase();
     return SUPPORTED_THEMES.includes(candidate) ? candidate : "dark";
 }
 
@@ -2927,7 +2927,7 @@ function saveUserProfile(nextFields = {}) {
 }
 
 function getProfileLanguage() {
-    return normalizeLanguage(state.profile?.language || "en");
+    return normalizeLanguage(state.profile?.language ?? "en");
 }
 
 function getLocaleForLanguage(language = getProfileLanguage()) {
@@ -2939,16 +2939,16 @@ function getLocaleForLanguage(language = getProfileLanguage()) {
 }
 
 function getProfileTheme() {
-    return normalizeTheme(state.profile?.theme || "dark");
+    return normalizeTheme(state.profile?.theme ?? "dark");
 }
 
 function getProfileNickname() {
-    const nickname = String(state.profile?.nickname || "").trim();
-    return nickname || "YOU";
+    const nickname = String(state.profile?.nickname ?? "").trim();
+    return nickname ?? "YOU";
 }
 
 function getProfileAvatarDataUrl() {
-    return String(state.profile?.avatarDataUrl || "");
+    return String(state.profile?.avatarDataUrl ?? "");
 }
 
 function getNicknameRegistry() {
@@ -2972,7 +2972,7 @@ function setNicknameRegistry(registry) {
 }
 
 function reserveNicknameForProfile(nickname) {
-    const normalizedNickname = String(nickname || "").trim();
+    const normalizedNickname = String(nickname ?? "").trim();
     if (!normalizedNickname || !state.profile?.id) return;
 
     const registry = getNicknameRegistry();
@@ -2986,7 +2986,7 @@ function reserveNicknameForProfile(nickname) {
 }
 
 function validateNickname(rawNickname) {
-    const value = String(rawNickname || "").trim();
+    const value = String(rawNickname ?? "").trim();
     if (!/^[A-Za-z0-9가-힣_-]{2,24}$/.test(value)) {
         return {
             valid: false,
@@ -3013,14 +3013,14 @@ function validateNickname(rawNickname) {
 }
 
 function buildDefaultAvatarDataUrl(seed = "") {
-    const initial = String(seed || "U").trim().slice(0, 1).toUpperCase() || "U";
+    const initial = String(seed ?? "U").trim().slice(0, 1).toUpperCase() ?? "U";
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#06b6d4"/><stop offset="1" stop-color="#0e7490"/></linearGradient></defs><rect width="120" height="120" rx="60" fill="url(#g)"/><text x="60" y="72" text-anchor="middle" font-size="44" font-family="Space Grotesk, sans-serif" fill="#ecfeff">${initial}</text></svg>`;
     return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
 function setProfileStatus(message, kind = "info") {
     if (!els.profileNicknameStatus) return;
-    const text = String(message || "");
+    const text = String(message ?? "");
     els.profileNicknameStatus.textContent = text;
     els.profileNicknameStatus.className = kind === "error"
         ? "text-[11px] text-rose-200"
@@ -3064,7 +3064,7 @@ function hydrateProfileSettings() {
 
 function onProfileNicknameInput() {
     if (!els.profileNicknameInput) return;
-    const input = String(els.profileNicknameInput.value || "").trim();
+    const input = String(els.profileNicknameInput.value ?? "").trim();
     const validation = validateNickname(input);
     if (!validation.valid) {
         setProfileStatus(validation.message, "error");
@@ -3079,13 +3079,13 @@ function onProfileNicknameInput() {
 }
 
 async function onProfileAvatarInputChange(event) {
-    const file = event?.target?.files?.[0] || null;
+    const file = event?.target?.files?.[0] ?? null;
     if (!file) return;
-    if (!String(file.type || "").startsWith("image/")) {
+    if (!String(file.type ?? "").startsWith("image/")) {
         showToast(t("profile.avatar_invalid"), "error", 2200);
         return;
     }
-    if (Number(file.size || 0) > (5 * 1024 * 1024)) {
+    if (Number(file.size ?? 0) > (5 * 1024 * 1024)) {
         showToast(t("profile.avatar_too_large"), "error", 2600);
         return;
     }
@@ -3203,7 +3203,7 @@ function renderLocalizedStaticText() {
     };
     if (Array.isArray(els.settingsTabButtons)) {
         for (const button of els.settingsTabButtons) {
-            const key = String(button.dataset.settingsTabBtn || "");
+            const key = String(button.dataset.settingsTabBtn ?? "");
             const title = tabTitles[key] || key;
             button.setAttribute("title", title);
             button.setAttribute("aria-label", title);
@@ -3212,7 +3212,7 @@ function renderLocalizedStaticText() {
     if (Array.isArray(els.settingsResetTabButtons)) {
         const resetLabel = t("settings.reset_tab", {}, "기본값으로 복원");
         for (const button of els.settingsResetTabButtons) {
-            const tabId = String(button.dataset.tab || "").trim();
+            const tabId = String(button.dataset.tab ?? "").trim();
             const tabLabel = tabTitles[tabId] || tabId;
             const labelNode = button.querySelector("span");
             if (labelNode) {
@@ -3246,8 +3246,8 @@ function renderLocalizedStaticText() {
     if (els.languageSelectLabel) els.languageSelectLabel.textContent = t("language.label");
     if (els.languageStatusText) els.languageStatusText.textContent = t("language.hint");
     if (els.languageSelect?.options?.length > 0) {
-        for (const option of Array.from(els.languageSelect.options)) {
-            const value = String(option.value || "");
+        for (const option of [...els.languageSelect.options]) {
+            const value = String(option.value ?? "");
             if (value === "ko") {
                 option.text = t("language.korean");
             } else if (value === "en") {
@@ -3304,7 +3304,7 @@ function applyLanguage(language, options = {}) {
 }
 
 function normalizeInferenceDevice(value) {
-    const lower = String(value || "").trim().toLowerCase();
+    const lower = String(value ?? "").trim().toLowerCase();
     const capabilities = getRuntimeCapabilities();
     if (lower === "webgpu") {
         if (capabilities.webgpu) return "webgpu";
@@ -3318,7 +3318,7 @@ function normalizeInferenceDevice(value) {
     }
     if (lower === "wasm") return "wasm";
     const preferredChain = resolveInferenceBackendChain("webgpu", capabilities);
-    return preferredChain[0] || "wasm";
+    return preferredChain[0] ?? "wasm";
 }
 
 function getInferenceDeviceEmoji(device) {
@@ -3382,7 +3382,7 @@ function getRuntimeCapabilities(options = {}) {
 
 function getStoredInferenceDevice() {
     try {
-        return String(localStorage.getItem(STORAGE_KEYS.inferenceDevice) || "").trim().toLowerCase();
+        return String(localStorage.getItem(STORAGE_KEYS.inferenceDevice) ?? "").trim().toLowerCase();
     } catch (_) {
         return "";
     }
@@ -3399,7 +3399,7 @@ function setStoredInferenceDevice(device) {
 
 function getStoredChatInferenceEnabled() {
     try {
-        const raw = String(localStorage.getItem(STORAGE_KEYS.chatInferenceEnabled) || "").trim().toLowerCase();
+        const raw = String(localStorage.getItem(STORAGE_KEYS.chatInferenceEnabled) ?? "").trim().toLowerCase();
         if (!raw) return true;
         if (raw === "false" || raw === "0" || raw === "off") return false;
         return true;
@@ -3418,7 +3418,7 @@ function setStoredChatInferenceEnabled(enabled) {
 
 function getStoredAutoLoadLastSessionEnabled() {
     try {
-        const raw = String(localStorage.getItem(STORAGE_KEYS.autoLoadLastSession) || "").trim().toLowerCase();
+        const raw = String(localStorage.getItem(STORAGE_KEYS.autoLoadLastSession) ?? "").trim().toLowerCase();
         if (!raw) return AUTO_LOAD_LAST_SESSION_DEFAULT;
         if (raw === "false" || raw === "0" || raw === "off") return false;
         return true;
@@ -3480,7 +3480,7 @@ function renderInferenceDeviceToggle() {
     const currentEmoji = getInferenceDeviceEmoji(current);
     const nextCandidate = current === "webgpu" ? "wasm" : "webgpu";
     const fallbackChain = resolveInferenceBackendChain("webgpu", capabilities);
-    const webGpuFallback = fallbackChain.find((item) => item !== "webgpu") || "wasm";
+    const webGpuFallback = fallbackChain.find((item) => item !== "webgpu") ?? "wasm";
     const next = nextCandidate === "webgpu" && !capabilities.webgpu
         ? webGpuFallback
         : nextCandidate;
@@ -3541,7 +3541,7 @@ function onChatInferenceToggleClick() {
 }
 
 async function reloadActiveSessionForInferenceDevice(preferredDevice) {
-    const activeFile = normalizeOnnxFileName(state.activeSessionFile || sessionStore.activeFileName || "");
+    const activeFile = normalizeOnnxFileName(state.activeSessionFile ?? sessionStore.activeFileName ?? "");
     if (!activeFile) return;
     if (getSessionRowState(activeFile) !== "loaded") return;
 
@@ -3610,7 +3610,7 @@ async function onInferenceDeviceToggleClick() {
     const nextRequested = current === "webgpu" ? "wasm" : "webgpu";
     if (nextRequested === "webgpu" && !capabilities.webgpu) {
         const fallbackChain = resolveInferenceBackendChain("webgpu", capabilities);
-        const fallbackDevice = fallbackChain.find((item) => item !== "webgpu") || "wasm";
+        const fallbackDevice = fallbackChain.find((item) => item !== "webgpu") ?? "wasm";
         const fallbackLabel = getInferenceDeviceDisplayName(fallbackDevice);
         showToast(
             t(
@@ -3654,7 +3654,7 @@ async function onInferenceDeviceToggleClick() {
 
 function getStoredDriveClientId() {
     try {
-        return String(localStorage.getItem(STORAGE_KEYS.googleDriveClientId) || "").trim();
+        return String(localStorage.getItem(STORAGE_KEYS.googleDriveClientId) ?? "").trim();
     } catch (_) {
         return "";
     }
@@ -3662,7 +3662,7 @@ function getStoredDriveClientId() {
 
 function setStoredDriveClientId(value) {
     try {
-        const next = String(value || "").trim();
+        const next = String(value ?? "").trim();
         if (!next) {
             localStorage.removeItem(STORAGE_KEYS.googleDriveClientId);
             return;
@@ -3675,7 +3675,7 @@ function setStoredDriveClientId(value) {
 
 function getStoredDriveClientSecret() {
     try {
-        return String(localStorage.getItem(STORAGE_KEYS.googleDriveClientSecret) || "").trim();
+        return String(localStorage.getItem(STORAGE_KEYS.googleDriveClientSecret) ?? "").trim();
     } catch (_) {
         return "";
     }
@@ -3683,7 +3683,7 @@ function getStoredDriveClientSecret() {
 
 function setStoredDriveClientSecret(value) {
     try {
-        const next = String(value || "").trim();
+        const next = String(value ?? "").trim();
         if (!next) {
             localStorage.removeItem(STORAGE_KEYS.googleDriveClientSecret);
             return;
@@ -3734,7 +3734,7 @@ function setStoredDriveAutoBackupEnabled(enabled) {
 
 function getStoredDriveLastSyncAt() {
     try {
-        return String(localStorage.getItem(STORAGE_KEYS.googleDriveLastSyncAt) || "").trim();
+        return String(localStorage.getItem(STORAGE_KEYS.googleDriveLastSyncAt) ?? "").trim();
     } catch (_) {
         return "";
     }
@@ -3742,7 +3742,7 @@ function getStoredDriveLastSyncAt() {
 
 function setStoredDriveLastSyncAt(value) {
     try {
-        const next = String(value || "").trim();
+        const next = String(value ?? "").trim();
         if (!next) {
             localStorage.removeItem(STORAGE_KEYS.googleDriveLastSyncAt);
             return;
@@ -3815,11 +3815,11 @@ function renderDriveBackupUi() {
         els.driveRefreshFilesBtn.disabled = state.driveBackup.inProgress || !state.driveBackup.connected;
     }
     if (els.driveRestoreBtn) {
-        const hasSelection = !!String(els.driveBackupFileSelect?.value || "").trim();
+        const hasSelection = !!String(els.driveBackupFileSelect?.value ?? "").trim();
         els.driveRestoreBtn.disabled = state.driveBackup.inProgress || !state.driveBackup.connected || !hasSelection;
     }
 
-    const progress = Math.max(0, Math.min(100, Number(state.driveBackup.progressPercent || 0)));
+    const progress = Math.max(0, Math.min(100, Number(state.driveBackup.progressPercent ?? 0)));
     if (els.driveProgressBar) {
         els.driveProgressBar.style.width = `${progress}%`;
     }
@@ -3827,7 +3827,7 @@ function renderDriveBackupUi() {
         els.driveProgressPercent.textContent = `${progress.toFixed(0)}%`;
     }
     if (els.driveProgressStatus) {
-        els.driveProgressStatus.textContent = state.driveBackup.progressStatus || "대기";
+        els.driveProgressStatus.textContent = state.driveBackup.progressStatus ?? "대기";
     }
     if (els.driveBackupSizeText) {
         const limitMb = Math.max(
@@ -3835,7 +3835,7 @@ function renderDriveBackupUi() {
             Math.min(DRIVE_BACKUP_MAX_LIMIT_MB, Number(state.driveBackup.backupLimitMb || DRIVE_BACKUP_DEFAULT_LIMIT_MB)),
         );
         const limitBytes = limitMb * 1024 * 1024;
-        const estimatedBytes = Math.max(0, Number(state.driveBackup.estimatedBackupBytes || 0));
+        const estimatedBytes = Math.max(0, Number(state.driveBackup.estimatedBackupBytes ?? 0));
         const exceeded = estimatedBytes > limitBytes;
         els.driveBackupSizeText.textContent = `예상 백업 용량: ${formatBytes(estimatedBytes)} / 제한: ${limitMb} MB`;
         els.driveBackupSizeText.className = exceeded
@@ -3858,7 +3858,7 @@ function renderDriveBackupFileOptions() {
         return;
     }
 
-    const previous = String(els.driveBackupFileSelect.value || "");
+    const previous = String(els.driveBackupFileSelect.value ?? "");
     els.driveBackupFileSelect.innerHTML = files.map((file) => {
         const modified = file.modifiedTime ? formatModelDate(file.modifiedTime) : "-";
         const sizeText = Number.isFinite(Number(file.size)) ? formatBytes(Number(file.size)) : "-";
@@ -3881,8 +3881,8 @@ function renderDriveBackupFileOptions() {
 }
 
 function setDriveProgress(percent, status) {
-    state.driveBackup.progressPercent = Math.max(0, Math.min(100, Number(percent || 0)));
-    state.driveBackup.progressStatus = String(status || "대기");
+    state.driveBackup.progressPercent = Math.max(0, Math.min(100, Number(percent ?? 0)));
+    state.driveBackup.progressStatus = String(status ?? "대기");
     renderDriveBackupUi();
 }
 
@@ -3893,12 +3893,12 @@ function setDriveLastSyncNow() {
 }
 
 function saveDriveClientIdFromInput() {
-    const clientId = String(els.driveClientIdInput?.value || "").trim();
+    const clientId = String(els.driveClientIdInput?.value ?? "").trim();
     if (!clientId) {
         showToast("Google OAuth Client ID를 입력하세요.", "error", 2400);
         return;
     }
-    const clientSecret = String(els.driveClientSecretInput?.value || "").trim();
+    const clientSecret = String(els.driveClientSecretInput?.value ?? "").trim();
 
     setStoredDriveClientId(clientId);
     setStoredDriveClientSecret(clientSecret);
@@ -3938,11 +3938,11 @@ function setDriveAutoBackupEnabled(enabled) {
 }
 
 function isGoogleIdentityReady() {
-    return !!(window.google && window.google.accounts && window.google.accounts.oauth2);
+    return !!window.google?.accounts?.oauth2;
 }
 
 function ensureDriveTokenClient() {
-    const clientId = String(state.driveBackup.clientId || getStoredDriveClientId() || "").trim();
+    const clientId = String(state.driveBackup.clientId ?? getStoredDriveClientId() ?? "").trim();
     if (!clientId) {
         throw new Error("Google OAuth Client ID가 설정되지 않았습니다.");
     }
@@ -3954,7 +3954,7 @@ function ensureDriveTokenClient() {
         return state.driveBackup.tokenClient;
     }
 
-    if (String(state.driveBackup.clientSecret || "").trim()) {
+    if (String(state.driveBackup.clientSecret ?? "").trim()) {
         console.warn("[WARN] Google OAuth Client Secret is set but not used in browser OAuth token flow.");
     }
 
@@ -3978,10 +3978,10 @@ async function ensureDriveAccessToken({ interactive = false } = {}) {
     return await new Promise((resolve, reject) => {
         tokenClient.callback = (response) => {
             if (response?.error) {
-                reject(new Error(String(response.error_description || response.error || "Google OAuth 인증 실패")));
+                reject(new Error(String(response.error_description ?? response.error ?? "Google OAuth 인증 실패")));
                 return;
             }
-            const token = String(response?.access_token || "").trim();
+            const token = String(response?.access_token ?? "").trim();
             if (!token) {
                 reject(new Error("Google OAuth 액세스 토큰을 받지 못했습니다."));
                 return;
@@ -4065,7 +4065,7 @@ function startDriveFileListPolling() {
 }
 
 function shouldRetryDriveError(error) {
-    const status = Number(error?.status || 0);
+    const status = Number(error?.status ?? 0);
     if (!status) return true;
     if ([408, 409, 425, 429].includes(status)) return true;
     return status >= 500;
@@ -4118,7 +4118,7 @@ async function driveRequest(url, options = {}, context = {}) {
         } catch (error) {
             lastError = error;
 
-            if (Number(error?.status || 0) === 401 && !authRefreshed) {
+            if (Number(error?.status ?? 0) === 401 && !authRefreshed) {
                 authRefreshed = true;
                 state.driveBackup.accessToken = "";
                 state.driveBackup.tokenExpiresAt = 0;
@@ -4141,7 +4141,7 @@ async function driveRequest(url, options = {}, context = {}) {
 }
 
 async function ensureDriveBackupFolder() {
-    if (String(state.driveBackup.folderId || "").trim()) {
+    if (String(state.driveBackup.folderId ?? "").trim()) {
         return state.driveBackup.folderId;
     }
 
@@ -4159,7 +4159,7 @@ async function ensureDriveBackupFolder() {
     const findData = await findResponse.json();
     const folders = Array.isArray(findData?.files) ? findData.files : [];
     if (folders.length > 0) {
-        state.driveBackup.folderId = String(folders[0].id || "");
+        state.driveBackup.folderId = String(folders[0].id ?? "");
         return state.driveBackup.folderId;
     }
 
@@ -4179,13 +4179,13 @@ async function ensureDriveBackupFolder() {
         },
     );
     const created = await createResponse.json();
-    state.driveBackup.folderId = String(created?.id || "");
+    state.driveBackup.folderId = String(created?.id ?? "");
     return state.driveBackup.folderId;
 }
 
 async function findAvailableBackupFileName(folderId, baseName) {
     const safeFolder = escapeDriveQueryLiteral(folderId);
-    const safeBase = String(baseName || "").replace(/\.json$/i, "");
+    const safeBase = String(baseName ?? "").replace(/\.json$/i, "");
     let attempt = 0;
     while (attempt < 200) {
         const candidate = attempt === 0 ? `${safeBase}.json` : `${safeBase}_${attempt}.json`;
@@ -4213,7 +4213,7 @@ function buildBackupPayload() {
     const sessions = state.chatSessions
         .slice(0, CHAT_TAB_MAX_COUNT)
         .map((item) => ({
-            id: String(item.id || "").trim(),
+            id: String(item.id ?? "").trim(),
             title: String(item.title || getDefaultChatTitle()).trim() || getDefaultChatTitle(),
             createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
             updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : new Date().toISOString(),
@@ -4226,7 +4226,7 @@ function buildBackupPayload() {
         app: "LucidLLM",
         schema: "backup.v2",
         chatSessions: sessions,
-        activeChatSessionId: String(state.activeChatSessionId || ""),
+        activeChatSessionId: String(state.activeChatSessionId ?? ""),
         profile: {
             language: getProfileLanguage(),
             nickname: getProfileNickname(),
@@ -4243,7 +4243,7 @@ function buildBackupPayload() {
             language: getProfileLanguage(),
             inferenceDevice: normalizeInferenceDevice(state.inference.preferredDevice),
             autoLoadLastSession: !!state.settings.autoLoadLastSessionEnabled,
-            hfTokenConfigured: !!String(getToken() || "").trim(),
+            hfTokenConfigured: !!String(getToken() ?? "").trim(),
         },
     };
 }
@@ -4276,7 +4276,7 @@ async function uploadResumableBlobWithProgress(uploadUrl, blob, progressRange = 
                 return;
             }
             try {
-                resolve(JSON.parse(xhr.responseText || "{}"));
+                resolve(JSON.parse(xhr.responseText ?? "{}"));
             } catch (_) {
                 resolve({});
             }
@@ -4303,7 +4303,7 @@ async function uploadBackupPayloadToDrive(uploadText, options = {}) {
             encrypted: options.encrypted ? "1" : "0",
         },
     };
-    const blob = new Blob([String(uploadText || "")], { type: "application/json;charset=UTF-8" });
+    const blob = new Blob([String(uploadText ?? "")], { type: "application/json;charset=UTF-8" });
 
     const initResponse = await driveRequest(
         `${GOOGLE_DRIVE_UPLOAD_API_BASE}/files?uploadType=resumable&fields=id,name,modifiedTime,size`,
@@ -4321,7 +4321,7 @@ async function uploadBackupPayloadToDrive(uploadText, options = {}) {
             interactiveAuth: false,
         },
     );
-    const uploadUrl = String(initResponse.headers.get("location") || "").trim();
+    const uploadUrl = String(initResponse.headers.get("location") ?? "").trim();
     if (!uploadUrl) {
         throw new Error("Google Drive 업로드 세션 URL을 받지 못했습니다.");
     }
@@ -4336,7 +4336,7 @@ async function uploadBackupPayloadToDrive(uploadText, options = {}) {
             return uploaded;
         } catch (error) {
             lastError = error;
-            if (Number(error?.status || 0) === 401) {
+            if (Number(error?.status ?? 0) === 401) {
                 state.driveBackup.accessToken = "";
                 state.driveBackup.tokenExpiresAt = 0;
             }
@@ -4389,7 +4389,7 @@ async function backupChatsToGoogleDrive({ manual = false } = {}) {
 
     try {
         const uploadPayload = await createBackupUploadText(payload, {
-            passphrase: String(els.driveEncryptionPassphraseInput?.value || "").trim(),
+            passphrase: String(els.driveEncryptionPassphraseInput?.value ?? "").trim(),
             compress: !!els.driveBackupCompressToggle?.checked,
             kdfIterations: DRIVE_BACKUP_KDF_ITERATIONS,
         });
@@ -4399,7 +4399,7 @@ async function backupChatsToGoogleDrive({ manual = false } = {}) {
         });
         state.driveBackup.lastBackupSignature = signature;
         setDriveLastSyncNow();
-        setDriveProgress(100, `백업 완료: ${uploaded?.name || "-"}`);
+        setDriveProgress(100, `백업 완료: ${uploaded?.name ?? "-"}`);
         await refreshDriveBackupFileList({ silent: true, interactiveAuth: false });
         showToast("설정/대화 백업이 완료되었습니다.", "success", 2400);
     } catch (error) {
@@ -4428,10 +4428,10 @@ async function refreshDriveBackupFileList({ silent = true, interactiveAuth = fal
         );
         const data = await response.json();
         const files = Array.isArray(data?.files) ? data.files : [];
-        files.sort((a, b) => String(b.modifiedTime || "").localeCompare(String(a.modifiedTime || "")));
+        files.sort((a, b) => String(b.modifiedTime ?? "").localeCompare(String(a.modifiedTime ?? "")));
 
-        const previousLatest = state.driveBackup.latestRemoteModifiedTime || "";
-        const nextLatest = files[0]?.modifiedTime || "";
+        const previousLatest = state.driveBackup.latestRemoteModifiedTime ?? "";
+        const nextLatest = files[0]?.modifiedTime ?? "";
 
         state.driveBackup.files = files;
         state.driveBackup.latestRemoteModifiedTime = nextLatest;
@@ -4458,7 +4458,7 @@ async function downloadDriveFileAsText(fileId) {
         },
     );
 
-    const totalBytes = Number(response.headers.get("content-length") || 0);
+    const totalBytes = Number(response.headers.get("content-length") ?? 0);
     if (!response.body) {
         setDriveProgress(80, "복원 파일 다운로드 중...");
         const text = await response.text();
@@ -4518,7 +4518,7 @@ function applyBackupPayload(payload, { overwrite = true } = {}) {
         throw new Error("복원 가능한 대화 데이터가 없습니다.");
     }
 
-    const restoreActive = String(payload?.activeChatSessionId || "").trim();
+    const restoreActive = String(payload?.activeChatSessionId ?? "").trim();
     const activeExists = compact.some((item) => item.id === restoreActive);
     const nextActive = activeExists ? restoreActive : compact[0].id;
 
@@ -4598,7 +4598,7 @@ async function onDriveRestoreClick() {
         return;
     }
 
-    const fileId = String(els.driveBackupFileSelect?.value || "").trim();
+    const fileId = String(els.driveBackupFileSelect?.value ?? "").trim();
     if (!fileId) {
         showToast("복원할 백업 파일을 선택하세요.", "error", 2400);
         return;
@@ -4612,7 +4612,7 @@ async function onDriveRestoreClick() {
     try {
         const rawText = await downloadDriveFileAsText(fileId);
         const payload = await parseBackupPayloadFromText(rawText, {
-            passphrase: String(els.driveEncryptionPassphraseInput?.value || "").trim(),
+            passphrase: String(els.driveEncryptionPassphraseInput?.value ?? "").trim(),
             kdfIterations: DRIVE_BACKUP_KDF_ITERATIONS,
         });
         applyBackupPayload(payload, { overwrite });
@@ -4650,7 +4650,7 @@ function scheduleAutoBackup(reason = "change") {
 function hydrateSettings() {
     let rawSystemPrompt = "";
     try {
-        rawSystemPrompt = localStorage.getItem(STORAGE_KEYS.systemPrompt) || "";
+        rawSystemPrompt = localStorage.getItem(STORAGE_KEYS.systemPrompt) ?? "";
     } catch (_) {
         rawSystemPrompt = "";
     }
@@ -4695,7 +4695,7 @@ function hydrateSettings() {
 }
 
 function normalizePromptLineEndings(value) {
-    return String(value || "").replace(/\r\n?/g, "\n");
+    return String(value ?? "").replace(/\r\n?/g, "\n");
 }
 
 function countPromptLines(value) {
@@ -4736,7 +4736,7 @@ function clampSystemPromptLines(value) {
 
 function notifySystemPromptLimit(message, kind = "info", duration = 2200) {
     const now = Date.now();
-    const lastNotifiedAt = Math.max(0, Number(state.settings.systemPromptLimitNoticeAt || 0));
+    const lastNotifiedAt = Math.max(0, Number(state.settings.systemPromptLimitNoticeAt ?? 0));
     if (now - lastNotifiedAt < 1200) {
         return;
     }
@@ -4754,13 +4754,13 @@ function enforceSystemPromptEditorLimit(options = {}) {
         };
     }
 
-    const previousLineCount = Math.max(0, Number(state.settings.systemPromptLastLineCount || 0));
-    const currentValue = String(els.systemPromptInput.value || "");
+    const previousLineCount = Math.max(0, Number(state.settings.systemPromptLastLineCount ?? 0));
+    const currentValue = String(els.systemPromptInput.value ?? "");
     const limited = clampSystemPromptLines(currentValue);
 
     if (limited.trimmed) {
         const nextCursor = Math.min(
-            Number(els.systemPromptInput.selectionStart || 0),
+            Number(els.systemPromptInput.selectionStart ?? 0),
             limited.value.length,
         );
         els.systemPromptInput.value = limited.value;
@@ -4797,9 +4797,9 @@ function enforceSystemPromptEditorLimit(options = {}) {
 }
 
 function readLlmDraftInputs() {
-    const prompt = els.systemPromptInput ? String(els.systemPromptInput.value || "") : "";
+    const prompt = els.systemPromptInput ? String(els.systemPromptInput.value ?? "") : "";
     const maxTokens = els.maxOutputTokensInput ? Number(els.maxOutputTokensInput.value) : getMaxOutputTokens();
-    const contextWindow = els.contextWindowSelect ? String(els.contextWindowSelect.value || "") : getContextWindowSize();
+    const contextWindow = els.contextWindowSelect ? String(els.contextWindowSelect.value ?? "") : getContextWindowSize();
     const temperature = els.llmTemperatureInput
         ? Number(els.llmTemperatureInput.value)
         : Number(state.settings.generationTemperature);
@@ -4831,7 +4831,7 @@ function validateLlmDraft(draft = readLlmDraftInputs()) {
         errors.push("최대 생성 토큰은 1~32768 범위의 정수여야 합니다.");
     }
 
-    if (!["4k", "8k", "16k", "32k", "128k"].includes(String(draft.contextWindow || ""))) {
+    if (!["4k", "8k", "16k", "32k", "128k"].includes(String(draft.contextWindow ?? ""))) {
         errors.push("컨텍스트 윈도우 값이 유효하지 않습니다.");
     }
 
@@ -4860,13 +4860,13 @@ function validateLlmDraft(draft = readLlmDraftInputs()) {
 function renderLlmDraftStatus() {
     const draft = readLlmDraftInputs();
     const validated = validateLlmDraft(draft);
-    state.settings.systemPromptLastLineCount = Math.max(0, Number(validated.lineCount || 0));
+    state.settings.systemPromptLastLineCount = Math.max(0, Number(validated.lineCount ?? 0));
     const clampedTemperature = clampGenerationTemperature(draft.temperature);
     const clampedTopP = clampGenerationTopP(draft.topP);
     const clampedPresencePenalty = clampGenerationPresencePenalty(draft.presencePenalty);
 
     if (els.maxOutputTokensValue) {
-        els.maxOutputTokensValue.textContent = String(Math.max(1, Math.min(32768, Number(draft.maxTokens) || 0)));
+        els.maxOutputTokensValue.textContent = String(Math.max(1, Math.min(32768, Number(draft.maxTokens) ?? 0)));
     }
     if (els.llmTemperatureValue) {
         els.llmTemperatureValue.textContent = clampedTemperature.toFixed(2);
@@ -4879,7 +4879,7 @@ function renderLlmDraftStatus() {
     }
 
     if (els.systemPromptLineCount) {
-        const lineCount = Math.max(0, Number(validated.lineCount || 0));
+        const lineCount = Math.max(0, Number(validated.lineCount ?? 0));
         const maxLines = SYSTEM_PROMPT_MAX_LINES;
         let counterClass = "text-[11px] text-slate-400";
         let suffix = "";
@@ -4942,7 +4942,7 @@ function applyLlmSettingsFromDraft(options = {}) {
 }
 
 function getSettingsTabTitle(tabId) {
-    const key = String(tabId || "").trim();
+    const key = String(tabId ?? "").trim();
     if (key === "model") return t("settings.tab.model");
     if (key === "llm") return t("settings.tab.llm");
     if (key === "profile") return t("settings.tab.profile");
@@ -4966,43 +4966,43 @@ function snapshotDownloadPanelState() {
         inProgress: false,
         isPaused: false,
         pauseRequested: false,
-        modelId: String(state.download.modelId || ""),
+        modelId: String(state.download.modelId ?? ""),
         quantizationOptions: Array.isArray(state.download.quantizationOptions)
             ? state.download.quantizationOptions.map((item) => ({
-                key: String(item?.key || ""),
-                quantizationKey: String(item?.quantizationKey || item?.key || ""),
-                label: String(item?.label || ""),
-                score: Number(item?.score) || 0,
+                key: String(item?.key ?? ""),
+                quantizationKey: String(item?.quantizationKey ?? item?.key ?? ""),
+                label: String(item?.label ?? ""),
+                score: Number(item?.score) ?? 0,
                 rank: Number.isFinite(Number(item?.rank)) ? Number(item.rank) : 999,
-                sourceFileName: String(item?.sourceFileName || ""),
-                fileName: String(item?.fileName || ""),
-                fileUrl: String(item?.fileUrl || ""),
+                sourceFileName: String(item?.sourceFileName ?? ""),
+                fileName: String(item?.fileName ?? ""),
+                fileUrl: String(item?.fileUrl ?? ""),
                 files: Array.isArray(item?.files) ? item.files.map((entry) => ({ ...entry })) : [],
             }))
             : [],
-        selectedQuantizationKey: String(state.download.selectedQuantizationKey || ""),
-        fileName: String(state.download.fileName || ""),
-        fileUrl: String(state.download.fileUrl || ""),
-        primaryFileName: String(state.download.primaryFileName || ""),
-        primaryFileUrl: String(state.download.primaryFileUrl || ""),
+        selectedQuantizationKey: String(state.download.selectedQuantizationKey ?? ""),
+        fileName: String(state.download.fileName ?? ""),
+        fileUrl: String(state.download.fileUrl ?? ""),
+        primaryFileName: String(state.download.primaryFileName ?? ""),
+        primaryFileUrl: String(state.download.primaryFileUrl ?? ""),
         queue: Array.isArray(state.download.queue) ? state.download.queue.map((item) => ({ ...item })) : [],
-        queueIndex: Math.max(0, Number(state.download.queueIndex || 0)),
-        completedBytes: Math.max(0, Number(state.download.completedBytes || 0)),
-        currentFileBytesReceived: Math.max(0, Number(state.download.currentFileBytesReceived || 0)),
+        queueIndex: Math.max(0, Number(state.download.queueIndex ?? 0)),
+        completedBytes: Math.max(0, Number(state.download.completedBytes ?? 0)),
+        currentFileBytesReceived: Math.max(0, Number(state.download.currentFileBytesReceived ?? 0)),
         currentFileTotalBytes: Number.isFinite(Number(state.download.currentFileTotalBytes))
             ? Number(state.download.currentFileTotalBytes)
             : null,
-        bytesReceived: Math.max(0, Number(state.download.bytesReceived || 0)),
+        bytesReceived: Math.max(0, Number(state.download.bytesReceived ?? 0)),
         totalBytes: Number.isFinite(Number(state.download.totalBytes))
             ? Number(state.download.totalBytes)
             : null,
         percent: Number.isFinite(Number(state.download.percent)) ? Number(state.download.percent) : 0,
-        speedBps: Math.max(0, Number(state.download.speedBps || 0)),
+        speedBps: Math.max(0, Number(state.download.speedBps ?? 0)),
         etaSeconds: Number.isFinite(Number(state.download.etaSeconds))
             ? Number(state.download.etaSeconds)
             : null,
-        attempt: Math.max(0, Number(state.download.attempt || 0)),
-        statusText: String(state.download.statusText || ""),
+        attempt: Math.max(0, Number(state.download.attempt ?? 0)),
+        statusText: String(state.download.statusText ?? ""),
         lastRenderedAt: 0,
     };
 }
@@ -5014,47 +5014,47 @@ function restoreDownloadPanelState(snapshot) {
     state.download.isPaused = !!snapshot.isPaused;
     state.download.pauseRequested = false;
     state.download.abortController = null;
-    state.download.modelId = String(snapshot.modelId || "");
+    state.download.modelId = String(snapshot.modelId ?? "");
     state.download.quantizationOptions = Array.isArray(snapshot.quantizationOptions)
         ? snapshot.quantizationOptions.map((item) => ({
-            key: String(item?.key || ""),
-            quantizationKey: String(item?.quantizationKey || item?.key || ""),
-            label: String(item?.label || ""),
-            score: Number(item?.score) || 0,
+            key: String(item?.key ?? ""),
+            quantizationKey: String(item?.quantizationKey ?? item?.key ?? ""),
+            label: String(item?.label ?? ""),
+            score: Number(item?.score) ?? 0,
             rank: Number.isFinite(Number(item?.rank)) ? Number(item.rank) : 999,
-            sourceFileName: String(item?.sourceFileName || ""),
-            fileName: String(item?.fileName || ""),
-            fileUrl: String(item?.fileUrl || ""),
+            sourceFileName: String(item?.sourceFileName ?? ""),
+            fileName: String(item?.fileName ?? ""),
+            fileUrl: String(item?.fileUrl ?? ""),
             files: Array.isArray(item?.files) ? item.files.map((entry) => ({ ...entry })) : [],
         }))
         : [];
-    state.download.selectedQuantizationKey = String(snapshot.selectedQuantizationKey || "");
-    state.download.fileName = String(snapshot.fileName || "");
-    state.download.fileUrl = String(snapshot.fileUrl || "");
-    state.download.primaryFileName = String(snapshot.primaryFileName || "");
-    state.download.primaryFileUrl = String(snapshot.primaryFileUrl || "");
+    state.download.selectedQuantizationKey = String(snapshot.selectedQuantizationKey ?? "");
+    state.download.fileName = String(snapshot.fileName ?? "");
+    state.download.fileUrl = String(snapshot.fileUrl ?? "");
+    state.download.primaryFileName = String(snapshot.primaryFileName ?? "");
+    state.download.primaryFileUrl = String(snapshot.primaryFileUrl ?? "");
     state.download.queue = Array.isArray(snapshot.queue) ? snapshot.queue.map((item) => ({ ...item })) : [];
-    state.download.queueIndex = Math.max(0, Number(snapshot.queueIndex || 0));
-    state.download.completedBytes = Math.max(0, Number(snapshot.completedBytes || 0));
-    state.download.currentFileBytesReceived = Math.max(0, Number(snapshot.currentFileBytesReceived || 0));
+    state.download.queueIndex = Math.max(0, Number(snapshot.queueIndex ?? 0));
+    state.download.completedBytes = Math.max(0, Number(snapshot.completedBytes ?? 0));
+    state.download.currentFileBytesReceived = Math.max(0, Number(snapshot.currentFileBytesReceived ?? 0));
     state.download.currentFileTotalBytes = Number.isFinite(Number(snapshot.currentFileTotalBytes))
         ? Number(snapshot.currentFileTotalBytes)
         : null;
-    state.download.bytesReceived = Math.max(0, Number(snapshot.bytesReceived || 0));
+    state.download.bytesReceived = Math.max(0, Number(snapshot.bytesReceived ?? 0));
     state.download.totalBytes = Number.isFinite(Number(snapshot.totalBytes)) ? Number(snapshot.totalBytes) : null;
     state.download.percent = Number.isFinite(Number(snapshot.percent)) ? Number(snapshot.percent) : 0;
-    state.download.speedBps = Math.max(0, Number(snapshot.speedBps || 0));
+    state.download.speedBps = Math.max(0, Number(snapshot.speedBps ?? 0));
     state.download.etaSeconds = Number.isFinite(Number(snapshot.etaSeconds)) ? Number(snapshot.etaSeconds) : null;
-    state.download.attempt = Math.max(0, Number(snapshot.attempt || 0));
-    state.download.statusText = String(snapshot.statusText || "모델 조회 후 다운로드 메뉴가 자동 활성화됩니다.");
+    state.download.attempt = Math.max(0, Number(snapshot.attempt ?? 0));
+    state.download.statusText = String(snapshot.statusText ?? "모델 조회 후 다운로드 메뉴가 자동 활성화됩니다.");
     state.download.lastRenderedAt = 0;
 }
 
 function captureSettingsTabSnapshot(tabId) {
-    const tab = String(tabId || "").trim();
+    const tab = String(tabId ?? "").trim();
     if (tab === "model") {
         return {
-            modelInput: String(els.modelIdInput?.value || ""),
+            modelInput: String(els.modelIdInput?.value ?? ""),
             modelLoadingVisible: !!(els.modelLoadingRow && !els.modelLoadingRow.classList.contains("hidden")),
             autoLoadLastSessionEnabled: !!state.settings.autoLoadLastSessionEnabled,
             download: snapshotDownloadPanelState(),
@@ -5075,8 +5075,8 @@ function captureSettingsTabSnapshot(tabId) {
     }
     if (tab === "profile") {
         return {
-            nickname: String(state.profile?.nickname || ""),
-            avatarDataUrl: String(state.profile?.avatarDataUrl || ""),
+            nickname: String(state.profile?.nickname ?? ""),
+            avatarDataUrl: String(state.profile?.avatarDataUrl ?? ""),
         };
     }
     if (tab === "theme") {
@@ -5091,23 +5091,23 @@ function captureSettingsTabSnapshot(tabId) {
     }
     if (tab === "backup") {
         return {
-            clientId: String(state.driveBackup.clientId || getStoredDriveClientId() || ""),
-            clientSecret: String(state.driveBackup.clientSecret || getStoredDriveClientSecret() || ""),
+            clientId: String(state.driveBackup.clientId ?? getStoredDriveClientId() ?? ""),
+            clientSecret: String(state.driveBackup.clientSecret ?? getStoredDriveClientSecret() ?? ""),
             backupLimitMb: Math.max(
                 DRIVE_BACKUP_MIN_LIMIT_MB,
                 Math.min(DRIVE_BACKUP_MAX_LIMIT_MB, Number(state.driveBackup.backupLimitMb || DRIVE_BACKUP_DEFAULT_LIMIT_MB)),
             ),
             autoEnabled: !!state.driveBackup.autoEnabled,
-            lastSyncAt: String(state.driveBackup.lastSyncAt || getStoredDriveLastSyncAt() || ""),
+            lastSyncAt: String(state.driveBackup.lastSyncAt ?? getStoredDriveLastSyncAt() ?? ""),
             connected: !!state.driveBackup.connected,
-            accessToken: String(state.driveBackup.accessToken || ""),
-            tokenExpiresAt: Math.max(0, Number(state.driveBackup.tokenExpiresAt || 0)),
+            accessToken: String(state.driveBackup.accessToken ?? ""),
+            tokenExpiresAt: Math.max(0, Number(state.driveBackup.tokenExpiresAt ?? 0)),
             files: cloneJsonSafe(state.driveBackup.files, []),
-            latestRemoteModifiedTime: String(state.driveBackup.latestRemoteModifiedTime || ""),
-            folderId: String(state.driveBackup.folderId || ""),
-            lastBackupSignature: String(state.driveBackup.lastBackupSignature || ""),
-            progressPercent: Math.max(0, Math.min(100, Number(state.driveBackup.progressPercent || 0))),
-            progressStatus: String(state.driveBackup.progressStatus || "대기"),
+            latestRemoteModifiedTime: String(state.driveBackup.latestRemoteModifiedTime ?? ""),
+            folderId: String(state.driveBackup.folderId ?? ""),
+            lastBackupSignature: String(state.driveBackup.lastBackupSignature ?? ""),
+            progressPercent: Math.max(0, Math.min(100, Number(state.driveBackup.progressPercent ?? 0))),
+            progressStatus: String(state.driveBackup.progressStatus ?? "대기"),
         };
     }
     return null;
@@ -5122,7 +5122,7 @@ function resetModelTabDefaults() {
     }
     restoreDownloadPanelState({
         enabled: false,
-        modelId: selectedModel || "",
+        modelId: selectedModel ?? "",
         fileName: "",
         fileUrl: "",
         primaryFileName: "",
@@ -5147,7 +5147,7 @@ function resetModelTabDefaults() {
 function restoreModelTabFromSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== "object") return;
     if (els.modelIdInput) {
-        els.modelIdInput.value = String(snapshot.modelInput || "");
+        els.modelIdInput.value = String(snapshot.modelInput ?? "");
     }
     if (els.modelLoadingRow) {
         els.modelLoadingRow.classList.toggle("hidden", !snapshot.modelLoadingVisible);
@@ -5194,10 +5194,10 @@ function resetLlmTabDefaults() {
 
 function restoreLlmTabFromSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== "object") return;
-    setSystemPrompt(String(snapshot.systemPrompt || ""));
+    setSystemPrompt(String(snapshot.systemPrompt ?? ""));
     setMaxOutputTokens(Number(snapshot.maxOutputTokens || LLM_DEFAULT_SETTINGS.maxOutputTokens));
     setContextWindowSize(String(snapshot.contextWindow || LLM_DEFAULT_SETTINGS.contextWindow));
-    setToken(String(snapshot.token || ""));
+    setToken(String(snapshot.token ?? ""));
     setLocalGenerationSettings({
         temperature: snapshot.generationTemperature,
         topP: snapshot.generationTopP,
@@ -5243,7 +5243,7 @@ function restoreProfileTabFromSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== "object") return;
     saveUserProfile({
         nickname: String(snapshot.nickname || buildDefaultProfile().nickname),
-        avatarDataUrl: String(snapshot.avatarDataUrl || ""),
+        avatarDataUrl: String(snapshot.avatarDataUrl ?? ""),
     });
     hydrateProfileSettings();
     renderProfileIdentityChip();
@@ -5307,11 +5307,11 @@ function restoreBackupTabFromSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== "object") return;
     stopDriveFileListPolling();
     state.driveBackup.inProgress = false;
-    setStoredDriveClientId(String(snapshot.clientId || ""));
-    setStoredDriveClientSecret(String(snapshot.clientSecret || ""));
+    setStoredDriveClientId(String(snapshot.clientId ?? ""));
+    setStoredDriveClientSecret(String(snapshot.clientSecret ?? ""));
     setStoredDriveBackupLimitMb(snapshot.backupLimitMb);
-    state.driveBackup.clientId = String(snapshot.clientId || "");
-    state.driveBackup.clientSecret = String(snapshot.clientSecret || "");
+    state.driveBackup.clientId = String(snapshot.clientId ?? "");
+    state.driveBackup.clientSecret = String(snapshot.clientSecret ?? "");
     state.driveBackup.backupLimitMb = Math.max(
         DRIVE_BACKUP_MIN_LIMIT_MB,
         Math.min(DRIVE_BACKUP_MAX_LIMIT_MB, Number(snapshot.backupLimitMb || DRIVE_BACKUP_DEFAULT_LIMIT_MB)),
@@ -5326,16 +5326,16 @@ function restoreBackupTabFromSnapshot(snapshot) {
         els.driveBackupLimitMbInput.value = String(state.driveBackup.backupLimitMb);
     }
     setDriveAutoBackupEnabled(!!snapshot.autoEnabled);
-    setStoredDriveLastSyncAt(String(snapshot.lastSyncAt || ""));
-    state.driveBackup.lastSyncAt = String(snapshot.lastSyncAt || "");
-    state.driveBackup.accessToken = String(snapshot.accessToken || "");
-    state.driveBackup.tokenExpiresAt = Math.max(0, Number(snapshot.tokenExpiresAt || 0));
+    setStoredDriveLastSyncAt(String(snapshot.lastSyncAt ?? ""));
+    state.driveBackup.lastSyncAt = String(snapshot.lastSyncAt ?? "");
+    state.driveBackup.accessToken = String(snapshot.accessToken ?? "");
+    state.driveBackup.tokenExpiresAt = Math.max(0, Number(snapshot.tokenExpiresAt ?? 0));
     state.driveBackup.tokenClient = null;
     state.driveBackup.connected = !!snapshot.connected;
     state.driveBackup.files = Array.isArray(snapshot.files) ? snapshot.files.map((item) => ({ ...item })) : [];
-    state.driveBackup.latestRemoteModifiedTime = String(snapshot.latestRemoteModifiedTime || "");
-    state.driveBackup.folderId = String(snapshot.folderId || "");
-    state.driveBackup.lastBackupSignature = String(snapshot.lastBackupSignature || "");
+    state.driveBackup.latestRemoteModifiedTime = String(snapshot.latestRemoteModifiedTime ?? "");
+    state.driveBackup.folderId = String(snapshot.folderId ?? "");
+    state.driveBackup.lastBackupSignature = String(snapshot.lastBackupSignature ?? "");
     if (state.driveBackup.connected) {
         startDriveFileListPolling();
     }
@@ -5347,7 +5347,7 @@ function restoreBackupTabFromSnapshot(snapshot) {
 }
 
 function applySettingsTabDefaults(tabId) {
-    const tab = String(tabId || "").trim();
+    const tab = String(tabId ?? "").trim();
     if (tab === "model") {
         resetModelTabDefaults();
         return true;
@@ -5376,7 +5376,7 @@ function applySettingsTabDefaults(tabId) {
 }
 
 function restoreSettingsTabFromSnapshot(tabId, snapshot) {
-    const tab = String(tabId || "").trim();
+    const tab = String(tabId ?? "").trim();
     if (tab === "model") {
         restoreModelTabFromSnapshot(snapshot);
         return true;
@@ -5405,7 +5405,7 @@ function restoreSettingsTabFromSnapshot(tabId, snapshot) {
 }
 
 function requestResetSettingsTab(tabId) {
-    const tab = String(tabId || "").trim();
+    const tab = String(tabId ?? "").trim();
     if (!tab) return;
     const tabTitle = getSettingsTabTitle(tab);
     const confirmed = window.confirm(
@@ -5492,7 +5492,7 @@ function createChatSession() {
 }
 
 function activateChatSession(sessionId) {
-    const nextId = String(sessionId || "").trim();
+    const nextId = String(sessionId ?? "").trim();
     if (!nextId || nextId === state.activeChatSessionId) {
         return;
     }
@@ -5514,7 +5514,7 @@ function activateChatSession(sessionId) {
 }
 
 function deleteChatSession(sessionId) {
-    const targetId = String(sessionId || "").trim();
+    const targetId = String(sessionId ?? "").trim();
     if (!targetId) return;
 
     if (state.isSendingChat) {
@@ -5559,7 +5559,7 @@ function buildNextChatSessionTitle() {
     const used = new Set(
         state.chatSessions
             .map((session) => {
-                const matched = new RegExp(`^${prefix}\\s+(\\d+)$`, "i").exec(String(session.title || "").trim());
+                const matched = new RegExp(`^${prefix}\\s+(\\d+)$`, "i").exec(String(session.title ?? "").trim());
                 return matched ? Number(matched[1]) : 0;
             })
             .filter((value) => Number.isFinite(value) && value > 0),
@@ -5577,7 +5577,7 @@ function getDefaultChatTitle() {
 }
 
 function getActiveChatSession() {
-    return state.chatSessions.find((item) => item.id === state.activeChatSessionId) || null;
+    return state.chatSessions.find((item) => item.id === state.activeChatSessionId) ?? null;
 }
 
 function syncActiveSessionToState() {
@@ -5592,7 +5592,7 @@ function syncActiveSessionToState() {
         return {
             id: normalizedId,
             role: item?.role === "user" ? "user" : "assistant",
-            text: String(item?.text || ""),
+            text: String(item?.text ?? ""),
             at: typeof item?.at === "string" && item.at.trim() ? item.at : new Date().toISOString(),
             tokenPerSecond: Number.isFinite(Number(item?.tokenPerSecond)) ? Number(item.tokenPerSecond) : null,
             tokenCount: Number.isFinite(Number(item?.tokenCount)) ? Number(item.tokenCount) : null,
@@ -5613,7 +5613,7 @@ function persistActiveSessionMessages() {
     active.messages = state.messages.map((item) => ({
         id: Number(item.id),
         role: item.role === "user" ? "user" : "assistant",
-        text: String(item.text || ""),
+        text: String(item.text ?? ""),
         at: typeof item.at === "string" && item.at.trim() ? item.at : new Date().toISOString(),
         tokenPerSecond: Number.isFinite(Number(item.tokenPerSecond)) ? Number(item.tokenPerSecond) : null,
         tokenCount: Number.isFinite(Number(item.tokenCount)) ? Number(item.tokenCount) : null,
@@ -5623,9 +5623,9 @@ function persistActiveSessionMessages() {
     }));
     active.updatedAt = new Date().toISOString();
 
-    const firstUser = active.messages.find((item) => item.role === "user" && String(item.text || "").trim());
+    const firstUser = active.messages.find((item) => item.role === "user" && String(item.text ?? "").trim());
     if (firstUser) {
-        const nextTitle = String(firstUser.text || "").trim().replace(/\s+/g, " ").slice(0, 22);
+        const nextTitle = String(firstUser.text ?? "").trim().replace(/\s+/g, " ").slice(0, 22);
         if (nextTitle) {
             active.title = nextTitle;
         }
@@ -5719,7 +5719,7 @@ function getStoredChatSessions() {
 
 function getStoredActiveChatSessionId() {
     try {
-        return String(localStorage.getItem(STORAGE_KEYS.activeChatSessionId) || "").trim();
+        return String(localStorage.getItem(STORAGE_KEYS.activeChatSessionId) ?? "").trim();
     } catch (_) {
         return "";
     }
@@ -5730,7 +5730,7 @@ function persistChatSessions() {
         const compact = state.chatSessions
             .slice(0, CHAT_TAB_MAX_COUNT)
             .map((item) => ({
-                id: String(item.id || "").trim(),
+                id: String(item.id ?? "").trim(),
                 title: String(item.title || getDefaultChatTitle()).trim() || getDefaultChatTitle(),
                 createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
                 updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : new Date().toISOString(),
@@ -5738,7 +5738,7 @@ function persistChatSessions() {
             }));
 
         localStorage.setItem(STORAGE_KEYS.chatSessions, JSON.stringify(compact));
-        localStorage.setItem(STORAGE_KEYS.activeChatSessionId, state.activeChatSessionId || "");
+        localStorage.setItem(STORAGE_KEYS.activeChatSessionId, state.activeChatSessionId ?? "");
         scheduleAutoBackup("chat_persist");
     } catch (_) {
         // no-op
@@ -5782,7 +5782,7 @@ function openSettings() {
         els.settingsOverlay.style.opacity = "1";
     });
 
-    setSettingsTab(state.settings.activeTab || "model");
+    setSettingsTab(state.settings.activeTab ?? "model");
     renderLlmDraftStatus();
     hydrateProfileSettings();
     renderLocalizedStaticText();
@@ -5841,19 +5841,19 @@ function closeSettings() {
 
 function setSettingsTab(tabId) {
     const allowed = new Set(["model", "llm", "profile", "theme", "language", "backup"]);
-    const next = allowed.has(String(tabId || "")) ? String(tabId) : "model";
+    const next = allowed.has(String(tabId ?? "")) ? String(tabId) : "model";
     state.settings.activeTab = next;
 
     if (Array.isArray(els.settingsTabButtons)) {
         for (const button of els.settingsTabButtons) {
-            const isActive = String(button.dataset.settingsTabBtn || "") === next;
+            const isActive = String(button.dataset.settingsTabBtn ?? "") === next;
             button.setAttribute("aria-selected", isActive ? "true" : "false");
         }
     }
 
     if (Array.isArray(els.settingsPanels)) {
         for (const panel of els.settingsPanels) {
-            const isActive = String(panel.dataset.settingsPanel || "") === next;
+            const isActive = String(panel.dataset.settingsPanel ?? "") === next;
             panel.classList.toggle("hidden", !isActive);
         }
     }
@@ -5865,7 +5865,7 @@ function getSettingsFocusableElements() {
         "a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])",
     );
 
-    return Array.from(candidates).filter((element) => {
+    return [...candidates].filter((element) => {
         if (!(element instanceof HTMLElement)) return false;
         if (element.closest(".hidden")) return false;
         return element.offsetParent !== null || element === document.activeElement;
@@ -5939,7 +5939,7 @@ async function handleModelLookup(rawInput, options = {}) {
         const metadataWithReadme = await enrichModelMetadataWithReadme(
             metadata,
             normalizedFetchedId || modelId,
-            { revision: metadata?.sha || "main" },
+            { revision: metadata?.sha ?? "main" },
         );
         if (isValidModelId(normalizedFetchedId)) {
             state.modelCardCache[normalizedFetchedId] = {
@@ -5948,7 +5948,7 @@ async function handleModelLookup(rawInput, options = {}) {
             };
         }
         applySelectedModel(metadataWithReadme.id || modelId, {
-            task: metadataWithReadme.pipeline_tag || "-",
+            task: metadataWithReadme.pipeline_tag ?? "-",
             downloads: Number.isFinite(Number(metadataWithReadme.downloads)) ? Number(metadataWithReadme.downloads) : null,
             raw: metadataWithReadme,
         });
@@ -5962,12 +5962,12 @@ async function handleModelLookup(rawInput, options = {}) {
 
         return { ok: true, modelId: selectedModel, metadata: metadataWithReadme };
     } catch (error) {
-        const failedModelId = normalizeModelId(targetModelId || selectedModel || "");
+        const failedModelId = normalizeModelId(targetModelId ?? selectedModel ?? "");
         if (failedModelId) {
             setSelectedModelLoadState("failed", failedModelId, getErrorMessage(error));
         }
 
-        const status = Number(error.status || 0);
+        const status = Number(error.status ?? 0);
         if (status === 404 || status === 401) {
             showToast("모델을 찾을 수 없습니다. 업로터/모델명을 확인해주세요.", "error", 3000);
         } else {
@@ -5985,16 +5985,16 @@ async function handleModelLookup(rawInput, options = {}) {
 }
 
 function normalizeModelId(raw) {
-    return String(raw || "").trim().replace(/^\/+|\/+$/g, "");
+    return String(raw ?? "").trim().replace(/^\/+|\/+$/g, "");
 }
 
 function looksLikeUrlInput(raw) {
-    const value = String(raw || "").trim();
+    const value = String(raw ?? "").trim();
     return /^https?:\/\//i.test(value) || /^www\./i.test(value) || /^huggingface\.co\//i.test(value);
 }
 
 function parseWebUrl(raw) {
-    let value = String(raw || "").trim();
+    let value = String(raw ?? "").trim();
     if (/^www\./i.test(value) || /^huggingface\.co\//i.test(value)) {
         value = `https://${value}`;
     }
@@ -6014,12 +6014,12 @@ function parseWebUrl(raw) {
 }
 
 function isHuggingFaceHost(hostname) {
-    const host = String(hostname || "").toLowerCase();
+    const host = String(hostname ?? "").toLowerCase();
     return host === "huggingface.co" || host === "www.huggingface.co";
 }
 
 function extractModelIdFromHfUrl(urlObj) {
-    const segments = String(urlObj.pathname || "")
+    const segments = String(urlObj.pathname ?? "")
         .split("/")
         .filter(Boolean)
         .map((part) => decodeURIComponent(part));
@@ -6054,7 +6054,7 @@ function extractModelIdFromHfUrl(urlObj) {
 }
 
 function isValidModelId(modelId) {
-    return /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(String(modelId || ""));
+    return /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(String(modelId ?? ""));
 }
 
 async function verifyWebPageUrl(urlObj) {
@@ -6102,7 +6102,7 @@ function createInputError(message, code, status = 0) {
 }
 
 async function resolveLookupInput(rawInput) {
-    const input = String(rawInput || "").trim();
+    const input = String(rawInput ?? "").trim();
     if (!input) {
         throw createInputError("업로더/모델명 또는 모델 URL을 입력해주세요.", "empty_input");
     }
@@ -6114,7 +6114,7 @@ async function resolveLookupInput(rawInput) {
 
         if (!isHfUrl) {
             if (!pageValidation.ok) {
-                throw createInputError(pageValidation.message || "URL 유효성 검증에 실패했습니다.", "invalid_url_page", pageValidation.status);
+                throw createInputError(pageValidation.message ?? "URL 유효성 검증에 실패했습니다.", "invalid_url_page", pageValidation.status);
             }
             throw createInputError(
                 "유효한 웹 페이지 주소지만 Hugging Face 모델 URL이 아닙니다. 예: https://huggingface.co/lightonai/LateOn-Code-edge",
@@ -6122,8 +6122,8 @@ async function resolveLookupInput(rawInput) {
             );
         }
 
-        if (!pageValidation.ok && [401, 403, 404].includes(Number(pageValidation.status || 0))) {
-            throw createInputError(pageValidation.message || "Hugging Face 페이지 접근에 실패했습니다.", "invalid_hf_page", pageValidation.status);
+        if (!pageValidation.ok && [401, 403, 404].includes(Number(pageValidation.status ?? 0))) {
+            throw createInputError(pageValidation.message ?? "Hugging Face 페이지 접근에 실패했습니다.", "invalid_hf_page", pageValidation.status);
         }
 
         const modelId = normalizeModelId(extractModelIdFromHfUrl(urlObj));
@@ -6156,14 +6156,14 @@ async function resolveLookupInput(rawInput) {
 }
 
 function encodeHfRepoId(modelId) {
-    return String(modelId || "")
+    return String(modelId ?? "")
         .split("/")
         .map((part) => encodeURIComponent(part))
         .join("/");
 }
 
 function encodeHfRevisionPath(revision) {
-    const normalized = String(revision || "main").trim() || "main";
+    const normalized = String(revision ?? "main").trim() ?? "main";
     return normalized
         .split("/")
         .filter(Boolean)
@@ -6221,7 +6221,7 @@ async function fetchModelMetadata(modelId) {
     }
 
     if (!response.ok) {
-        const error = new Error((payload && payload.error) || `HTTP ${response.status}`);
+        const error = new Error((payload && payload.error) ?? `HTTP ${response.status}`);
         error.status = response.status;
         error.payload = payload;
         throw error;
@@ -6235,7 +6235,7 @@ function collectSiblingFileNamesWithoutSize(metadata) {
     const siblings = Array.isArray(metadata?.siblings) ? metadata.siblings : [];
     const missing = [];
     for (const sibling of siblings) {
-        const fileName = normalizeOpfsModelRelativePath(sibling?.rfilename || sibling?.path || "");
+        const fileName = normalizeOpfsModelRelativePath(sibling?.rfilename ?? sibling?.path ?? "");
         if (!fileName) continue;
         if (extractSiblingSizeBytes(sibling) !== null) continue;
         missing.push(fileName);
@@ -6249,7 +6249,7 @@ async function fetchSiblingSizeMapFromHfTreeApi(modelId, fileNames = [], options
         return new Map();
     }
 
-    const revision = String(options.revision || "main").trim() || "main";
+    const revision = String(options.revision ?? "main").trim() ?? "main";
     const url = buildHfModelTreeApiUrl(normalizedModelId, revision);
     const headers = {
         Accept: "application/json",
@@ -6285,8 +6285,8 @@ async function fetchSiblingSizeMapFromHfTreeApi(modelId, fileNames = [], options
     );
     const sizeMap = new Map();
     for (const row of payload) {
-        if (String(row?.type || "file").toLowerCase() !== "file") continue;
-        const path = normalizeOpfsModelRelativePath(row?.path || row?.rfilename || "");
+        if (String(row?.type ?? "file").toLowerCase() !== "file") continue;
+        const path = normalizeOpfsModelRelativePath(row?.path ?? row?.rfilename ?? "");
         if (!path) continue;
         const lowerPath = path.toLowerCase();
         if (targetSet.size > 0 && !targetSet.has(lowerPath)) continue;
@@ -6319,7 +6319,7 @@ async function enrichModelMetadataWithSiblingSizeMap(metadata, modelId = "") {
 
     try {
         const sizeMap = await fetchSiblingSizeMapFromHfTreeApi(
-            modelId || base.id || "",
+            modelId ?? base.id ?? "",
             missingFileNames,
             {
                 revision: typeof base?.sha === "string" && base.sha.trim()
@@ -6334,7 +6334,7 @@ async function enrichModelMetadataWithSiblingSizeMap(metadata, modelId = "") {
 
         let patchedCount = 0;
         const patched = siblings.map((sibling) => {
-            const fileName = normalizeOpfsModelRelativePath(sibling?.rfilename || sibling?.path || "");
+            const fileName = normalizeOpfsModelRelativePath(sibling?.rfilename ?? sibling?.path ?? "");
             if (!fileName) return sibling;
             if (extractSiblingSizeBytes(sibling) !== null) return sibling;
             const sizeBytes = sizeMap.get(fileName.toLowerCase());
@@ -6351,7 +6351,7 @@ async function enrichModelMetadataWithSiblingSizeMap(metadata, modelId = "") {
 
         if (patchedCount > 0) {
             console.info("[INFO] enriched sibling size metadata via HF tree API", {
-                model_id: modelId || base.id || "",
+                model_id: modelId ?? base.id ?? "",
                 patched_count: patchedCount,
                 requested_count: missingFileNames.length,
             });
@@ -6359,7 +6359,7 @@ async function enrichModelMetadataWithSiblingSizeMap(metadata, modelId = "") {
     } catch (error) {
         base.siblings = siblings;
         console.warn("[WARN] failed to enrich sibling size metadata via HF tree API", {
-            model_id: modelId || base.id || "",
+            model_id: modelId ?? base.id ?? "",
             missing_count: missingFileNames.length,
             message: getErrorMessage(error),
         });
@@ -6379,7 +6379,7 @@ async function fetchModelReadme(modelId, options = {}) {
         };
     }
 
-    const revision = String(options.revision || "main").trim() || "main";
+    const revision = String(options.revision ?? "main").trim() ?? "main";
     const url = buildHfModelReadmeUrl(normalizedModelId, revision);
     const headers = {
         Accept: "text/markdown,text/plain;q=0.9,*/*;q=0.8",
@@ -6410,7 +6410,7 @@ async function fetchModelReadme(modelId, options = {}) {
             throw error;
         }
 
-        const text = String(await response.text() || "").replace(/\r\n/g, "\n").trim();
+        const text = String(await response.text() ?? "").replace(/\r\n/g, "\n").trim();
         return {
             content: text,
             missing: false,
@@ -6421,14 +6421,14 @@ async function fetchModelReadme(modelId, options = {}) {
         return {
             content: "",
             missing: false,
-            status: Number(error?.status || 0),
+            status: Number(error?.status ?? 0),
             errorMessage: getErrorMessage(error),
         };
     }
 }
 
 async function enrichModelMetadataWithReadme(metadata, modelId, options = {}) {
-    const normalizedModelId = normalizeModelId(modelId || metadata?.id || "");
+    const normalizedModelId = normalizeModelId(modelId ?? metadata?.id ?? "");
     const base = metadata && typeof metadata === "object"
         ? { ...metadata }
         : {};
@@ -6443,12 +6443,12 @@ async function enrichModelMetadataWithReadme(metadata, modelId, options = {}) {
 
     const readmeResult = await fetchModelReadme(normalizedModelId, options);
     base.__readmeResolved = true;
-    base.__readmeContent = String(readmeResult.content || "");
+    base.__readmeContent = String(readmeResult.content ?? "");
     base.__readmeMissing = !!readmeResult.missing;
     base.__readmeStatus = Number.isFinite(Number(readmeResult.status))
         ? Number(readmeResult.status)
         : 0;
-    base.__readmeError = String(readmeResult.errorMessage || "");
+    base.__readmeError = String(readmeResult.errorMessage ?? "");
     return base;
 }
 
@@ -6473,8 +6473,8 @@ function setModelLoading(isLoading) {
 
 function setSelectedModelLoadState(status, modelId = "", errorMessage = "") {
     state.selectedModelLoad.status = status;
-    state.selectedModelLoad.modelId = normalizeModelId(modelId || state.selectedModelLoad.modelId || "");
-    state.selectedModelLoad.errorMessage = String(errorMessage || "").trim();
+    state.selectedModelLoad.modelId = normalizeModelId(modelId ?? state.selectedModelLoad.modelId ?? "");
+    state.selectedModelLoad.errorMessage = String(errorMessage ?? "").trim();
     renderModelStatusHeader();
 }
 
@@ -6495,9 +6495,9 @@ function applySelectedModel(modelId, options = {}) {
 
     state.selectedModelMeta = {
         id: normalized,
-        task: (typeof options.task === "string" && options.task.trim()) ? options.task.trim() : (previousMeta.task || "-"),
+        task: (typeof options.task === "string" && options.task.trim()) ? options.task.trim() : (previousMeta.task ?? "-"),
         downloads: nextDownloads,
-        raw: options.raw !== undefined ? options.raw : (previousMeta.raw || null),
+        raw: options.raw !== undefined ? options.raw : (previousMeta.raw ?? null),
     };
 
     renderModelStatusHeader();
@@ -6508,14 +6508,14 @@ function normalizeDownloadQuantizationOptions(rawOptions) {
     if (!Array.isArray(rawOptions)) return [];
     return rawOptions
         .map((option) => ({
-            key: String(option?.key || "").trim().toLowerCase(),
-            quantizationKey: String(option?.quantizationKey || option?.key || "").trim().toLowerCase(),
-            label: String(option?.label || "기본").trim() || "기본",
-            score: Number(option?.score) || 0,
+            key: String(option?.key ?? "").trim().toLowerCase(),
+            quantizationKey: String(option?.quantizationKey ?? option?.key ?? "").trim().toLowerCase(),
+            label: String(option?.label ?? "기본").trim() ?? "기본",
+            score: Number(option?.score) ?? 0,
             rank: Number.isFinite(Number(option?.rank)) ? Number(option.rank) : 999,
-            sourceFileName: String(option?.sourceFileName || "").trim(),
-            fileName: String(option?.fileName || "").trim(),
-            fileUrl: String(option?.fileUrl || "").trim(),
+            sourceFileName: String(option?.sourceFileName ?? "").trim(),
+            fileName: String(option?.fileName ?? "").trim(),
+            fileUrl: String(option?.fileUrl ?? "").trim(),
             files: Array.isArray(option?.files) ? option.files.map((item) => ({ ...item })) : [],
         }))
         .filter((option) => option.key && option.fileName && option.fileUrl && option.files.length > 0);
@@ -6543,11 +6543,11 @@ function applyDownloadQuantizationSelectionByKey(nextKey, options = {}) {
         return false;
     }
 
-    const normalizedKey = String(nextKey || "").trim().toLowerCase();
+    const normalizedKey = String(nextKey ?? "").trim().toLowerCase();
     const selectedOption = (normalizedKey
         ? quantizationOptions.find((option) => (
-            String(option.key || "").toLowerCase() === normalizedKey
-            || String(option.quantizationKey || "").toLowerCase() === normalizedKey
+            String(option.key ?? "").toLowerCase() === normalizedKey
+            ?? String(option.quantizationKey ?? "").toLowerCase() === normalizedKey
         ))
         : null) || quantizationOptions[0];
     if (!selectedOption || !selectedOption.fileName || !selectedOption.fileUrl) {
@@ -6558,11 +6558,11 @@ function applyDownloadQuantizationSelectionByKey(nextKey, options = {}) {
     state.download.isPaused = false;
     state.download.pauseRequested = false;
     state.download.abortController = null;
-    state.download.selectedQuantizationKey = String(selectedOption.key || "");
-    state.download.fileName = String(selectedOption.fileName || "");
-    state.download.fileUrl = String(selectedOption.fileUrl || "");
-    state.download.primaryFileName = String(selectedOption.fileName || "");
-    state.download.primaryFileUrl = String(selectedOption.fileUrl || "");
+    state.download.selectedQuantizationKey = String(selectedOption.key ?? "");
+    state.download.fileName = String(selectedOption.fileName ?? "");
+    state.download.fileUrl = String(selectedOption.fileUrl ?? "");
+    state.download.primaryFileName = String(selectedOption.fileName ?? "");
+    state.download.primaryFileUrl = String(selectedOption.fileUrl ?? "");
     state.download.queue = Array.isArray(selectedOption.files)
         ? selectedOption.files.map((item) => ({ ...item }))
         : [];
@@ -6617,7 +6617,7 @@ function prepareDownloadForModel(metadata, modelId) {
     state.download.quantizationOptions = normalizeDownloadQuantizationOptions(target.quantizationOptions);
     state.download.selectedQuantizationKey = "";
     const resolvedSelection = applyDownloadQuantizationSelectionByKey(
-        target.selectedQuantizationKey || state.download.quantizationOptions[0]?.key || "",
+        target.selectedQuantizationKey ?? state.download.quantizationOptions[0]?.key ?? "",
         { render: false, toast: false },
     );
     if (!resolvedSelection) {
@@ -6657,7 +6657,7 @@ function normalizeStoragePrefixFromModelId(modelId) {
 }
 
 function normalizeOpfsModelRelativePath(path) {
-    let value = String(path || "").trim();
+    let value = String(path ?? "").trim();
     if (!value) return "";
     value = value
         .replace(/\\/g, "/")
@@ -6673,11 +6673,11 @@ function normalizeOpfsModelRelativePath(path) {
 }
 
 function toSafeModelBundleDirectoryName(modelId = "") {
-    return normalizeStoragePrefixFromModelId(modelId) || "model-bundle";
+    return normalizeStoragePrefixFromModelId(modelId) ?? "model-bundle";
 }
 
 function toSafeModelPathSegment(segment, fallback = "entry") {
-    const safe = String(segment || "")
+    const safe = String(segment ?? "")
         .replace(/[^A-Za-z0-9._-]+/g, "-")
         .replace(/^-+|-+$/g, "");
     return safe || fallback;
@@ -6698,9 +6698,9 @@ function toSafeModelBundleRelativePath(sourceFileName, fallbackFileName = "file.
 }
 
 function shouldIncludeTransformersAsset(sourceFileName) {
-    const lower = String(sourceFileName || "").trim().replace(/\\/g, "/").toLowerCase();
+    const lower = String(sourceFileName ?? "").trim().replace(/\\/g, "/").toLowerCase();
     if (!lower || lower.endsWith(".onnx")) return false;
-    const base = lower.split("/").filter(Boolean).pop() || "";
+    const base = lower.split("/").filter(Boolean).pop() ?? "";
     const requiredNames = new Set([
         "config.json",
         "generation_config.json",
@@ -6722,7 +6722,7 @@ function shouldIncludeTransformersAsset(sourceFileName) {
 }
 
 function isRelatedAssetPath(sourceFileName, primaryDirLower) {
-    const normalized = String(sourceFileName || "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
+    const normalized = String(sourceFileName ?? "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
     if (!normalized) return false;
     const lower = normalized.toLowerCase();
     const rootLevel = !lower.includes("/");
@@ -6732,8 +6732,8 @@ function isRelatedAssetPath(sourceFileName, primaryDirLower) {
 }
 
 function getExternalDataChunkIndexForSource(candidatePath, sourceOnnxPath) {
-    const candidate = String(candidatePath || "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
-    const source = String(sourceOnnxPath || "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
+    const candidate = String(candidatePath ?? "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
+    const source = String(sourceOnnxPath ?? "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
     if (!candidate || !source) return null;
 
     const sourceLower = source.toLowerCase();
@@ -6771,7 +6771,7 @@ function sortExternalDataSourcesForOnnxFile(paths, sourceOnnxPath) {
         if (safeA !== safeB) {
             return safeA - safeB;
         }
-        return String(a || "").localeCompare(String(b || ""));
+        return String(a ?? "").localeCompare(String(b ?? ""));
     });
 }
 
@@ -6811,7 +6811,7 @@ function collectModelSiblingInfo(metadata) {
 }
 
 function resolveQuantizationInfoFromFileName(fileName) {
-    const normalized = normalizeOpfsModelRelativePath(fileName) || String(fileName || "").trim().replace(/\\/g, "/");
+    const normalized = normalizeOpfsModelRelativePath(fileName) ?? String(fileName ?? "").trim().replace(/\\/g, "/");
     const lower = normalized.toLowerCase();
     const base = lower.split("/").filter(Boolean).pop() || lower;
 
@@ -6860,7 +6860,7 @@ function resolveQuantizationInfoFromFileName(fileName) {
 }
 
 function mapQuantizationKeyToTransformersDtype(quantizationKey) {
-    const key = String(quantizationKey || "").trim().toLowerCase();
+    const key = String(quantizationKey ?? "").trim().toLowerCase();
     if (!key || key === "auto") return "auto";
     if (key === "q4f16") return "q4f16";
     if (key === "bnb4") return "bnb4";
@@ -6887,7 +6887,7 @@ function resolveEffectiveTransformersDtype({ sourceFileName = "", modelFileNameH
     // If the selected ONNX filename already pins quantization (e.g. model_q4f16.onnx),
     // prefer `auto` so transformers.js does not over-constrain dtype/device compatibility.
     // This avoids load failures when fallback backends do not advertise the explicit dtype token.
-    const normalizedSource = String(sourceFileName || "").trim().toLowerCase();
+    const normalizedSource = String(sourceFileName ?? "").trim().toLowerCase();
     if (/model_(?:fp16|fp32|quantized|q4|q4f16|q8|int4|int8|uint8|bnb4)\.onnx$/i.test(normalizedSource)) {
         return "auto";
     }
@@ -6898,24 +6898,24 @@ function resolveEffectiveTransformersDtype({ sourceFileName = "", modelFileNameH
         return sourceDtype;
     }
 
-    const normalizedHint = String(modelFileNameHint || "").trim().toLowerCase();
+    const normalizedHint = String(modelFileNameHint ?? "").trim().toLowerCase();
     if (
         hintedDtype !== "auto"
         && /\b(?:fp16|fp32|int8|uint8|quantized|q4f16|q4|q8|bnb4)\b/.test(normalizedHint)
     ) {
         return "auto";
     }
-    return hintedDtype || "auto";
+    return hintedDtype ?? "auto";
 }
 
 function describeQuantizationOption(option, options = {}) {
-    const baseName = String(option?.sourceFileName || "").split("/").filter(Boolean).pop() || option?.sourceFileName || "-";
+    const baseName = String(option?.sourceFileName ?? "").split("/").filter(Boolean).pop() ?? option?.sourceFileName ?? "-";
     const includeSize = options.includeSize !== false;
     if (!includeSize) {
-        return `${option?.label || "기본"} (${baseName})`;
+        return `${option?.label ?? "기본"} (${baseName})`;
     }
     const sizeLabel = formatExpectedDownloadSizeForOption(option);
-    return `${option?.label || "기본"} (${baseName}, ${sizeLabel})`;
+    return `${option?.label ?? "기본"} (${baseName}, ${sizeLabel})`;
 }
 
 function summarizeExpectedDownloadSizeFromFiles(files) {
@@ -6941,9 +6941,9 @@ function summarizeExpectedDownloadSizeFromFiles(files) {
 }
 
 function formatExpectedDownloadSizeFromSummary(summary) {
-    const knownCount = Number(summary?.knownCount || 0);
-    const unknownCount = Number(summary?.unknownCount || 0);
-    const totalKnownBytes = Number(summary?.totalKnownBytes || 0);
+    const knownCount = Number(summary?.knownCount ?? 0);
+    const unknownCount = Number(summary?.unknownCount ?? 0);
+    const totalKnownBytes = Number(summary?.totalKnownBytes ?? 0);
     if (knownCount <= 0) {
         return "-";
     }
@@ -6973,7 +6973,7 @@ function buildModelDownloadTargetFromSource({
     if (onnxFiles.length === 0) {
         return null;
     }
-    const normalizedPrimaryPath = String(sourceFileName || "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
+    const normalizedPrimaryPath = String(sourceFileName ?? "").trim().replace(/\\/g, "/").replace(/^\/+/, "");
     const lastSlashIndex = normalizedPrimaryPath.lastIndexOf("/");
     const primaryDirLower = lastSlashIndex >= 0
         ? normalizedPrimaryPath.slice(0, lastSlashIndex + 1).toLowerCase()
@@ -6999,11 +6999,11 @@ function buildModelDownloadTargetFromSource({
     const preferredAssetSources = assetCandidates.filter((name) => isRelatedAssetPath(name, primaryDirLower));
     const selectedAssetSources = [...externalDataSources, ...preferredAssetSources];
     const selectedAssetKeys = new Set(
-        selectedAssetSources.map((name) => String(name || "").trim().toLowerCase()),
+        selectedAssetSources.map((name) => String(name ?? "").trim().toLowerCase()),
     );
     const fallbackByBaseName = new Map();
     for (const candidate of assetCandidates) {
-        const normalized = String(candidate || "").trim();
+        const normalized = String(candidate ?? "").trim();
         const key = normalized.toLowerCase();
         if (!normalized || selectedAssetKeys.has(key)) continue;
         const baseName = normalized.split("/").filter(Boolean).pop()?.toLowerCase() || key;
@@ -7023,7 +7023,7 @@ function buildModelDownloadTargetFromSource({
                 sourceFileName: name,
                 fileName,
                 fileUrl: buildModelFileResolveUrl(modelId, name),
-                expectedSizeBytes: siblingFileSizeMap.get(String(name || "").toLowerCase()) ?? null,
+                expectedSizeBytes: siblingFileSizeMap.get(String(name ?? "").toLowerCase()) ?? null,
             };
         })
         .filter((item) => !!item);
@@ -7045,13 +7045,13 @@ function buildModelDownloadTargetFromSource({
 
 function buildModelDownloadTarget(metadata, modelId, options = {}) {
     const normalizedPreferredQuantizationKey = typeof options === "string"
-        ? String(options || "").trim().toLowerCase()
-        : String(options?.preferredQuantizationKey || "").trim().toLowerCase();
+        ? String(options ?? "").trim().toLowerCase()
+        : String(options?.preferredQuantizationKey ?? "").trim().toLowerCase();
     const preferredSourceFileName = typeof options === "object"
-        ? normalizeOpfsModelRelativePath(options?.preferredSourceFileName || "")
+        ? normalizeOpfsModelRelativePath(options?.preferredSourceFileName ?? "")
         : "";
     const preferredPrimaryFileName = typeof options === "object"
-        ? normalizeOnnxFileName(options?.preferredPrimaryFileName || "")
+        ? normalizeOnnxFileName(options?.preferredPrimaryFileName ?? "")
         : "";
 
     const { siblingFileNames, siblingFileSizeMap } = collectModelSiblingInfo(metadata);
@@ -7073,11 +7073,11 @@ function buildModelDownloadTarget(metadata, modelId, options = {}) {
 
         const quantization = resolveQuantizationInfoFromFileName(sourceFileName);
         const normalizedSource = normalizeOpfsModelRelativePath(sourceFileName).toLowerCase();
-        const optionKey = `${String(quantization.key || "auto").trim().toLowerCase()}::${normalizedSource}`;
+        const optionKey = `${String(quantization.key ?? "auto").trim().toLowerCase()}::${normalizedSource}`;
         const candidate = {
             key: optionKey,
-            quantizationKey: String(quantization.key || "auto"),
-            label: String(quantization.label || "기본"),
+            quantizationKey: String(quantization.key ?? "auto"),
+            label: String(quantization.label ?? "기본"),
             score: scoreDownloadCandidate(sourceFileName),
             rank: Number.isFinite(Number(quantization.rank)) ? Number(quantization.rank) : 999,
             sourceFileName: target.primary.sourceFileName,
@@ -7092,7 +7092,7 @@ function buildModelDownloadTarget(metadata, modelId, options = {}) {
     quantizationOptions.sort((a, b) => {
         if (a.rank !== b.rank) return a.rank - b.rank;
         if (b.score !== a.score) return b.score - a.score;
-        return String(a.sourceFileName || "").localeCompare(String(b.sourceFileName || ""));
+        return String(a.sourceFileName ?? "").localeCompare(String(b.sourceFileName ?? ""));
     });
     if (quantizationOptions.length === 0) {
         return null;
@@ -7100,18 +7100,18 @@ function buildModelDownloadTarget(metadata, modelId, options = {}) {
 
     const selectedOptionBySource = preferredSourceFileName
         ? quantizationOptions.find((option) => (
-            normalizeOpfsModelRelativePath(option?.sourceFileName || "") === preferredSourceFileName
+            normalizeOpfsModelRelativePath(option?.sourceFileName ?? "") === preferredSourceFileName
         ))
         : null;
     const selectedOptionByPrimaryFile = !selectedOptionBySource && preferredPrimaryFileName
         ? quantizationOptions.find((option) => (
-            normalizeOnnxFileName(option?.fileName || "") === preferredPrimaryFileName
+            normalizeOnnxFileName(option?.fileName ?? "") === preferredPrimaryFileName
         ))
         : null;
     const selectedOptionByQuantizationKey = !selectedOptionBySource && !selectedOptionByPrimaryFile && normalizedPreferredQuantizationKey
         ? quantizationOptions.find((option) => (
             option.key === normalizedPreferredQuantizationKey
-            || String(option.quantizationKey || "").toLowerCase() === normalizedPreferredQuantizationKey
+            ?? String(option.quantizationKey ?? "").toLowerCase() === normalizedPreferredQuantizationKey
         ))
         : null;
     const selectedOption = selectedOptionBySource
@@ -7146,7 +7146,7 @@ function toSafeModelStorageFileName(sourceFileName, modelId = "") {
     const normalizedBase = base.toLowerCase().endsWith(".onnx")
         ? base
         : `${base.replace(/\.[^.]+$/g, "")}.onnx`;
-    segments[segments.length - 1] = normalizedBase || "model.onnx";
+    segments[segments.length - 1] = normalizedBase ?? "model.onnx";
     const merged = `${bundleDir}/${segments.join("/")}`;
     return normalizeOnnxFileName(merged);
 }
@@ -7155,11 +7155,11 @@ function toSafeModelStorageAssetFileName(sourceFileName, modelId = "") {
     const bundleDir = toSafeModelBundleDirectoryName(modelId);
     const relativePath = toSafeModelBundleRelativePath(sourceFileName, "asset.bin");
     const normalized = normalizeOpfsModelRelativePath(`${bundleDir}/${relativePath}`);
-    return normalized || "";
+    return normalized ?? "";
 }
 
 function scoreDownloadCandidate(fileName) {
-    const lower = String(fileName || "").toLowerCase();
+    const lower = String(fileName ?? "").toLowerCase();
     let score = 0;
     if (lower.endsWith(".onnx")) score += 100;
     if (lower.includes("int4") || lower.includes("quant")) score += 12;
@@ -7169,12 +7169,12 @@ function scoreDownloadCandidate(fileName) {
 }
 
 function buildModelFileResolveUrl(modelId, fileName) {
-    const encodedModel = String(modelId || "")
+    const encodedModel = String(modelId ?? "")
         .split("/")
         .map((part) => encodeURIComponent(part))
         .join("/");
 
-    const encodedFile = String(fileName || "")
+    const encodedFile = String(fileName ?? "")
         .split("/")
         .map((part) => encodeURIComponent(part))
         .join("/");
@@ -7189,23 +7189,23 @@ function renderDownloadPanel() {
     const isInProgress = !!state.download.inProgress;
     const isPaused = !!state.download.isPaused;
     const isComplete = !isInProgress && isEnabled && state.download.percent >= 100;
-    const isFailure = !isInProgress && /실패/.test(state.download.statusText || "");
+    const isFailure = !isInProgress && /실패/.test(state.download.statusText ?? "");
 
     els.downloadMenuPanel.classList.toggle("opacity-60", !isEnabled);
 
     if (els.downloadModelId) {
-        els.downloadModelId.textContent = state.download.modelId || "-";
+        els.downloadModelId.textContent = state.download.modelId ?? "-";
     }
     if (els.downloadFileName) {
         const queue = Array.isArray(state.download.queue) ? state.download.queue : [];
         const queueCount = queue.length;
         if (queueCount > 1) {
             const stepIndex = isInProgress || isPaused
-                ? Math.min(queueCount - 1, Math.max(0, Number(state.download.queueIndex || 0)))
+                ? Math.min(queueCount - 1, Math.max(0, Number(state.download.queueIndex ?? 0)))
                 : (state.download.percent >= 100 ? queueCount - 1 : 0);
-            els.downloadFileName.textContent = `${state.download.fileName || "-"} (${stepIndex + 1}/${queueCount})`;
+            els.downloadFileName.textContent = `${state.download.fileName ?? "-"} (${stepIndex + 1}/${queueCount})`;
         } else {
-            els.downloadFileName.textContent = state.download.fileName || "-";
+            els.downloadFileName.textContent = state.download.fileName ?? "-";
         }
     }
     if (els.downloadQuantizationLabel) {
@@ -7215,7 +7215,7 @@ function renderDownloadPanel() {
         const options = Array.isArray(state.download.quantizationOptions)
             ? state.download.quantizationOptions
             : [];
-        const selectedKey = String(state.download.selectedQuantizationKey || "");
+        const selectedKey = String(state.download.selectedQuantizationKey ?? "");
 
         const currentSignature = JSON.stringify(
             options.map((option) => [
@@ -7225,7 +7225,7 @@ function renderDownloadPanel() {
                 formatExpectedDownloadSizeForOption(option),
             ]),
         );
-        const previousSignature = String(els.downloadQuantizationSelect.dataset.optionSignature || "");
+        const previousSignature = String(els.downloadQuantizationSelect.dataset.optionSignature ?? "");
         if (currentSignature !== previousSignature) {
             els.downloadQuantizationSelect.innerHTML = "";
             if (options.length === 0) {
@@ -7236,7 +7236,7 @@ function renderDownloadPanel() {
             } else {
                 for (const option of options) {
                     const optionNode = document.createElement("option");
-                    optionNode.value = String(option.key || "");
+                    optionNode.value = String(option.key ?? "");
                     optionNode.textContent = describeQuantizationOption(option);
                     els.downloadQuantizationSelect.appendChild(optionNode);
                 }
@@ -7308,7 +7308,7 @@ function renderDownloadPanel() {
     }
 
     if (els.downloadStatusText) {
-        els.downloadStatusText.textContent = state.download.statusText || "-";
+        els.downloadStatusText.textContent = state.download.statusText ?? "-";
     }
 
     if (els.downloadStatusChip) {
@@ -7341,7 +7341,7 @@ function onDownloadQuantizationChange(event) {
     if (state.download.inProgress || state.download.isPaused) {
         return;
     }
-    const requestedKey = String(event?.target?.value || "").trim().toLowerCase();
+    const requestedKey = String(event?.target?.value ?? "").trim().toLowerCase();
     const changed = applyDownloadQuantizationSelectionByKey(requestedKey, {
         render: true,
         toast: true,
@@ -7402,13 +7402,13 @@ async function onClickDownloadResume() {
 async function runDownloadFlow({ resume = false } = {}) {
     if (!state.download.enabled) return;
     const queue = Array.isArray(state.download.queue)
-        ? state.download.queue.filter((item) => item && item.fileName && item.fileUrl)
+        ? state.download.queue.filter((item) => item?.fileName && item?.fileUrl)
         : [];
     if (queue.length === 0) return;
     for (const item of queue) {
-        const fileUrl = String(item?.fileUrl || "").trim();
+        const fileUrl = String(item?.fileUrl ?? "").trim();
         if (!isHttpsUrl(fileUrl, { allowLocalhostHttp: true })) {
-            throw new Error(`보안 정책으로 HTTPS가 아닌 모델 파일 URL은 차단됩니다: ${fileUrl || "-"}`);
+            throw new Error(`보안 정책으로 HTTPS가 아닌 모델 파일 URL은 차단됩니다: ${fileUrl ?? "-"}`);
         }
     }
     console.info("[INFO] start model bundle download", {
@@ -7416,7 +7416,7 @@ async function runDownloadFlow({ resume = false } = {}) {
         file_count: queue.length,
         resume: !!resume,
         queue: queue.map((item) => ({
-            kind: item.kind || "asset",
+            kind: item.kind ?? "asset",
             source: item.sourceFileName || item.fileName,
             target: item.fileName,
         })),
@@ -7452,7 +7452,7 @@ async function runDownloadFlow({ resume = false } = {}) {
     ensureManifestEntryForModelFile(primaryItem.fileName, {
         modelId: state.download.modelId,
         fileUrl: primaryItem.fileUrl,
-        task: state.selectedModelMeta?.task || "-",
+        task: state.selectedModelMeta?.task ?? "-",
         downloads: state.selectedModelMeta?.downloads ?? null,
         revision: typeof state.selectedModelMeta?.raw?.sha === "string"
             ? state.selectedModelMeta.raw.sha.slice(0, 12)
@@ -7462,9 +7462,9 @@ async function runDownloadFlow({ resume = false } = {}) {
     await refreshModelSessionList({ silent: true });
 
     const startIndex = resume
-        ? Math.max(0, Math.min(queue.length - 1, Number(state.download.queueIndex || 0)))
+        ? Math.max(0, Math.min(queue.length - 1, Number(state.download.queueIndex ?? 0)))
         : 0;
-    let completedBytes = Math.max(0, Number(state.download.completedBytes || 0));
+    let completedBytes = Math.max(0, Number(state.download.completedBytes ?? 0));
     let activeItem = queue[startIndex] || primaryItem;
     let activeIndex = startIndex;
     const downloadedFileSummaries = [];
@@ -7472,11 +7472,11 @@ async function runDownloadFlow({ resume = false } = {}) {
     try {
         for (let index = startIndex; index < queue.length; index += 1) {
             const item = queue[index];
-            const displaySourceName = String(item.sourceFileName || item.fileName || "");
+            const displaySourceName = String(item.sourceFileName ?? item.fileName ?? "");
             activeItem = item;
             activeIndex = index;
             const initialBytes = resume && index === startIndex
-                ? Math.max(0, Number(state.download.currentFileBytesReceived || 0))
+                ? Math.max(0, Number(state.download.currentFileBytesReceived ?? 0))
                 : 0;
 
             if (!resume && item.kind === "asset") {
@@ -7492,7 +7492,7 @@ async function runDownloadFlow({ resume = false } = {}) {
                         fileName: item.fileName,
                         sourceFileName: displaySourceName,
                         sizeBytes: existingSize,
-                        kind: item.kind || "asset",
+                        kind: item.kind ?? "asset",
                         fileUrl: item.fileUrl,
                     });
                     maybeRenderDownloadProgress();
@@ -7537,7 +7537,7 @@ async function runDownloadFlow({ resume = false } = {}) {
                 },
             });
 
-            completedBytes += Number(result.bytesReceived || 0);
+            completedBytes += Number(result.bytesReceived ?? 0);
             state.download.completedBytes = completedBytes;
             state.download.currentFileBytesReceived = 0;
             state.download.currentFileTotalBytes = null;
@@ -7552,8 +7552,8 @@ async function runDownloadFlow({ resume = false } = {}) {
                 sourceFileName: displaySourceName,
                 sizeBytes: Number.isFinite(Number(result.totalBytes))
                     ? Number(result.totalBytes)
-                    : Number(result.bytesReceived || 0),
-                kind: item.kind || "asset",
+                    : Number(result.bytesReceived ?? 0),
+                kind: item.kind ?? "asset",
                 fileUrl: item.fileUrl,
             });
             resume = false;
@@ -7571,16 +7571,16 @@ async function runDownloadFlow({ resume = false } = {}) {
         renderDownloadPanel();
 
         const primarySummary = downloadedFileSummaries.find((item) => item.fileName === primaryItem.fileName)
-            || downloadedFileSummaries.find((item) => item.kind === "onnx")
-            || downloadedFileSummaries[0]
-            || null;
+            ?? downloadedFileSummaries.find((item) => item.kind === "onnx")
+            ?? downloadedFileSummaries[0]
+            ?? null;
         upsertOpfsManifestEntry({
             fileName: primaryItem.fileName,
             modelId: state.download.modelId,
             fileUrl: primaryItem.fileUrl,
             downloadedAt: new Date().toISOString(),
-            sizeBytes: Number(primarySummary?.sizeBytes || 0) || null,
-            task: state.selectedModelMeta?.task || "-",
+            sizeBytes: Number(primarySummary?.sizeBytes ?? 0) ?? null,
+            task: state.selectedModelMeta?.task ?? "-",
             downloads: state.selectedModelMeta?.downloads ?? null,
             revision: typeof state.selectedModelMeta?.raw?.sha === "string"
                 ? state.selectedModelMeta.raw.sha.slice(0, 12)
@@ -7601,13 +7601,13 @@ async function runDownloadFlow({ resume = false } = {}) {
             state.download.pauseRequested = false;
             state.download.speedBps = 0;
             state.download.etaSeconds = null;
-            state.download.statusText = `다운로드가 일시 중단되었습니다. (${activeIndex + 1}/${queue.length}) ${activeItem?.sourceFileName || activeItem?.fileName || ""}`;
+            state.download.statusText = `다운로드가 일시 중단되었습니다. (${activeIndex + 1}/${queue.length}) ${activeItem?.sourceFileName ?? activeItem?.fileName ?? ""}`;
             state.download.queueIndex = activeIndex;
             state.download.completedBytes = completedBytes;
             ensureManifestEntryForModelFile(primaryItem.fileName, {
                 modelId: state.download.modelId,
                 fileUrl: primaryItem.fileUrl,
-                task: state.selectedModelMeta?.task || "-",
+                task: state.selectedModelMeta?.task ?? "-",
                 downloads: state.selectedModelMeta?.downloads ?? null,
                 revision: typeof state.selectedModelMeta?.raw?.sha === "string"
                     ? state.selectedModelMeta.raw.sha.slice(0, 12)
@@ -7629,7 +7629,7 @@ async function runDownloadFlow({ resume = false } = {}) {
         ensureManifestEntryForModelFile(primaryItem.fileName, {
             modelId: state.download.modelId,
             fileUrl: primaryItem.fileUrl,
-            task: state.selectedModelMeta?.task || "-",
+            task: state.selectedModelMeta?.task ?? "-",
             downloads: state.selectedModelMeta?.downloads ?? null,
             revision: typeof state.selectedModelMeta?.raw?.sha === "string"
                 ? state.selectedModelMeta.raw.sha.slice(0, 12)
@@ -7660,7 +7660,7 @@ async function downloadModelFileToOpfsWithRetry({
 }) {
     const fileHandle = await getOpfsModelsFileHandleByRelativePath(fileName, { create: true });
     const writable = await fileHandle.createWritable({ keepExistingData: true });
-    const startBytes = Math.max(0, Number(initialBytes || 0));
+    const startBytes = Math.max(0, Number(initialBytes ?? 0));
 
     const context = {
         url,
@@ -7736,7 +7736,7 @@ async function getExistingOpfsFileSize(fileName) {
     try {
         const fileHandle = await getOpfsModelsFileHandleByRelativePath(name, { create: false });
         const file = await fileHandle.getFile();
-        const size = Number(file?.size || 0);
+        const size = Number(file?.size ?? 0);
         return Number.isFinite(size) && size > 0 ? size : 0;
     } catch (_) {
         return 0;
@@ -7772,7 +7772,7 @@ async function streamDownloadAttemptToOpfs(context, onProgress) {
         throw error;
     }
 
-    const status = Number(response.status || 0);
+    const status = Number(response.status ?? 0);
     if (!response.ok && status !== 206) {
         const error = new Error(`다운로드 요청 실패 (HTTP ${status})`);
         error.status = status;
@@ -7899,7 +7899,7 @@ function parseTotalBytesFromResponse(response, alreadyReceivedBytes = 0) {
 }
 
 function shouldRetryDownloadError(error) {
-    const status = Number(error?.status || 0);
+    const status = Number(error?.status ?? 0);
     if (error?.code === "download_paused") {
         return false;
     }
@@ -8036,29 +8036,29 @@ async function listOpfsFilesRecursive(directoryHandle, options = {}) {
 
 function toAbsoluteOpfsPath(segments = []) {
     const cleaned = segments
-        .map((segment) => String(segment || "").trim())
+        .map((segment) => String(segment ?? "").trim())
         .filter(Boolean);
     return cleaned.length > 0 ? `/${cleaned.join("/")}` : "/";
 }
 
 function splitAbsoluteOpfsPath(path) {
-    const normalized = String(path || "/").trim().replace(/\\/g, "/");
+    const normalized = String(path ?? "/").trim().replace(/\\/g, "/");
     return normalized.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
 }
 
 function getCurrentExplorerSegments() {
-    return splitAbsoluteOpfsPath(state.opfs.explorer.currentPath || "/");
+    return splitAbsoluteOpfsPath(state.opfs.explorer.currentPath ?? "/");
 }
 
 function sanitizeExplorerEntryName(rawName) {
-    const name = String(rawName || "").trim();
+    const name = String(rawName ?? "").trim();
     if (!name || name === "." || name === "..") return "";
     if (name.includes("/") || name.includes("\\")) return "";
     return name;
 }
 
 function sanitizeExplorerTargetPath(rawPath) {
-    let path = String(rawPath || "").trim();
+    let path = String(rawPath ?? "").trim();
     if (!path) return "";
     path = path.replace(/\\/g, "/");
     if (!path.startsWith("/")) {
@@ -8153,7 +8153,7 @@ async function refreshStorageEstimate() {
 }
 
 function renderExplorerPath() {
-    const currentPath = state.opfs.explorer.currentPath || "/";
+    const currentPath = state.opfs.explorer.currentPath ?? "/";
     if (els.opfsPathText) {
         els.opfsPathText.textContent = currentPath;
     }
@@ -8190,15 +8190,15 @@ function renderExplorerPath() {
 
 function renderExplorerStatusBar() {
     const entries = Array.isArray(state.opfs.explorer.entries) ? state.opfs.explorer.entries : [];
-    const selectedPath = String(state.opfs.explorer.selectedEntryPath || "");
-    const selectedEntry = entries.find((entry) => entry.path === selectedPath) || null;
+    const selectedPath = String(state.opfs.explorer.selectedEntryPath ?? "");
+    const selectedEntry = entries.find((entry) => entry.path === selectedPath) ?? null;
     const selectedCount = selectedEntry ? 1 : 0;
     const selectedSize = selectedEntry && selectedEntry.kind === "file"
-        ? Number(selectedEntry.sizeBytes || 0)
+        ? Number(selectedEntry.sizeBytes ?? 0)
         : 0;
     const totalSize = entries
         .filter((entry) => entry.kind === "file")
-        .reduce((sum, entry) => sum + Math.max(0, Number(entry.sizeBytes || 0)), 0);
+        .reduce((sum, entry) => sum + Math.max(0, Number(entry.sizeBytes ?? 0)), 0);
 
     if (els.opfsStatusSelection) {
         els.opfsStatusSelection.textContent = `선택: ${selectedCount}개`;
@@ -8214,7 +8214,7 @@ function renderExplorerStatusBar() {
 function renderExplorerSelectionState() {
     if (!els.opfsSelectedEntryText) return;
 
-    const path = String(state.opfs.explorer.selectedEntryPath || "");
+    const path = String(state.opfs.explorer.selectedEntryPath ?? "");
     if (!path) {
         els.opfsSelectedEntryText.textContent = "선택된 항목 없음";
         if (els.opfsRenameInput) {
@@ -8227,7 +8227,7 @@ function renderExplorerSelectionState() {
         return;
     }
 
-    const kind = state.opfs.explorer.selectedEntryKind || "file";
+    const kind = state.opfs.explorer.selectedEntryKind ?? "file";
     const name = state.opfs.explorer.selectedEntryName || path.split("/").pop() || path;
     els.opfsSelectedEntryText.textContent = `${kind === "directory" ? "디렉터리" : "파일"} 선택됨: ${path}`;
     if (els.opfsRenameInput) {
@@ -8243,7 +8243,7 @@ function setExplorerSelectedEntry(entryPath, kind, name) {
     const path = sanitizeExplorerTargetPath(entryPath);
     state.opfs.explorer.selectedEntryPath = path;
     state.opfs.explorer.selectedEntryKind = kind === "directory" ? "directory" : "file";
-    state.opfs.explorer.selectedEntryName = String(name || "").trim();
+    state.opfs.explorer.selectedEntryName = String(name ?? "").trim();
     renderExplorerSelectionState();
     renderOpfsExplorerList();
 }
@@ -8266,7 +8266,7 @@ function renderExplorerContextMenu() {
     if (els.opfsContextTarget) {
         els.opfsContextTarget.textContent = hasTarget
             ? `${menuState.targetKind === "directory" ? "폴더" : "파일"}: ${menuState.targetPath}`
-            : `현재 경로: ${state.opfs.explorer.currentPath || "/"}`;
+            : `현재 경로: ${state.opfs.explorer.currentPath ?? "/"}`;
     }
 
     const disableSelectors = [
@@ -8295,11 +8295,11 @@ function renderExplorerContextMenu() {
 
 function openExplorerContextMenu(options = {}) {
     state.opfs.explorer.contextMenu.open = true;
-    state.opfs.explorer.contextMenu.x = Number(options.x || 0);
-    state.opfs.explorer.contextMenu.y = Number(options.y || 0);
-    state.opfs.explorer.contextMenu.targetPath = sanitizeExplorerTargetPath(options.targetPath || "");
+    state.opfs.explorer.contextMenu.x = Number(options.x ?? 0);
+    state.opfs.explorer.contextMenu.y = Number(options.y ?? 0);
+    state.opfs.explorer.contextMenu.targetPath = sanitizeExplorerTargetPath(options.targetPath ?? "");
     state.opfs.explorer.contextMenu.targetKind = options.targetKind === "directory" ? "directory" : "file";
-    state.opfs.explorer.contextMenu.targetName = String(options.targetName || "").trim();
+    state.opfs.explorer.contextMenu.targetName = String(options.targetName ?? "").trim();
     renderExplorerContextMenu();
 }
 
@@ -8347,8 +8347,8 @@ async function scanExplorerEntriesForSegments(segments) {
 
         if (kind === "file") {
             const file = await handle.getFile();
-            row.sizeBytes = Number(file.size || 0);
-            row.lastModified = Number(file.lastModified || 0);
+            row.sizeBytes = Number(file.size ?? 0);
+            row.lastModified = Number(file.lastModified ?? 0);
         }
 
         entries.push(row);
@@ -8410,14 +8410,14 @@ function renderExplorerTreePanel() {
         return;
     }
 
-    const currentPath = sanitizeExplorerTargetPath(state.opfs.explorer.currentPath || "/");
+    const currentPath = sanitizeExplorerTargetPath(state.opfs.explorer.currentPath ?? "/");
     els.opfsTreeBody.innerHTML = rows.map((row) => {
         const isCurrent = currentPath === row.path;
         const isAncestor = !isCurrent && currentPath.startsWith(`${row.path}/`);
         const rowClass = isCurrent
             ? "bg-cyan-500/15 border-cyan-300/45 text-cyan-100"
             : (isAncestor ? "bg-slate-800/50 border-slate-600/50 text-slate-200" : "border-transparent text-slate-300 hover:bg-slate-800/70");
-        const depthPadding = Math.max(0, Number(row.depth || 0)) * 14;
+        const depthPadding = Math.max(0, Number(row.depth ?? 0)) * 14;
         return `
             <button
                 type="button"
@@ -8438,9 +8438,9 @@ function renderExplorerTreePanel() {
 }
 
 function resolveExplorerContextBasePath(targetPath, targetKind) {
-    const normalizedTarget = sanitizeExplorerTargetPath(targetPath || "");
+    const normalizedTarget = sanitizeExplorerTargetPath(targetPath ?? "");
     if (!normalizedTarget) {
-        return state.opfs.explorer.currentPath || "/";
+        return state.opfs.explorer.currentPath ?? "/";
     }
     if (targetKind === "directory") {
         return normalizedTarget;
@@ -8481,9 +8481,9 @@ async function createExplorerFileAt(basePath, name) {
 
 async function handleExplorerContextMenuAction(action) {
     const menuState = state.opfs.explorer.contextMenu || {};
-    const targetPath = sanitizeExplorerTargetPath(menuState.targetPath || "");
+    const targetPath = sanitizeExplorerTargetPath(menuState.targetPath ?? "");
     const targetKind = menuState.targetKind === "directory" ? "directory" : "file";
-    const targetName = String(menuState.targetName || "").trim() || (splitParentAndName(targetPath).name || "");
+    const targetName = String(menuState.targetName ?? "").trim() ?? (splitParentAndName(targetPath).name ?? "");
     const basePath = resolveExplorerContextBasePath(targetPath, targetKind);
 
     if (action === "opfs-context-create-dir") {
@@ -8522,7 +8522,7 @@ async function handleExplorerContextMenuAction(action) {
     }
 
     if (action === "opfs-context-rename") {
-        const input = prompt("새 이름을 입력하세요.", targetName || "");
+        const input = prompt("새 이름을 입력하세요.", targetName ?? "");
         if (input === null) return;
         const nextName = sanitizeExplorerEntryName(input);
         if (!nextName) {
@@ -8654,14 +8654,14 @@ async function refreshOpfsExplorer({ silent = false } = {}) {
 }
 
 function setExplorerUploadStatus(text) {
-    state.opfs.explorer.uploadStatusText = String(text || "대기");
+    state.opfs.explorer.uploadStatusText = String(text ?? "대기");
     if (els.opfsUploadStatus) {
         els.opfsUploadStatus.textContent = state.opfs.explorer.uploadStatusText;
     }
 }
 
 async function onCreateExplorerDirectory() {
-    const name = sanitizeExplorerEntryName(els.opfsCreateDirInput?.value || "");
+    const name = sanitizeExplorerEntryName(els.opfsCreateDirInput?.value ?? "");
     if (!name) {
         showToast("유효한 폴더명을 입력하세요.", "error", 2200);
         return;
@@ -8684,7 +8684,7 @@ async function onCreateExplorerDirectory() {
 }
 
 async function onCreateExplorerFile() {
-    const name = sanitizeExplorerEntryName(els.opfsCreateFileInput?.value || "");
+    const name = sanitizeExplorerEntryName(els.opfsCreateFileInput?.value ?? "");
     if (!name) {
         showToast("유효한 파일명을 입력하세요.", "error", 2200);
         return;
@@ -8719,7 +8719,7 @@ async function onCreateExplorerFile() {
 
 async function writeBrowserFileToHandle(file, handle, onProgress) {
     const writable = await handle.createWritable({ keepExistingData: false });
-    const totalBytes = Number(file.size || 0);
+    const totalBytes = Number(file.size ?? 0);
 
     let bytesWritten = 0;
     let pendingChunks = [];
@@ -8803,11 +8803,11 @@ function ensureManifestEntryForModelFile(fileName, options = {}) {
 
     upsertOpfsManifestEntry({
         fileName: normalized,
-        modelId: isValidModelId(options.modelId) ? options.modelId : (selectedModel || ""),
-        fileUrl: String(options.fileUrl || ""),
+        modelId: isValidModelId(options.modelId) ? options.modelId : (selectedModel ?? ""),
+        fileUrl: String(options.fileUrl ?? ""),
         downloadedAt: String(options.downloadedAt || new Date().toISOString()),
         sizeBytes: Number.isFinite(Number(options.sizeBytes)) ? Number(options.sizeBytes) : null,
-        task: typeof options.task === "string" ? options.task : (state.selectedModelMeta?.task || "-"),
+        task: typeof options.task === "string" ? options.task : (state.selectedModelMeta?.task ?? "-"),
         downloads: Number.isFinite(Number(options.downloads)) ? Number(options.downloads) : (state.selectedModelMeta?.downloads ?? null),
         revision: typeof options.revision === "string" ? options.revision : "main",
         downloadStatus: typeof options.downloadStatus === "string" ? options.downloadStatus : "downloaded",
@@ -8824,8 +8824,7 @@ async function uploadFilesToCurrentExplorerDirectory(files) {
     try {
         const currentDir = await resolveDirectoryHandleBySegments(segments, { create: true });
 
-        for (let index = 0; index < files.length; index += 1) {
-            const file = files[index];
+        for (const file of files) {
             const safeName = sanitizeExplorerEntryName(file.name);
             if (!safeName) {
                 continue;
@@ -8841,7 +8840,7 @@ async function uploadFilesToCurrentExplorerDirectory(files) {
             const modelFileName = modelFileNameFromAbsolutePath(absolutePath);
             if (modelFileName) {
                 ensureManifestEntryForModelFile(modelFileName, {
-                    sizeBytes: Number(file.size || 0),
+                    sizeBytes: Number(file.size ?? 0),
                     modelId: selectedModel,
                     downloadStatus: "uploaded",
                 });
@@ -9099,7 +9098,7 @@ async function onRenameExplorerEntry() {
         return;
     }
 
-    const nextName = sanitizeExplorerEntryName(els.opfsRenameInput?.value || "");
+    const nextName = sanitizeExplorerEntryName(els.opfsRenameInput?.value ?? "");
     if (!nextName) {
         showToast("유효한 새 이름을 입력하세요.", "error", 2200);
         return;
@@ -9137,7 +9136,7 @@ async function onMoveExplorerEntry() {
         return;
     }
 
-    const targetPath = sanitizeExplorerTargetPath(els.opfsMoveInput?.value || "");
+    const targetPath = sanitizeExplorerTargetPath(els.opfsMoveInput?.value ?? "");
     if (!targetPath) {
         showToast("유효한 대상 경로를 입력하세요.", "error", 2200);
         return;
@@ -9222,8 +9221,8 @@ async function scanOpfsModelFiles() {
         const segments = splitOpfsModelRelativePathSegments(normalizedFileName);
         files.push({
             fileName: normalizedFileName,
-            sizeBytes: Number(file.size || 0),
-            lastModified: Number(file.lastModified || 0),
+            sizeBytes: Number(file.size ?? 0),
+            lastModified: Number(file.lastModified ?? 0),
             cache: true,
             bundlePath: segments.slice(0, -1).join("/"),
         });
@@ -9248,8 +9247,8 @@ function resolveModelIdForSessionFile(fileName) {
     const normalizedFileName = normalizeOnnxFileName(fileName);
     if (!normalizedFileName) return "";
 
-    const manifestEntry = getOpfsManifest()[normalizedFileName] || null;
-    const fromManifest = normalizeModelId(manifestEntry?.modelId || "");
+    const manifestEntry = getOpfsManifest()[normalizedFileName] ?? null;
+    const fromManifest = normalizeModelId(manifestEntry?.modelId ?? "");
     if (isValidModelId(fromManifest)) {
         return fromManifest;
     }
@@ -9259,7 +9258,7 @@ function resolveModelIdForSessionFile(fileName) {
         return inferred;
     }
 
-    const fromSelected = normalizeModelId(selectedModel || state.selectedModelMeta?.id || "");
+    const fromSelected = normalizeModelId(selectedModel ?? state.selectedModelMeta?.id ?? "");
     if (state.activeSessionFile === normalizedFileName && isValidModelId(fromSelected)) {
         return fromSelected;
     }
@@ -9290,7 +9289,7 @@ async function getModelCardMetadata(modelId, options = {}) {
     }
 
     const selectedRaw = state.selectedModelMeta?.raw;
-    if (!forceRefresh && selectedRaw && normalizeModelId(selectedRaw.id || "") === normalizedModelId) {
+    if (!forceRefresh && selectedRaw && normalizeModelId(selectedRaw.id ?? "") === normalizedModelId) {
         const enrichedSelected = await enrichModelMetadataWithReadme(selectedRaw, normalizedModelId, options);
         state.modelCardCache[normalizedModelId] = {
             metadata: enrichedSelected,
@@ -9310,21 +9309,21 @@ async function getModelCardMetadata(modelId, options = {}) {
 
 function buildLocalModelCardMetadata(fileName, modelId = "") {
     const normalizedFileName = normalizeOnnxFileName(fileName);
-    const manifestEntry = normalizedFileName ? (getOpfsManifest()[normalizedFileName] || null) : null;
+    const manifestEntry = normalizedFileName ? (getOpfsManifest()[normalizedFileName] ?? null) : null;
     const resolvedModelId = normalizeModelId(modelId || manifestEntry?.modelId || resolveModelIdForSessionFile(normalizedFileName));
     const fileEntry = (Array.isArray(state.opfs.files) ? state.opfs.files : [])
-        .find((item) => normalizeOnnxFileName(item?.fileName || "") === normalizedFileName) || null;
+        .find((item) => normalizeOnnxFileName(item?.fileName ?? "") === normalizedFileName) ?? null;
     const summaryText = isValidModelId(resolvedModelId)
         ? "README.md가 없습니다."
         : "README.md를 조회할 모델 ID가 없습니다.";
 
-    const fallbackId = `local/${String(normalizedFileName || "model").replace(/[^A-Za-z0-9._/-]+/g, "-")}`;
+    const fallbackId = `local/${String(normalizedFileName ?? "model").replace(/[^A-Za-z0-9._/-]+/g, "-")}`;
     return {
         id: resolvedModelId || fallbackId,
-        pipeline_tag: manifestEntry?.task || "-",
+        pipeline_tag: manifestEntry?.task ?? "-",
         downloads: Number.isFinite(Number(manifestEntry?.downloads)) ? Number(manifestEntry.downloads) : null,
         likes: null,
-        lastModified: fileEntry?.lastModified || manifestEntry?.downloadedAt || "",
+        lastModified: fileEntry?.lastModified ?? manifestEntry?.downloadedAt ?? "",
         tags: [
             "source:opfs",
             manifestEntry?.downloadStatus ? `status:${manifestEntry.downloadStatus}` : "",
@@ -9342,7 +9341,7 @@ async function onClickSessionModelCard(fileName) {
     if (!normalizedFileName) return;
 
     const modelId = resolveModelIdForSessionFile(normalizedFileName);
-    const manifestEntry = getOpfsManifest()[normalizedFileName] || null;
+    const manifestEntry = getOpfsManifest()[normalizedFileName] ?? null;
     const revisionHint = typeof manifestEntry?.revision === "string" && manifestEntry.revision.trim()
         ? manifestEntry.revision.trim()
         : "main";
@@ -9363,7 +9362,7 @@ async function onClickSessionModelCard(fileName) {
         renderModelCardWindow(fallbackMetadata, modelId);
         openModelCardWindow();
 
-        const status = Number(error?.status || 0);
+        const status = Number(error?.status ?? 0);
         if (status === 404 || status === 401) {
             showToast("모델 카드 API 조회 실패로 로컬 카드 정보를 표시합니다.", "info", 3200);
         } else {
@@ -9398,14 +9397,14 @@ function renderModelSessionList() {
         const rowState = getSessionRowState(fileName);
         const action = getSessionRowActionMeta(rowState);
         const lampMeta = getSessionStateLampMeta(rowState);
-        const manifestEntry = manifest[fileName] || null;
-        const modelId = manifestEntry?.modelId || "-";
+        const manifestEntry = manifest[fileName] ?? null;
+        const modelId = manifestEntry?.modelId ?? "-";
         const normalizedModelId = isValidModelId(modelId) ? normalizeModelId(modelId) : "";
         const modelPageUrl = normalizedModelId
             ? `${HF_BASE_URL}/${normalizedModelId.split("/").map((part) => encodeURIComponent(part)).join("/")}`
             : "";
-        const revision = manifestEntry?.revision || "main";
-        const downloadStatus = manifestEntry?.downloadStatus || "downloaded";
+        const revision = manifestEntry?.revision ?? "main";
+        const downloadStatus = manifestEntry?.downloadStatus ?? "downloaded";
         const canUpdate = !!(manifestEntry?.fileUrl || isValidModelId(modelId));
         const statusTextClass = downloadStatus === "downloaded"
             ? "text-emerald-200"
@@ -9498,7 +9497,7 @@ function getSessionRowState(fileName) {
 function setSessionRowState(fileName, status, errorMessage = "") {
     state.sessionRows[fileName] = {
         status,
-        errorMessage: String(errorMessage || ""),
+        errorMessage: String(errorMessage ?? ""),
     };
 }
 
@@ -9562,21 +9561,21 @@ function getSessionStateLampMeta(rowState) {
 }
 
 function syncSessionRuntimeState() {
-    const activeByStore = normalizeOnnxFileName(sessionStore.activeFileName || "");
+    const activeByStore = normalizeOnnxFileName(sessionStore.activeFileName ?? "");
     if (activeByStore && sessionStore.sessions.has(activeByStore)) {
         state.activeSessionFile = activeByStore;
-        const activeEntry = sessionStore.sessions.get(activeByStore) || null;
-        sessionStore.activeSession = activeEntry?.session || null;
+        const activeEntry = sessionStore.sessions.get(activeByStore) ?? null;
+        sessionStore.activeSession = activeEntry?.session ?? null;
         setSessionRowState(activeByStore, "loaded", "");
         renderChatInferenceToggle();
         return activeByStore;
     }
 
-    const activeByState = normalizeOnnxFileName(state.activeSessionFile || "");
+    const activeByState = normalizeOnnxFileName(state.activeSessionFile ?? "");
     if (activeByState && sessionStore.sessions.has(activeByState)) {
         sessionStore.activeFileName = activeByState;
-        const activeEntry = sessionStore.sessions.get(activeByState) || null;
-        sessionStore.activeSession = activeEntry?.session || null;
+        const activeEntry = sessionStore.sessions.get(activeByState) ?? null;
+        sessionStore.activeSession = activeEntry?.session ?? null;
         setSessionRowState(activeByState, "loaded", "");
         renderChatInferenceToggle();
         return activeByState;
@@ -9655,10 +9654,10 @@ async function onClickSessionLoad(fileName, options = {}) {
             setLastLoadedSessionFile(normalizedFileName);
         }
 
-        const manifestEntry = getOpfsManifest()[normalizedFileName] || null;
+        const manifestEntry = getOpfsManifest()[normalizedFileName] ?? null;
         if (manifestEntry && isValidModelId(manifestEntry.modelId)) {
             applySelectedModel(manifestEntry.modelId, {
-                task: manifestEntry.task || "-",
+                task: manifestEntry.task ?? "-",
                 downloads: manifestEntry.downloads ?? null,
             });
             setSelectedModelLoadState("loaded", manifestEntry.modelId, "");
@@ -9677,7 +9676,7 @@ async function onClickSessionLoad(fileName, options = {}) {
 
         const syncedActive = syncSessionRuntimeState();
         if (!syncedActive) {
-            setSelectedModelLoadState("idle", previousSelectedLoad.modelId || "", "");
+            setSelectedModelLoadState("idle", previousSelectedLoad.modelId ?? "", "");
         } else if (!switchedFromFile) {
             state.selectedModelLoad = previousSelectedLoad;
             renderModelStatusHeader();
@@ -9716,7 +9715,7 @@ async function onClickSessionLoad(fileName, options = {}) {
 }
 
 function normalizeRevisionToken(value) {
-    return String(value || "").trim().toLowerCase();
+    return String(value ?? "").trim().toLowerCase();
 }
 
 function isRevisionSameOrSuperset(currentRevision, latestRevision) {
@@ -9727,7 +9726,7 @@ function isRevisionSameOrSuperset(currentRevision, latestRevision) {
 }
 
 function toTimestampSafe(value) {
-    const text = String(value || "").trim();
+    const text = String(value ?? "").trim();
     if (!text) return null;
     const timestamp = Date.parse(text);
     return Number.isFinite(timestamp) ? timestamp : null;
@@ -9735,7 +9734,7 @@ function toTimestampSafe(value) {
 
 function evaluateModelUpdateNecessity(currentEntry, metadata) {
     const latestRevision = typeof metadata?.sha === "string" ? metadata.sha.slice(0, 12) : "";
-    const currentRevision = String(currentEntry?.revision || "");
+    const currentRevision = String(currentEntry?.revision ?? "");
     if (isRevisionSameOrSuperset(currentRevision, latestRevision)) {
         return {
             updateRequired: false,
@@ -9776,7 +9775,7 @@ function resolveUpdateIntegrityCheckCategory(item, primarySourceFileName = "") {
     if (item?.kind === "onnx" || item?.isPrimary) {
         return "primary";
     }
-    const sourcePath = normalizeOpfsModelRelativePath(item?.sourceFileName || item?.fileName || "");
+    const sourcePath = normalizeOpfsModelRelativePath(item?.sourceFileName ?? item?.fileName ?? "");
     if (!sourcePath) {
         return "bundle";
     }
@@ -9790,12 +9789,12 @@ function resolveUpdateIntegrityCheckCategory(item, primarySourceFileName = "") {
 }
 
 async function validateLocalModelBundleFilesForUpdate(queue, options = {}) {
-    const primaryPath = normalizeOpfsModelRelativePath(options.primaryFileName || "");
+    const primaryPath = normalizeOpfsModelRelativePath(options.primaryFileName ?? "");
     const rows = Array.isArray(queue) ? queue : [];
     const primarySourceFileName = normalizeOpfsModelRelativePath(
         options.primarySourceFileName
-        || rows.find((item) => item?.kind === "onnx" || item?.isPrimary)?.sourceFileName
-        || "",
+        ?? rows.find((item) => item?.kind === "onnx" || item?.isPrimary)?.sourceFileName
+        ?? "",
     );
     const primaryExpectedSizeBytes = Number.isFinite(Number(options.primaryExpectedSizeBytes))
         ? Math.max(0, Number(options.primaryExpectedSizeBytes))
@@ -9803,7 +9802,7 @@ async function validateLocalModelBundleFilesForUpdate(queue, options = {}) {
     const checks = [];
 
     for (const item of rows) {
-        const relativePath = normalizeOpfsModelRelativePath(item?.fileName || "");
+        const relativePath = normalizeOpfsModelRelativePath(item?.fileName ?? "");
         if (!relativePath) continue;
 
         const localSizeBytes = await getExistingOpfsFileSize(relativePath);
@@ -9866,7 +9865,7 @@ async function onClickSessionUpdate(fileName) {
     }
 
     const manifest = getOpfsManifest();
-    const entry = manifest[normalizedFileName] || null;
+    const entry = manifest[normalizedFileName] ?? null;
     if (!entry) {
         showToast("업데이트 정보를 찾을 수 없습니다. 모델을 다시 조회 후 다운로드하세요.", "error", 3000);
         return;
@@ -9874,9 +9873,9 @@ async function onClickSessionUpdate(fileName) {
 
     let targetModelId = isValidModelId(entry.modelId) ? entry.modelId : selectedModel;
     let targetFileName = normalizedFileName;
-    let targetFileUrl = String(entry.fileUrl || "");
+    let targetFileUrl = String(entry.fileUrl ?? "");
     const preferredSourceFileName = normalizeOpfsModelRelativePath(
-        extractModelFileHintFromResolveUrl(entry.fileUrl || ""),
+        extractModelFileHintFromResolveUrl(entry.fileUrl ?? ""),
     );
     let targetPrimarySourceFileName = preferredSourceFileName;
     let targetQueue = [];
@@ -9899,14 +9898,14 @@ async function onClickSessionUpdate(fileName) {
                     targetQueue = target.files;
                     targetFileName = normalizeOnnxFileName(target.primary.fileName) || normalizedFileName;
                     targetFileUrl = target.primary.fileUrl;
-                    targetPrimarySourceFileName = normalizeOpfsModelRelativePath(target.primary.sourceFileName || "")
+                    targetPrimarySourceFileName = normalizeOpfsModelRelativePath(target.primary.sourceFileName ?? "")
                         || targetPrimarySourceFileName;
                     targetQuantizationOptions = normalizeDownloadQuantizationOptions(target.quantizationOptions);
-                    targetSelectedQuantizationKey = String(target.selectedQuantizationKey || "").trim().toLowerCase();
+                    targetSelectedQuantizationKey = String(target.selectedQuantizationKey ?? "").trim().toLowerCase();
                     ensureManifestEntryForModelFile(targetFileName, {
                         ...entry,
                         fileUrl: targetFileUrl,
-                        revision: typeof metadata?.sha === "string" ? metadata.sha.slice(0, 12) : (entry.revision || "main"),
+                        revision: typeof metadata?.sha === "string" ? metadata.sha.slice(0, 12) : (entry.revision ?? "main"),
                         downloadStatus: "ready",
                     });
                 } else if (!targetFileUrl || !targetFileName) {
@@ -9995,7 +9994,7 @@ async function onClickSessionUpdate(fileName) {
 
         if (isValidModelId(targetModelId)) {
             applySelectedModel(targetModelId, {
-                task: entry.task || state.selectedModelMeta?.task || "-",
+                task: entry.task ?? state.selectedModelMeta?.task ?? "-",
                 downloads: entry.downloads ?? state.selectedModelMeta?.downloads ?? null,
             });
         }
@@ -10005,11 +10004,11 @@ async function onClickSessionUpdate(fileName) {
         state.download.isPaused = false;
         state.download.pauseRequested = false;
         state.download.abortController = null;
-        state.download.modelId = targetModelId || selectedModel || "";
+        state.download.modelId = targetModelId ?? selectedModel ?? "";
         state.download.quantizationOptions = targetQuantizationOptions;
         state.download.selectedQuantizationKey = "";
         if (targetQuantizationOptions.length > 0) {
-            const selectedKey = targetSelectedQuantizationKey || targetQuantizationOptions[0]?.key || "";
+            const selectedKey = targetSelectedQuantizationKey ?? targetQuantizationOptions[0]?.key ?? "";
             const selected = applyDownloadQuantizationSelectionByKey(selectedKey, {
                 render: false,
                 toast: false,
@@ -10164,7 +10163,7 @@ async function loadCachedSession(fileName, options = {}) {
     let externalDataChunkCount = 0;
     try {
         const fileRef = await fileHandle.getFile();
-        const fileSize = Number(fileRef?.size || 0);
+        const fileSize = Number(fileRef?.size ?? 0);
         if (fileSize <= 0) {
             const error = new Error(`모델 파일 크기가 0입니다: ${resolvedPath}`);
             error.code = "CorruptedModel";
@@ -10183,8 +10182,8 @@ async function loadCachedSession(fileName, options = {}) {
             throw error;
         }
         const task = resolvePipelineTaskForModel(normalizedFileName, modelId);
-        const manifestEntry = getOpfsManifest()[normalizedFileName] || null;
-        const modelFileNameHintRaw = extractModelFileHintFromResolveUrl(manifestEntry?.fileUrl || "");
+        const manifestEntry = getOpfsManifest()[normalizedFileName] ?? null;
+        const modelFileNameHintRaw = extractModelFileHintFromResolveUrl(manifestEntry?.fileUrl ?? "");
         const modelFileNameHint = normalizeTransformersModelFileNameHint(modelFileNameHintRaw);
         const modelDtypeHint = resolveTransformersDtypeFromFileName(modelFileNameHintRaw || normalizedFileName);
         relatedFileCount = await countRelatedOpfsModelFiles(modelId, normalizedFileName);
@@ -10211,7 +10210,7 @@ async function loadCachedSession(fileName, options = {}) {
         });
 
         const preferredDevice = normalizeInferenceDevice(
-            String(options.preferredDevice || state.inference.preferredDevice || "").trim().toLowerCase(),
+            String(options.preferredDevice ?? state.inference.preferredDevice ?? "").trim().toLowerCase(),
         );
         const fallbackDevices = resolveInferenceBackendChain(preferredDevice, getRuntimeCapabilities());
 
@@ -10263,10 +10262,10 @@ async function loadCachedSession(fileName, options = {}) {
             modelId,
             task,
             modelFileNameHint: session?.modelFileNameHint || modelFileNameHint,
-            modelBinding: session?.modelBinding || "",
+            modelBinding: session?.modelBinding ?? "",
             dtype: session?.dtype || modelDtypeHint,
             relatedFileCount,
-            externalDataChunkCount: Number(session?.externalDataChunkCount || 0),
+            externalDataChunkCount: Number(session?.externalDataChunkCount ?? 0),
             runtime: LOCAL_INFERENCE_RUNTIME.runtime,
         });
 
@@ -10343,7 +10342,7 @@ async function countRelatedOpfsModelFiles(modelId, fileName = "") {
                 const bundleDir = await resolveOpfsModelsDirectoryBySegments(bundleSegments, { create: false });
                 const files = await listOpfsFilesRecursive(bundleDir, { baseSegments: [] });
                 const directCount = files.length;
-                const lastSegment = String(bundleSegments[bundleSegments.length - 1] || "").toLowerCase();
+                const lastSegment = String(bundleSegments[bundleSegments.length - 1] ?? "").toLowerCase();
                 if (lastSegment !== "onnx") {
                     return directCount;
                 }
@@ -10392,7 +10391,7 @@ async function countExternalDataChunksForOnnxFile(fileName) {
         const files = await listOpfsFilesRecursive(bundleDir, { baseSegments: [] });
         let count = 0;
         for (const item of files) {
-            const relativePath = normalizeOpfsModelRelativePath(item?.relativePath || "");
+            const relativePath = normalizeOpfsModelRelativePath(item?.relativePath ?? "");
             if (!relativePath) continue;
             const absolutePath = normalizeOpfsModelRelativePath(`${bundleSegments.join("/")}/${relativePath}`);
             if (isExternalOnnxDataPathForSource(absolutePath, normalizedFileName)) {
@@ -10407,14 +10406,14 @@ async function countExternalDataChunksForOnnxFile(fileName) {
 
 function resolveModelIdForCachedSession(fileName) {
     const normalizedFileName = normalizeOnnxFileName(fileName);
-    const manifest = getOpfsManifest()[normalizedFileName] || null;
+    const manifest = getOpfsManifest()[normalizedFileName] ?? null;
 
-    const fromManifest = normalizeModelId(manifest?.modelId || "");
+    const fromManifest = normalizeModelId(manifest?.modelId ?? "");
     if (isValidModelId(fromManifest)) {
         return fromManifest;
     }
 
-    const fromSelected = normalizeModelId(selectedModel || "");
+    const fromSelected = normalizeModelId(selectedModel ?? "");
     if (isValidModelId(fromSelected)) {
         return fromSelected;
     }
@@ -10428,7 +10427,7 @@ function resolveModelIdForCachedSession(fileName) {
 }
 
 function normalizePipelineTask(rawTask) {
-    const task = String(rawTask || "").trim().toLowerCase();
+    const task = String(rawTask ?? "").trim().toLowerCase();
     if (!task) return TRANSFORMERS_DEFAULT_TASK;
 
     const aliases = {
@@ -10446,14 +10445,14 @@ function normalizePipelineTask(rawTask) {
 
 function decodeUriComponentSafe(value) {
     try {
-        return decodeURIComponent(String(value || ""));
+        return decodeURIComponent(String(value ?? ""));
     } catch (_) {
-        return String(value || "");
+        return String(value ?? "");
     }
 }
 
 function extractModelFileHintFromResolveUrl(fileUrl) {
-    const raw = String(fileUrl || "").trim();
+    const raw = String(fileUrl ?? "").trim();
     if (!raw) return "";
     try {
         const parsed = new URL(raw);
@@ -10475,7 +10474,7 @@ function extractModelFileHintFromResolveUrl(fileUrl) {
 }
 
 function normalizeTransformersModelFileNameHint(rawHint) {
-    let value = String(rawHint || "").trim();
+    let value = String(rawHint ?? "").trim();
     if (!value) return "";
     value = value
         .replace(/\\/g, "/")
@@ -10496,7 +10495,7 @@ function normalizeTransformersModelFileNameHint(rawHint) {
         segments.shift();
     }
 
-    let last = String(segments[segments.length - 1] || "").trim();
+    let last = String(segments[segments.length - 1] ?? "").trim();
     if (!last) return "";
     while (/\.onnx$/i.test(last)) {
         last = last.slice(0, -5);
@@ -10514,7 +10513,7 @@ function normalizeTransformersModelFileNameHint(rawHint) {
 
 function resolvePipelineTaskForModel(fileName, modelId) {
     const normalizedFileName = normalizeOnnxFileName(fileName);
-    const manifest = getOpfsManifest()[normalizedFileName] || null;
+    const manifest = getOpfsManifest()[normalizedFileName] ?? null;
     const task = normalizePipelineTask(
         manifest?.task
         || state.selectedModelMeta?.pipeline_tag
@@ -10553,7 +10552,7 @@ async function ensureTransformersModule() {
 }
 
 function configureTransformersRuntimeEnv(runtime) {
-    const envRef = runtime?.env || runtime?.default?.env || null;
+    const envRef = runtime?.env ?? runtime?.default?.env ?? null;
     if (!envRef || typeof envRef !== "object") return;
 
     if (Object.prototype.hasOwnProperty.call(envRef, "allowRemoteModels")) {
@@ -10574,7 +10573,7 @@ async function loadTransformersModuleFromCandidates() {
     let lastError = null;
 
     for (const candidate of candidates) {
-        const url = String(candidate || "").trim();
+        const url = String(candidate ?? "").trim();
         if (!url) continue;
         try {
             const runtime = await import(url);
@@ -10610,10 +10609,10 @@ function getPipelineFactory(mod) {
 }
 
 function getTransformersPipelineKey(task, modelId, modelFileName = "", externalDataChunkCount = 0, device = "", dtype = "") {
-    const fileHint = String(modelFileName || "").trim().toLowerCase();
-    const chunkCount = Math.max(0, Math.trunc(Number(externalDataChunkCount || 0)));
-    const normalizedDevice = String(device || "").trim().toLowerCase() || "auto";
-    const normalizedDtype = String(dtype || "").trim().toLowerCase() || "auto";
+    const fileHint = String(modelFileName ?? "").trim().toLowerCase();
+    const chunkCount = Math.max(0, Math.trunc(Number(externalDataChunkCount ?? 0)));
+    const normalizedDevice = String(device ?? "").trim().toLowerCase() ?? "auto";
+    const normalizedDtype = String(dtype ?? "").trim().toLowerCase() ?? "auto";
     return `${normalizePipelineTask(task)}::${normalizeModelId(modelId)}::${fileHint}::ext${chunkCount}::dev${normalizedDevice}::dt${normalizedDtype}`;
 }
 
@@ -10630,7 +10629,7 @@ async function releaseTransformersPipeline(key, options = {}) {
     const entry = transformersStore.pipelines.get(key);
     if (!entry) return;
 
-    const current = Math.max(0, Math.trunc(Number(entry.refCount || 0)));
+    const current = Math.max(0, Math.trunc(Number(entry.refCount ?? 0)));
     const next = Math.max(0, current - 1);
     entry.refCount = next;
     entry.lastUsed = Date.now();
@@ -10652,8 +10651,8 @@ async function pruneTransformersPipelineCache() {
     const limit = Math.max(1, Number(TRANSFORMERS_PIPELINE_CACHE_LIMIT || 1));
     while (transformersStore.pipelines.size > limit) {
         const releasable = [...transformersStore.pipelines.entries()]
-            .filter(([, entry]) => Math.max(0, Math.trunc(Number(entry?.refCount || 0))) === 0)
-            .sort((a, b) => Number(a[1]?.lastUsed || 0) - Number(b[1]?.lastUsed || 0));
+            .filter(([, entry]) => Math.max(0, Math.trunc(Number(entry?.refCount ?? 0))) === 0)
+            .sort((a, b) => Number(a[1]?.lastUsed ?? 0) - Number(b[1]?.lastUsed ?? 0));
         if (releasable.length === 0) {
             break;
         }
@@ -10673,17 +10672,17 @@ async function getOrCreateTransformersPipeline(task, modelId, options = {}) {
     const normalizedTask = normalizePipelineTask(task);
     const normalizedModel = normalizeModelId(modelId);
     const shouldRetain = options.retain === true;
-    const externalDataChunkCount = Math.max(0, Math.trunc(Number(options.externalDataChunkCount || 0)));
-    const rawModelFileName = String(options.modelFileName || "").trim();
+    const externalDataChunkCount = Math.max(0, Math.trunc(Number(options.externalDataChunkCount ?? 0)));
+    const rawModelFileName = String(options.modelFileName ?? "").trim();
     const modelFileName = normalizeTransformersModelFileNameHint(rawModelFileName);
-    const requestedDevice = String(options.device || "").trim().toLowerCase();
+    const requestedDevice = String(options.device ?? "").trim().toLowerCase();
     const runtimeCapabilities = getRuntimeCapabilities();
-    const fallbackDeviceChain = resolveInferenceBackendChain(requestedDevice || "webgpu", runtimeCapabilities);
+    const fallbackDeviceChain = resolveInferenceBackendChain(requestedDevice ?? "webgpu", runtimeCapabilities);
     const resolvedDevice = ["webgpu", "webgl", "wasm"].includes(requestedDevice)
         ? requestedDevice
-        : (fallbackDeviceChain[0] || "wasm");
-    const requestedDtype = String(options.dtype || "").trim().toLowerCase();
-    const resolvedDtype = requestedDtype || "auto";
+        : (fallbackDeviceChain[0] ?? "wasm");
+    const requestedDtype = String(options.dtype ?? "").trim().toLowerCase();
+    const resolvedDtype = requestedDtype ?? "auto";
     if (rawModelFileName && rawModelFileName !== modelFileName) {
         console.info("[INFO] normalized transformers model_file_name hint", {
             raw: rawModelFileName,
@@ -10777,7 +10776,7 @@ function extractTextFromTransformersOutput(output, task) {
         for (let index = messages.length - 1; index >= 0; index -= 1) {
             const message = messages[index];
             if (!message || typeof message !== "object") continue;
-            const role = String(message.role || "").trim().toLowerCase();
+            const role = String(message.role ?? "").trim().toLowerCase();
             const content = coerceText(
                 message.content
                 ?? message.text
@@ -10838,8 +10837,8 @@ function extractTextFromTransformersOutput(output, task) {
             const compact = output
                 .slice(0, 5)
                 .map((item) => {
-                    const label = String(item?.label || "-");
-                    const score = Number(item?.score || 0);
+                    const label = String(item?.label ?? "-");
+                    const score = Number(item?.score ?? 0);
                     const scoreText = Number.isFinite(score) ? ` (${(score * 100).toFixed(1)}%)` : "";
                     return `${label}${scoreText}`;
                 });
@@ -10852,7 +10851,7 @@ function extractTextFromTransformersOutput(output, task) {
     }
     const fromOutputMessages = extractAssistantTextFromMessages(Array.isArray(output) ? output : []);
     if (fromOutputMessages) return fromOutputMessages;
-    return coerceText(first) || "";
+    return coerceText(first) ?? "";
 }
 
 function extractTokenIdsFromGenerationBeamPayload(payload) {
@@ -10892,19 +10891,19 @@ async function createTransformersSession({
     const hintFromOptions = normalizeTransformersModelFileNameHint(modelFileNameHint);
     let resolvedModelFileNameHint = hintFromOptions;
     if (!resolvedModelFileNameHint) {
-        const manifestEntry = getOpfsManifest()[normalizeOnnxFileName(fileName)] || null;
-        const modelFileNameHintRaw = extractModelFileHintFromResolveUrl(manifestEntry?.fileUrl || "");
+        const manifestEntry = getOpfsManifest()[normalizeOnnxFileName(fileName)] ?? null;
+        const modelFileNameHintRaw = extractModelFileHintFromResolveUrl(manifestEntry?.fileUrl ?? "");
         resolvedModelFileNameHint = normalizeTransformersModelFileNameHint(modelFileNameHintRaw);
     }
     if (!resolvedModelFileNameHint) {
         resolvedModelFileNameHint = normalizeTransformersModelFileNameHint(fileName);
     }
-    const resolvedSourceFileName = normalizeOpfsModelRelativePath(modelSourceFileName || "");
+    const resolvedSourceFileName = normalizeOpfsModelRelativePath(modelSourceFileName ?? "");
     const resolvedDtype = resolveEffectiveTransformersDtype({
         sourceFileName: resolvedSourceFileName || fileName || resolvedModelFileNameHint,
         modelFileNameHint: resolvedModelFileNameHint,
     });
-    const normalizedExternalDataChunkCount = Math.max(0, Math.trunc(Number(externalDataChunkCount || 0)));
+    const normalizedExternalDataChunkCount = Math.max(0, Math.trunc(Number(externalDataChunkCount ?? 0)));
     const { key, pipeline, device, dtype } = await getOrCreateTransformersPipeline(resolvedTask, normalizedModelId, {
         modelFileName: resolvedModelFileNameHint,
         dtype: resolvedDtype,
@@ -10924,15 +10923,15 @@ async function createTransformersSession({
         modelBinding: normalizedExternalDataChunkCount > 0
             ? "model_id_pipeline_external_data"
             : "model_id_pipeline",
-        device: String(device || "").trim().toLowerCase() || "auto",
-        dtype: String(dtype || resolvedDtype || "auto").trim().toLowerCase() || "auto",
+        device: String(device ?? "").trim().toLowerCase() ?? "auto",
+        dtype: String(dtype ?? resolvedDtype ?? "auto").trim().toLowerCase() ?? "auto",
         externalDataChunkCount: normalizedExternalDataChunkCount,
         pipelineKey: key,
         pipeline,
         async generateText(promptOrMessages, options = {}) {
             const chatMessages = normalizeTransformersChatMessages(promptOrMessages);
             const hasChatMessages = chatMessages.length > 0;
-            const text = hasChatMessages ? "" : String(promptOrMessages || "");
+            const text = hasChatMessages ? "" : String(promptOrMessages ?? "");
             const inputPayload = hasChatMessages ? chatMessages : text;
             const maxNewTokens = Math.max(1, Math.trunc(Number(options.maxNewTokens || LOCAL_INFERENCE_RUNTIME.maxNewTokens)));
             const onToken = typeof options.onToken === "function" ? options.onToken : null;
@@ -10971,7 +10970,7 @@ async function createTransformersSession({
                         if (!Array.isArray(tokenIds) || tokenIds.length === 0) return;
 
                         let decoded = String(
-                            pipeline.tokenizer.decode(tokenIds, { skip_special_tokens: true }) || "",
+                            pipeline.tokenizer.decode(tokenIds, { skip_special_tokens: true }) ?? "",
                         );
                         if (!decoded) return;
                         if (!hasChatMessages && decoded.startsWith(text)) {
@@ -11021,17 +11020,17 @@ async function createTransformersSession({
 
 function logSessionCreateAttempt(stage, payload) {
     const data = {
-        stage: String(stage || "unknown"),
-        file_name: String(payload?.fileName || ""),
-        file_path: String(payload?.filePath || ""),
-        model_id: String(payload?.modelId || ""),
-        task: String(payload?.task || ""),
-        model_file_name_hint: String(payload?.modelFileNameHint || ""),
-        dtype: String(payload?.dtype || ""),
+        stage: String(stage ?? "unknown"),
+        file_name: String(payload?.fileName ?? ""),
+        file_path: String(payload?.filePath ?? ""),
+        model_id: String(payload?.modelId ?? ""),
+        task: String(payload?.task ?? ""),
+        model_file_name_hint: String(payload?.modelFileNameHint ?? ""),
+        dtype: String(payload?.dtype ?? ""),
         external_data_chunks: Number.isFinite(Number(payload?.externalDataChunkCount))
             ? Number(payload.externalDataChunkCount)
             : 0,
-        model_binding: String(payload?.modelBinding || ""),
+        model_binding: String(payload?.modelBinding ?? ""),
         related_file_count: Number.isFinite(Number(payload?.relatedFileCount)) ? Number(payload.relatedFileCount) : null,
         runtime: String(payload?.runtime || LOCAL_INFERENCE_RUNTIME.runtime),
         error: payload?.error ? String(payload.error) : "",
@@ -11061,7 +11060,7 @@ function extractNumericRuntimeErrorCode(error) {
         typeof error?.cause?.message === "string" ? error.cause.message : "",
     ];
     for (const raw of messageCandidates) {
-        const text = String(raw || "").trim();
+        const text = String(raw ?? "").trim();
         if (!text) continue;
         if (/^\d{5,}$/.test(text)) {
             return Number(text);
@@ -11079,7 +11078,7 @@ function extractNumericRuntimeErrorCode(error) {
 }
 
 function classifySessionLoadError(error) {
-    const statusCode = Number(error?.status || 0);
+    const statusCode = Number(error?.status ?? 0);
     const rawMessage = getErrorMessage(error);
     const message = rawMessage.toLowerCase();
 
@@ -11200,13 +11199,13 @@ function openDeleteDialog(targetLabel, options = {}) {
 
     const resolvedLabel = mode === "model"
         ? normalizedFileName
-        : String(targetLabel || options.targetPath || "").trim();
+        : String(targetLabel ?? options.targetPath ?? "").trim();
     if (!resolvedLabel) return;
 
     state.deleteDialog.fileName = mode === "model" ? normalizedFileName : "";
     state.deleteDialog.targetPath = mode === "model"
         ? toAbsoluteOpfsPath([OPFS_MODELS_DIR, normalizedFileName])
-        : sanitizeExplorerTargetPath(options.targetPath || "");
+        : sanitizeExplorerTargetPath(options.targetPath ?? "");
     state.deleteDialog.targetKind = options.targetKind === "directory" ? "directory" : "file";
     state.deleteDialog.mode = mode;
     state.deleteDialog.open = true;
@@ -11234,7 +11233,7 @@ function isDeleteDialogOpen() {
 
 function openErrorDialog(message) {
     if (!els.errorDialogOverlay || !els.errorDialogMessage) return;
-    els.errorDialogMessage.textContent = String(message || "삭제할 수 없습니다. 페이지 새로고침 후 다시 시도하세요.");
+    els.errorDialogMessage.textContent = String(message ?? "삭제할 수 없습니다. 페이지 새로고침 후 다시 시도하세요.");
     els.errorDialogOverlay.classList.remove("hidden");
     els.errorDialogOverlay.focus();
 }
@@ -11253,7 +11252,7 @@ async function onConfirmDeleteModel() {
 
     const mode = state.deleteDialog.mode === "explorer" ? "explorer" : "model";
     const fileName = normalizeOnnxFileName(state.deleteDialog.fileName);
-    const targetPath = sanitizeExplorerTargetPath(state.deleteDialog.targetPath || "");
+    const targetPath = sanitizeExplorerTargetPath(state.deleteDialog.targetPath ?? "");
     if (mode === "model" && !fileName) {
         closeDeleteDialog();
         return;
@@ -11280,7 +11279,7 @@ async function onConfirmDeleteModel() {
                 : [fileName];
             if (bundlePath) {
                 const scannedModelFiles = (Array.isArray(state.opfs.files) ? state.opfs.files : [])
-                    .map((item) => normalizeOnnxFileName(item?.fileName || ""))
+                    .map((item) => normalizeOnnxFileName(item?.fileName ?? ""))
                     .filter((name) => !!name && (name === fileName || name.startsWith(`${bundlePath}/`)));
                 for (const scannedName of scannedModelFiles) {
                     if (!affectedModelFiles.includes(scannedName)) {
@@ -11333,7 +11332,7 @@ async function onConfirmDeleteModel() {
                     key === modelPrefix || key.startsWith(`${modelPrefix}/`)
                 ));
                 const scannedModelFiles = (Array.isArray(state.opfs.files) ? state.opfs.files : [])
-                    .map((item) => normalizeOnnxFileName(item?.fileName || ""))
+                    .map((item) => normalizeOnnxFileName(item?.fileName ?? ""))
                     .filter((name) => !!name && (name === modelPrefix || name.startsWith(`${modelPrefix}/`)));
                 for (const scannedName of scannedModelFiles) {
                     if (!affectedModelFiles.includes(scannedName)) {
@@ -11376,8 +11375,8 @@ async function onConfirmDeleteModel() {
             console.error("[ERROR] OPFS delete DOMException", {
                 file_name: mode === "model" ? fileName : targetPath,
                 code: Number.isFinite(Number(error.code)) ? Number(error.code) : null,
-                name: error.name || "",
-                message: error.message || "",
+                name: error.name ?? "",
+                message: error.message ?? "",
             });
             openErrorDialog("삭제할 수 없습니다. 페이지 새로고침 후 다시 시도하세요.");
         } else {
@@ -11396,8 +11395,8 @@ async function onConfirmDeleteModel() {
 function renderModelStatusHeader() {
     if (!els.modelStatusText) return;
 
-    const status = state.selectedModelLoad.status || "idle";
-    const modelId = normalizeModelId(state.selectedModelLoad.modelId || selectedModel || state.selectedModelMeta?.id || state.activeSessionFile || "");
+    const status = state.selectedModelLoad.status ?? "idle";
+    const modelId = normalizeModelId(state.selectedModelLoad.modelId ?? selectedModel ?? state.selectedModelMeta?.id ?? state.activeSessionFile ?? "");
     const modelName = modelId || (getProfileLanguage() === "ko" ? "모델" : "Model");
 
     let text = t("status.model.waiting");
@@ -11438,20 +11437,20 @@ function parseModelCardMetadata(metadata, fallbackModelId = "") {
     const updatedAt = formatModelDate(metadata?.lastModified);
 
     return {
-        name: modelId || "-",
-        uploader: uploader || "-",
-        task: metadata?.pipeline_tag || extractTagValue(tags, "pipeline_tag:") || "-",
+        name: modelId ?? "-",
+        uploader: uploader ?? "-",
+        task: metadata?.pipeline_tag ?? extractTagValue(tags, "pipeline_tag:") ?? "-",
         downloads: formatMetric(metadata?.downloads),
         license,
         likes: formatMetric(metadata?.likes),
         updatedAt,
         tags: tags.length > 0 ? tags.slice(0, 20).join(", ") : "-",
-        summary: description || "README.md가 없습니다.",
+        summary: description ?? "README.md가 없습니다.",
     };
 }
 
 function pickModelDescription(metadata) {
-    const readme = String(metadata?.__readmeContent || "").trim();
+    const readme = String(metadata?.__readmeContent ?? "").trim();
     if (readme) {
         return readme.slice(0, 40000);
     }
@@ -11480,7 +11479,7 @@ function pickModelLicense(metadata, tags) {
     }
 
     const fromTag = extractTagValue(tags, "license:");
-    return fromTag || "-";
+    return fromTag ?? "-";
 }
 
 function extractTagValue(tags, prefix) {
@@ -11488,7 +11487,7 @@ function extractTagValue(tags, prefix) {
     for (const tag of tags) {
         if (typeof tag !== "string") continue;
         const normalized = tag.trim();
-        if (!normalized.toLowerCase().startsWith(String(prefix || "").toLowerCase())) continue;
+        if (!normalized.toLowerCase().startsWith(String(prefix ?? "").toLowerCase())) continue;
         return normalized.slice(prefix.length).trim();
     }
     return "";
@@ -11554,7 +11553,7 @@ function createAssistantStreamRenderer() {
             pushChunk: () => {},
             reset: () => {},
             finalize: (finalText = "") => {
-                updateMessageEntryById(message?.id || 0, { text: String(finalText || "") });
+                updateMessageEntryById(message?.id ?? 0, { text: String(finalText ?? "") });
                 persistActiveSessionMessages();
                 return message;
             },
@@ -11648,7 +11647,7 @@ function createAssistantStreamRenderer() {
 
     const pushChunk = (chunk, meta = {}) => {
         if (closed) return;
-        const next = String(chunk || "");
+        const next = String(chunk ?? "");
         if (!next) return;
 
         if (!startedAt) {
@@ -11697,7 +11696,7 @@ function createAssistantStreamRenderer() {
         cancelScheduledFlush();
         const skipMetrics = meta.skipMetrics === true;
 
-        const resolvedFinalText = String(finalText || "");
+        const resolvedFinalText = String(finalText ?? "");
         if (resolvedFinalText) {
             text = resolvedFinalText;
             buffered = "";
@@ -11752,7 +11751,7 @@ function createAssistantStreamRenderer() {
 
 async function appendAssistantMessageWithTokenMetrics(fullText) {
     const stream = createAssistantStreamRenderer();
-    const finalText = String(fullText || "");
+    const finalText = String(fullText ?? "");
     stream.finalize(finalText, {
         forceTokenCount: Math.max(1, countApproxTokens(finalText)),
     });
@@ -11760,7 +11759,7 @@ async function appendAssistantMessageWithTokenMetrics(fullText) {
 }
 
 async function copyTextToClipboard(text) {
-    const value = String(text || "");
+    const value = String(text ?? "");
     if (navigator?.clipboard && typeof navigator.clipboard.writeText === "function") {
         await navigator.clipboard.writeText(value);
         return true;
@@ -11812,7 +11811,7 @@ async function onChatSubmit(event) {
     event.preventDefault();
     if (state.isSendingChat) return;
 
-    const userText = (els.chatInput.value || "").trim();
+    const userText = (els.chatInput.value ?? "").trim();
     if (!userText) return;
 
     try {
@@ -11847,14 +11846,14 @@ function focusChatInputForContinuousTyping() {
 }
 
 async function sendMessage(userText) {
-    const normalizedUserText = String(userText || "").trim();
+    const normalizedUserText = String(userText ?? "").trim();
     if (!normalizedUserText) return;
 
     if (!selectedModel && state.activeSessionFile) {
-        const manifestEntry = getOpfsManifest()[state.activeSessionFile] || null;
+        const manifestEntry = getOpfsManifest()[state.activeSessionFile] ?? null;
         if (manifestEntry?.modelId && isValidModelId(manifestEntry.modelId)) {
             applySelectedModel(manifestEntry.modelId, {
-                task: manifestEntry.task || "-",
+                task: manifestEntry.task ?? "-",
                 downloads: manifestEntry.downloads ?? null,
             });
             setSelectedModelLoadState("loaded", manifestEntry.modelId, "");
@@ -11868,8 +11867,8 @@ async function sendMessage(userText) {
 
     console.info("[CHAT] submit route", {
         local_mode: true,
-        active_file: state.activeSessionFile || "",
-        selected_model: selectedModel || "",
+        active_file: state.activeSessionFile ?? "",
+        selected_model: selectedModel ?? "",
         local_loaded: true,
         inference: state.inference.enabled,
     });
@@ -11891,7 +11890,7 @@ async function sendMessage(userText) {
                 streamRenderer.reset();
             },
         });
-        streamRenderer.finalize(reply || "응답이 비어 있습니다.");
+        streamRenderer.finalize(reply ?? "응답이 비어 있습니다.");
         state.monitoring.chatSuccessCount += 1;
     } catch (error) {
         const errorId = createChatErrorId();
@@ -11920,24 +11919,24 @@ function getRecentNetworkEvents(limit = 8) {
 }
 
 async function collectChatFailureDiagnostics(error, context = {}) {
-    const activeFile = String(state.activeSessionFile || "").trim();
+    const activeFile = String(state.activeSessionFile ?? "").trim();
     const mode = "local";
     const session = sessionStore.activeSession;
     const sessionInputMetadata = session?.inputMetadata && typeof session.inputMetadata === "object"
         ? Object.fromEntries(
             Object.entries(session.inputMetadata).map(([name, meta]) => [name, {
-                type: meta?.type || "",
+                type: meta?.type ?? "",
                 dims: Array.isArray(meta?.dims) ? [...meta.dims] : [],
             }]),
         )
         : {};
 
     return {
-        error_id: context.errorId || "",
+        error_id: context.errorId ?? "",
         mode,
         online: typeof navigator?.onLine === "boolean" ? navigator.onLine : null,
-        selected_model: selectedModel || "",
-        resolved_model: normalizeModelId(selectedModel || ""),
+        selected_model: selectedModel ?? "",
+        resolved_model: normalizeModelId(selectedModel ?? ""),
         active_session_file: activeFile,
         active_session_state: activeFile ? getSessionRowState(activeFile) : "",
         has_active_session_object: !!sessionStore.activeSession,
@@ -11952,15 +11951,15 @@ async function collectChatFailureDiagnostics(error, context = {}) {
         last_inference_error: serializeErrorSummary(error),
         recent_network_events: getRecentNetworkEvents(10),
         context: {
-            user_text_len: String(context.userText || "").length,
+            user_text_len: String(context.userText ?? "").length,
         },
     };
 }
 
 function formatChatFailureMessage(error, diagnostics = {}, errorId = "") {
-    const code = String(error?.code || "");
+    const code = String(error?.code ?? "");
     const raw = getErrorMessage(error);
-    const mode = String(diagnostics?.mode || "local");
+    const mode = String(diagnostics?.mode ?? "local");
 
     let reason = "";
     if (mode === "local") {
@@ -12012,7 +12011,7 @@ async function requestChatCompletion(userText, options = {}) {
 
     console.info("[LOCAL] chat request routed to local session", {
         active_file: state.activeSessionFile,
-        model_id: selectedModel || "",
+        model_id: selectedModel ?? "",
     });
     return await requestLocalSessionCompletion(userText, options);
 }
@@ -12023,7 +12022,7 @@ async function requestLocalSessionCompletion(userText, options = {}) {
         onToken = null,
         onStreamReset = null,
     } = options;
-    const activeFile = String(state.activeSessionFile || "").trim();
+    const activeFile = String(state.activeSessionFile ?? "").trim();
     let session = sessionStore.activeSession;
     if (!activeFile || !session) {
         const error = new Error(getProfileLanguage() === "ko"
@@ -12046,18 +12045,18 @@ async function requestLocalSessionCompletion(userText, options = {}) {
         }
         throw createLocalEmptyOutputError(session, userText, {
             attempts: 1,
-            outputsPreview: [{ attempt: 1, normalized: String(cleaned || "").slice(0, 160) }],
+            outputsPreview: [{ attempt: 1, normalized: String(cleaned ?? "").slice(0, 160) }],
         });
     } catch (error) {
-        const code = String(error?.code || "");
-        const currentDevice = String(session?.device || "").trim().toLowerCase();
-        const recoveryDevices = resolveInferenceBackendChain(currentDevice || "webgpu", getRuntimeCapabilities())
+        const code = String(error?.code ?? "");
+        const currentDevice = String(session?.device ?? "").trim().toLowerCase();
+        const recoveryDevices = resolveInferenceBackendChain(currentDevice ?? "webgpu", getRuntimeCapabilities())
             .filter((device) => device !== currentDevice);
         const canRetryWithFallback = code === "local_inference_run_failed" && recoveryDevices.length > 0;
         if (canRetryWithFallback) {
             console.warn("[LOCAL] inference failed on primary device, retrying with fallback chain", {
                 active_file: activeFile,
-                current_device: currentDevice || "unknown",
+                current_device: currentDevice ?? "unknown",
                 code,
                 message: getErrorMessage(error),
                 recovery_devices: recoveryDevices,
@@ -12087,7 +12086,7 @@ async function requestLocalSessionCompletion(userText, options = {}) {
                     }
                     throw createLocalEmptyOutputError(session, userText, {
                         attempts: 1,
-                        outputsPreview: [{ attempt: 1, normalized: String(cleaned || "").slice(0, 160) }],
+                        outputsPreview: [{ attempt: 1, normalized: String(cleaned ?? "").slice(0, 160) }],
                     });
                 } catch (attemptError) {
                     recoveryError = attemptError;
@@ -12142,8 +12141,8 @@ async function requestLocalSessionCompletion(userText, options = {}) {
 }
 
 async function runLocalInferenceProbe(userText = "안녕하세요") {
-    const probeText = String(userText || "").trim();
-    const activeFile = String(state.activeSessionFile || "").trim();
+    const probeText = String(userText ?? "").trim();
+    const activeFile = String(state.activeSessionFile ?? "").trim();
     const session = sessionStore.activeSession;
     if (!probeText) {
         const error = new Error("프로브 입력 텍스트가 비어 있습니다.");
@@ -12171,11 +12170,11 @@ async function runLocalInferenceProbe(userText = "안녕하세요") {
         output: cleaned,
         elapsed_ms: Number(elapsedMs.toFixed(2)),
         active_file: activeFile,
-        model_id: String(session?.modelId || ""),
-        task: String(session?.task || ""),
-        pipeline_key: String(session?.pipelineKey || ""),
-        model_file_name_hint: String(session?.modelFileNameHint || ""),
-        model_binding: String(session?.modelBinding || ""),
+        model_id: String(session?.modelId ?? ""),
+        task: String(session?.task ?? ""),
+        pipeline_key: String(session?.pipelineKey ?? ""),
+        model_file_name_hint: String(session?.modelFileNameHint ?? ""),
+        model_binding: String(session?.modelBinding ?? ""),
     };
 }
 
@@ -12252,14 +12251,14 @@ function findManifestEntriesByModelId(modelId) {
     if (!normalized) return [];
     const manifest = getOpfsManifest();
     return Object.entries(manifest)
-        .filter(([, entry]) => normalizeModelId(entry?.modelId || "") === normalized)
+        .filter(([, entry]) => normalizeModelId(entry?.modelId ?? "") === normalized)
         .map(([fileName, entry]) => ({
             fileName: normalizeOnnxFileName(fileName),
-            modelId: normalizeModelId(entry?.modelId || ""),
-            task: String(entry?.task || ""),
+            modelId: normalizeModelId(entry?.modelId ?? ""),
+            task: String(entry?.task ?? ""),
             sizeBytes: Number.isFinite(Number(entry?.sizeBytes)) ? Number(entry.sizeBytes) : null,
-            fileUrl: String(entry?.fileUrl || ""),
-            revision: String(entry?.revision || ""),
+            fileUrl: String(entry?.fileUrl ?? ""),
+            revision: String(entry?.revision ?? ""),
         }))
         .filter((item) => !!item.fileName);
 }
@@ -12270,11 +12269,11 @@ function extractSessionInputNames(session) {
             ? Object.keys(session.inputMetadata)
             : [];
         if (direct.length > 0) {
-            return direct.map((name) => String(name || "").trim()).filter(Boolean);
+            return direct.map((name) => String(name ?? "").trim()).filter(Boolean);
         }
         const runtimeNames = session?.pipeline?.model?.session?.inputNames;
         if (Array.isArray(runtimeNames)) {
-            return runtimeNames.map((name) => String(name || "").trim()).filter(Boolean);
+            return runtimeNames.map((name) => String(name ?? "").trim()).filter(Boolean);
         }
     } catch (_) {
         // ignore runtime metadata lookup failures
@@ -12286,7 +12285,7 @@ async function runLocalPerformanceSample(session, promptText, generation) {
     const startedAt = performance.now();
     let firstTokenAt = null;
     const output = await runInference(session, promptText, {
-        activeFile: state.activeSessionFile || "",
+        activeFile: state.activeSessionFile ?? "",
         inferenceEnabled: true,
         generation,
         isolated: true,
@@ -12312,9 +12311,9 @@ async function runLocalPerformanceSample(session, promptText, generation) {
 async function runModelReadinessAudit(options = {}) {
     const expectedModelId = normalizeModelId(
         options.expectedModelId
-        || selectedModel
-        || state.selectedModelMeta?.id
-        || "onnx-community/Qwen3-0.6B-ONNX",
+        ?? selectedModel
+        ?? state.selectedModelMeta?.id
+        ?? "onnx-community/Qwen3-0.6B-ONNX",
     );
     const report = {
         started_at: new Date().toISOString(),
@@ -12352,16 +12351,16 @@ async function runModelReadinessAudit(options = {}) {
     const secureUrl = isHttpsUrl(targetEntry.fileUrl, { allowLocalhostHttp: true });
     report.checks.secure_download_url = {
         ok: secureUrl,
-        url: targetEntry.fileUrl || "",
+        url: targetEntry.fileUrl ?? "",
     };
     if (!secureUrl) {
-        throw new Error(`HTTPS가 아닌 모델 URL이 감지되었습니다: ${targetEntry.fileUrl || "-"}`);
+        throw new Error(`HTTPS가 아닌 모델 URL이 감지되었습니다: ${targetEntry.fileUrl ?? "-"}`);
     }
 
     report.checks.bundle_integrity = await validateLocalModelBundleFilesForUpdate([
         {
             kind: "onnx",
-            sourceFileName: extractModelFileHintFromResolveUrl(targetEntry.fileUrl || "") || targetEntry.fileName,
+            sourceFileName: extractModelFileHintFromResolveUrl(targetEntry.fileUrl ?? "") ?? targetEntry.fileName,
             fileName: targetEntry.fileName,
             fileUrl: targetEntry.fileUrl,
             expectedSizeBytes: targetEntry.sizeBytes,
@@ -12378,7 +12377,7 @@ async function runModelReadinessAudit(options = {}) {
         elapsed_ms: Number((performance.now() - moduleStartedAt).toFixed(2)),
     };
 
-    const originallyActive = normalizeOnnxFileName(state.activeSessionFile || "");
+    const originallyActive = normalizeOnnxFileName(state.activeSessionFile ?? "");
     if (originallyActive !== targetEntry.fileName || !sessionStore.activeSession) {
         await onClickSessionLoad(targetEntry.fileName, {
             silent: true,
@@ -12394,9 +12393,9 @@ async function runModelReadinessAudit(options = {}) {
     const inputNames = extractSessionInputNames(session);
     report.checks.session_ready = {
         ok: true,
-        device: String(session.device || ""),
-        dtype: String(session.dtype || ""),
-        runtime: String(session.runtime || ""),
+        device: String(session.device ?? ""),
+        dtype: String(session.dtype ?? ""),
+        runtime: String(session.runtime ?? ""),
     };
     report.checks.tokenizer_compatibility = {
         available: !!session?.pipeline?.tokenizer,
@@ -12422,11 +12421,11 @@ async function runModelReadinessAudit(options = {}) {
         ),
     };
 
-    const prompt = String(options.prompt || "짧게 자기소개 한 문장만 해줘.").trim();
+    const prompt = String(options.prompt ?? "짧게 자기소개 한 문장만 해줘.").trim();
     const perfSample = await runLocalPerformanceSample(session, prompt, generationConfig);
     report.checks.generation_params = {
         config: generationConfig,
-        output_preview: String(perfSample.output || "").slice(0, 220),
+        output_preview: String(perfSample.output ?? "").slice(0, 220),
     };
     report.checks.performance_single = {
         ttft_ms: perfSample.ttftMs,
@@ -12442,7 +12441,7 @@ async function runModelReadinessAudit(options = {}) {
         },
     };
 
-    const sequentialPrompt = String(options.concurrentPrompt || "한 줄 요약으로 답해줘.").trim();
+    const sequentialPrompt = String(options.concurrentPrompt ?? "한 줄 요약으로 답해줘.").trim();
     const sequentialA = await runLocalPerformanceSample(session, sequentialPrompt, generationConfig);
     const sequentialB = await runLocalPerformanceSample(session, sequentialPrompt, generationConfig);
     const sequentialAvgMs = (sequentialA.elapsedMs + sequentialB.elapsedMs) / 2;
@@ -12450,12 +12449,12 @@ async function runModelReadinessAudit(options = {}) {
     const concurrentStart = performance.now();
     await Promise.all([
         runInference(session, sequentialPrompt, {
-            activeFile: state.activeSessionFile || "",
+            activeFile: state.activeSessionFile ?? "",
             inferenceEnabled: true,
             generation: generationConfig,
         }),
         runInference(session, sequentialPrompt, {
-            activeFile: state.activeSessionFile || "",
+            activeFile: state.activeSessionFile ?? "",
             inferenceEnabled: true,
             generation: generationConfig,
         }),
@@ -12500,7 +12499,7 @@ async function runModelReadinessAudit(options = {}) {
 }
 
 function getLocalInferenceConfig() {
-    const activeFile = String(state.activeSessionFile || "").trim();
+    const activeFile = String(state.activeSessionFile ?? "").trim();
     const maxOutputTokens = Number(getMaxOutputTokens() || LLM_DEFAULT_SETTINGS.maxOutputTokens);
     const maxNewTokens = Math.max(1, Math.min(maxOutputTokens, 32768));
     return {
@@ -12513,8 +12512,8 @@ function getLocalInferenceConfig() {
 }
 
 function cleanupLocalAssistantText(text, userText) {
-    const base = cleanupGeneratedText(String(text || ""), userText);
-    let cleaned = String(base || "").trim();
+    const base = cleanupGeneratedText(String(text ?? ""), userText);
+    let cleaned = String(base ?? "").trim();
     if (!cleaned) return "";
     cleaned = cleaned.replace(/^\[(?:LOCAL MODE|로컬 모드):[^\]]+\]\s*/i, "").trim();
     cleaned = stripReasoningTrace(cleaned);
@@ -12542,7 +12541,7 @@ function cleanupLocalAssistantText(text, userText) {
 }
 
 function stripReasoningTrace(text) {
-    let value = String(text || "").trim();
+    let value = String(text ?? "").trim();
     if (!value) return "";
 
     // Remove explicit reasoning blocks (Qwen-style think tags), keep only final answer text.
@@ -12562,19 +12561,19 @@ function stripReasoningTrace(text) {
 }
 
 function normalizeAssistantLineForRepetition(line) {
-    return String(line || "")
+    return String(line ?? "")
         .trim()
         .toLowerCase()
         .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
 function collapseRepeatedAssistantLines(text) {
-    const lines = String(text || "")
+    const lines = String(text ?? "")
         .split(/\r?\n+/)
-        .map((line) => String(line || "").trim())
+        .map((line) => String(line ?? "").trim())
         .filter(Boolean);
     if (lines.length <= 1) {
-        return String(text || "").trim();
+        return String(text ?? "").trim();
     }
 
     const deduped = [];
@@ -12599,7 +12598,7 @@ function collapseRepeatedAssistantLines(text) {
     for (const line of deduped) {
         const normalized = normalizeAssistantLineForRepetition(line);
         if (!normalized) continue;
-        counts.set(normalized, (counts.get(normalized) || 0) + 1);
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
     }
 
     let dominantNorm = "";
@@ -12637,15 +12636,15 @@ function summarizePipelineOutput(output) {
 function buildLocalRunFailure(error, session, context = {}) {
     const wrapped = new Error(getErrorMessage(error));
     wrapped.code = "local_inference_run_failed";
-    wrapped.status = Number(error?.status || 0);
+    wrapped.status = Number(error?.status ?? 0);
     wrapped.cause = error;
     wrapped.details = {
         step: Number(context.step || 1),
-        task: String(session?.task || ""),
-        model_id: String(session?.modelId || ""),
-        device: String(session?.device || ""),
+        task: String(session?.task ?? ""),
+        model_id: String(session?.modelId ?? ""),
+        device: String(session?.device ?? ""),
         output_preview: summarizePipelineOutput(context.output),
-        active_file: state.activeSessionFile || "",
+        active_file: state.activeSessionFile ?? "",
         runtime: LOCAL_INFERENCE_RUNTIME.runtime,
     };
     return wrapped;
@@ -12655,20 +12654,20 @@ function createLocalEmptyOutputError(session, userText, context = {}) {
     const error = new Error("모델이 비어있거나 무의미한 응답을 반환했습니다.");
     error.code = "local_inference_empty_output";
     error.details = {
-        task: String(session?.task || ""),
-        model_id: String(session?.modelId || ""),
-        device: String(session?.device || ""),
-        user_text_len: String(userText || "").length,
-        attempts: Number(context.attempts || 0),
+        task: String(session?.task ?? ""),
+        model_id: String(session?.modelId ?? ""),
+        device: String(session?.device ?? ""),
+        user_text_len: String(userText ?? "").length,
+        attempts: Number(context.attempts ?? 0),
         outputs_preview: Array.isArray(context.outputsPreview) ? context.outputsPreview : [],
-        active_file: state.activeSessionFile || "",
+        active_file: state.activeSessionFile ?? "",
         runtime: LOCAL_INFERENCE_RUNTIME.runtime,
     };
     return error;
 }
 
 function resolveLocalGenerationTokenCap(session) {
-    const modelId = normalizeModelId(session?.modelId || selectedModel || "").toLowerCase();
+    const modelId = normalizeModelId(session?.modelId ?? selectedModel ?? "").toLowerCase();
     if (modelId.includes("qwen")) {
         return LOCAL_MAX_NEW_TOKENS_QWEN_CAP;
     }
@@ -12682,7 +12681,7 @@ function resolveEffectiveLocalMaxNewTokens(session, requestedMaxNewTokens) {
 }
 
 function normalizeTransformersChatRole(role) {
-    const normalized = String(role || "").trim().toLowerCase();
+    const normalized = String(role ?? "").trim().toLowerCase();
     if (!normalized) return "user";
     if (["assistant", "model", "bot", "ai"].includes(normalized)) return "assistant";
     if (["system", "developer"].includes(normalized)) return "system";
@@ -12718,7 +12717,7 @@ function buildPromptInstructionText() {
         ? "내부 추론 과정(<think>...</think>)은 출력하지 말고 최종 답변만 출력하세요."
         : "Do not reveal internal reasoning (<think>...</think>). Return only the final answer.";
     return [systemPrompt, languageGuard, roleLabelGuard, reasoningGuard]
-        .map((item) => String(item || "").trim())
+        .map((item) => String(item ?? "").trim())
         .filter(Boolean)
         .join("\n");
 }
@@ -12729,7 +12728,7 @@ function collectRecentPromptMessages(userText) {
         .slice(-8)
         .map((item) => ({
             role: item?.role === "user" ? "user" : "assistant",
-            content: String(item?.text || "").trim(),
+            content: String(item?.text ?? "").trim(),
         }))
         .filter((item) => !!item.content);
 
@@ -12751,7 +12750,7 @@ function collectRecentPromptMessages(userText) {
 
 function buildPromptMessages(userText, options = {}) {
     const includeHistory = options.includeHistory !== false;
-    const trimmedUser = String(userText || "").trim();
+    const trimmedUser = String(userText ?? "").trim();
     if (!trimmedUser) return [];
 
     const messages = [];
@@ -12795,14 +12794,14 @@ function buildDirectPrompt(userText) {
     const languageGuard = getProfileLanguage() === "ko"
         ? t("prompt.language_guard.ko")
         : t("prompt.language_guard.en");
-    const trimmed = String(userText || "").trim();
+    const trimmed = String(userText ?? "").trim();
     if (!trimmed) return "";
     if (!languageGuard) return trimmed;
     return `${languageGuard}\n\n${trimmed}`;
 }
 
 function buildForcedAnswerPrompt(userText) {
-    const trimmed = String(userText || "").trim();
+    const trimmed = String(userText ?? "").trim();
     if (!trimmed) return "";
     if (getProfileLanguage() === "ko") {
         return `다음 요청에 대해 반드시 한 문장 이상으로 답하세요.\n요청: ${trimmed}\n답변:`;
@@ -12812,7 +12811,7 @@ function buildForcedAnswerPrompt(userText) {
 
 function shouldPreferMessagesPromptOnly(session, normalizedTask) {
     if (normalizedTask !== "text-generation") return false;
-    const modelId = normalizeModelId(session?.modelId || selectedModel || "").toLowerCase();
+    const modelId = normalizeModelId(session?.modelId ?? selectedModel ?? "").toLowerCase();
     if (!modelId) return false;
     // SmolLM2 Instruct follows transformers.js chat messages flow directly.
     if (modelId.includes("smollm2") && modelId.includes("instruct")) {
@@ -12829,14 +12828,14 @@ async function runInference(session, userText, options = {}) {
     }
 
     const {
-        activeFile = state.activeSessionFile || "",
+        activeFile = state.activeSessionFile ?? "",
         inferenceEnabled = true,
         onToken = null,
         onStreamReset = null,
         generation = null,
         isolated = false,
     } = options;
-    const activeFileLabel = String(activeFile || state.activeSessionFile || "");
+    const activeFileLabel = String(activeFile ?? state.activeSessionFile ?? "");
     const config = getLocalInferenceConfig();
     const generationConfig = {
         ...getLocalGenerationSettings(),
@@ -12851,7 +12850,7 @@ async function runInference(session, userText, options = {}) {
         preferMessagesOnly
             ? { label: "direct_prompt_fallback", payload: buildDirectPrompt(userText) }
             : { label: "direct_prompt", payload: buildDirectPrompt(userText) },
-        { label: "plain_prompt", payload: String(userText || "").trim() },
+        { label: "plain_prompt", payload: String(userText ?? "").trim() },
         { label: "forced_answer_prompt", payload: buildForcedAnswerPrompt(userText) },
         shouldUseChatPrompt
             ? { label: "chat_prompt_legacy", payload: buildPrompt(userText, { includeHistory }) }
@@ -12873,10 +12872,10 @@ async function runInference(session, userText, options = {}) {
 
     console.info("[LOCAL] session input metadata", {
         active_file: activeFileLabel,
-        model_id: String(session?.modelId || ""),
-        task: String(session?.task || ""),
-        device: String(session?.device || ""),
-        dtype: String(session?.dtype || ""),
+        model_id: String(session?.modelId ?? ""),
+        task: String(session?.task ?? ""),
+        device: String(session?.device ?? ""),
+        dtype: String(session?.dtype ?? ""),
         runtime: LOCAL_INFERENCE_RUNTIME.runtime,
         max_new_tokens: Number(config.maxNewTokens || LOCAL_INFERENCE_RUNTIME.maxNewTokens),
         temperature: Number(generationConfig.temperature),
@@ -12886,8 +12885,7 @@ async function runInference(session, userText, options = {}) {
         inference: inferenceEnabled,
     });
 
-    for (let index = 0; index < prompts.length; index += 1) {
-        const current = prompts[index];
+    for (const [index, current] of prompts.entries()) {
         const currentPrompt = current.payload;
         const requestedMaxNewTokens = Number(config.maxNewTokens || LOCAL_INFERENCE_RUNTIME.maxNewTokens);
         const effectiveMaxNewTokens = resolveEffectiveLocalMaxNewTokens(session, requestedMaxNewTokens);
@@ -12911,8 +12909,8 @@ async function runInference(session, userText, options = {}) {
             outputsPreview.push({
                 attempt: index + 1,
                 prompt_label: current.label,
-                generated: String(generated || "").slice(0, 160),
-                normalized: String(normalized || "").slice(0, 160),
+                generated: String(generated ?? "").slice(0, 160),
+                normalized: String(normalized ?? "").slice(0, 160),
             });
             console.info("[LOCAL] filtered non-meaningful reply", {
                 active_file: activeFileLabel,
@@ -12921,8 +12919,8 @@ async function runInference(session, userText, options = {}) {
                 prompt_payload: describeInferencePromptPayload(currentPrompt),
                 max_new_tokens_requested: requestedMaxNewTokens,
                 max_new_tokens_effective: effectiveMaxNewTokens,
-                generated_preview: String(generated || "").slice(0, 120),
-                normalized_preview: String(normalized || "").slice(0, 120),
+                generated_preview: String(generated ?? "").slice(0, 120),
+                normalized_preview: String(normalized ?? "").slice(0, 120),
             });
         } catch (error) {
             if (index >= prompts.length - 1) {
@@ -12957,7 +12955,7 @@ function buildPrompt(userText, options = {}) {
 }
 
 function isAssistantLabelOnly(text) {
-    const normalized = String(text || "").trim().toLowerCase();
+    const normalized = String(text ?? "").trim().toLowerCase();
     if (!normalized) return false;
     const compact = normalized.replace(/[\s:：\-_.!?,"'`~]+/g, "");
     return [
@@ -12971,11 +12969,11 @@ function isAssistantLabelOnly(text) {
 }
 
 function isMeaningfulAssistantReply(text, userText = "") {
-    const value = String(text || "").trim();
+    const value = String(text ?? "").trim();
     if (!value) return false;
     if (isAssistantLabelOnly(value)) return false;
     const normalizedValue = normalizePromptText(value).toLowerCase();
-    const normalizedUser = normalizePromptText(String(userText || "")).toLowerCase();
+    const normalizedUser = normalizePromptText(String(userText ?? "")).toLowerCase();
     if (normalizedUser && normalizedValue === normalizedUser) {
         return false;
     }
@@ -12991,20 +12989,20 @@ function isMeaningfulAssistantReply(text, userText = "") {
 }
 
 function isLikelyPromptEchoReply(text, userText = "") {
-    const lines = String(text || "")
+    const lines = String(text ?? "")
         .split(/\r?\n+/)
-        .map((line) => String(line || "").trim())
+        .map((line) => String(line ?? "").trim())
         .filter(Boolean);
     if (lines.length === 0) return false;
 
-    const normalizedUser = normalizePromptText(String(userText || "")).toLowerCase();
+    const normalizedUser = normalizePromptText(String(userText ?? "")).toLowerCase();
     const normalizedGuards = [
         t("prompt.language_guard.ko"),
         t("prompt.language_guard.en"),
         "모든 답변은 한국어로 작성하세요.",
         "Respond in English only.",
     ]
-        .map((item) => normalizePromptText(String(item || "")).toLowerCase())
+        .map((item) => normalizePromptText(String(item ?? "")).toLowerCase())
         .filter(Boolean);
 
     const normalizedLines = lines
@@ -13029,7 +13027,7 @@ function isLikelyPromptEchoReply(text, userText = "") {
 }
 
 function cleanupGeneratedText(generatedText, userText) {
-    const text = String(generatedText || "").trim();
+    const text = String(generatedText ?? "").trim();
     if (!text) return "";
 
     const marker = `User: ${userText}`;
@@ -13051,7 +13049,7 @@ function appendMessageBubble(entry, options = {}) {
     if (!entry || typeof entry !== "object") return null;
 
     const role = entry.role === "user" ? "user" : "assistant";
-    const messageId = Number(entry.id || 0);
+    const messageId = Number(entry.id ?? 0);
 
     const row = document.createElement("div");
     row.className = role === "user"
@@ -13115,7 +13113,7 @@ function appendMessageBubble(entry, options = {}) {
 
     const content = document.createElement("div");
     content.className = "whitespace-pre-wrap break-words leading-relaxed";
-    content.textContent = String(entry.text || "");
+    content.textContent = String(entry.text ?? "");
 
     bubble.appendChild(header);
     bubble.appendChild(content);
@@ -13139,7 +13137,7 @@ function addMessage(role, text, options = {}) {
     const entry = {
         id: messageId,
         role: role === "user" ? "user" : "assistant",
-        text: String(text || ""),
+        text: String(text ?? ""),
         at: new Date().toISOString(),
         tokenPerSecond: Number.isFinite(Number(options.tokenPerSecond)) ? Number(options.tokenPerSecond) : null,
         tokenCount: Number.isFinite(Number(options.tokenCount)) ? Number(options.tokenCount) : null,
@@ -13161,15 +13159,15 @@ function addMessage(role, text, options = {}) {
     return {
         id: messageId,
         entry,
-        bubble: rendered?.bubble || null,
-        content: rendered?.content || null,
-        tokenBadge: rendered?.tokenBadge || null,
+        bubble: rendered?.bubble ?? null,
+        content: rendered?.content ?? null,
+        tokenBadge: rendered?.tokenBadge ?? null,
     };
 }
 
 function getToken() {
     try {
-        return (localStorage.getItem(STORAGE_KEYS.token) || "").trim();
+        return (localStorage.getItem(STORAGE_KEYS.token) ?? "").trim();
     } catch (_) {
         return "";
     }
@@ -13189,7 +13187,7 @@ function setToken(value) {
 
 function getSystemPrompt() {
     try {
-        const raw = localStorage.getItem(STORAGE_KEYS.systemPrompt) || "";
+        const raw = localStorage.getItem(STORAGE_KEYS.systemPrompt) ?? "";
         const limited = clampSystemPromptLines(raw);
         if (limited.trimmed) {
             localStorage.setItem(STORAGE_KEYS.systemPrompt, limited.value);
@@ -13238,7 +13236,7 @@ function setMaxOutputTokens(value) {
 
 function getContextWindowSize() {
     try {
-        const value = String(localStorage.getItem(STORAGE_KEYS.contextWindow) || "8k");
+        const value = String(localStorage.getItem(STORAGE_KEYS.contextWindow) ?? "8k");
         if (!["4k", "8k", "16k", "32k", "128k"].includes(value)) {
             return "8k";
         }
@@ -13249,7 +13247,7 @@ function getContextWindowSize() {
 }
 
 function setContextWindowSize(value) {
-    const next = ["4k", "8k", "16k", "32k", "128k"].includes(String(value || "")) ? String(value) : "8k";
+    const next = ["4k", "8k", "16k", "32k", "128k"].includes(String(value ?? "")) ? String(value) : "8k";
     try {
         localStorage.setItem(STORAGE_KEYS.contextWindow, next);
     } catch (_) {
@@ -13389,8 +13387,8 @@ function getOpfsManifest() {
             next[normalizedFileName] = {
                 fileName: normalizedFileName,
                 modelId: isValidModelId(value.modelId) ? normalizeModelId(value.modelId) : "",
-                fileUrl: String(value.fileUrl || ""),
-                downloadedAt: String(value.downloadedAt || ""),
+                fileUrl: String(value.fileUrl ?? ""),
+                downloadedAt: String(value.downloadedAt ?? ""),
                 sizeBytes: Number.isFinite(Number(value.sizeBytes)) ? Number(value.sizeBytes) : null,
                 task: typeof value.task === "string" ? value.task : "-",
                 downloads: Number.isFinite(Number(value.downloads)) ? Number(value.downloads) : null,
@@ -13416,14 +13414,14 @@ function setOpfsManifest(next) {
 }
 
 function upsertOpfsManifestEntry(entry) {
-    const normalizedFileName = normalizeOnnxFileName(entry?.fileName || "");
+    const normalizedFileName = normalizeOnnxFileName(entry?.fileName ?? "");
     if (!normalizedFileName) return;
 
     const current = getOpfsManifest();
     current[normalizedFileName] = {
         fileName: normalizedFileName,
         modelId: isValidModelId(entry?.modelId) ? normalizeModelId(entry.modelId) : "",
-        fileUrl: String(entry?.fileUrl || ""),
+        fileUrl: String(entry?.fileUrl ?? ""),
         downloadedAt: String(entry?.downloadedAt || new Date().toISOString()),
         sizeBytes: Number.isFinite(Number(entry?.sizeBytes)) ? Number(entry.sizeBytes) : null,
         task: typeof entry?.task === "string" ? entry.task : "-",
@@ -13479,8 +13477,8 @@ function removeOpfsManifestEntriesByPrefix(prefixPath) {
 
 function getLastLoadedSessionFile() {
     try {
-        const value = normalizeOnnxFileName(localStorage.getItem(STORAGE_KEYS.lastLoadedSessionFile) || "");
-        return value || "";
+        const value = normalizeOnnxFileName(localStorage.getItem(STORAGE_KEYS.lastLoadedSessionFile) ?? "");
+        return value ?? "";
     } catch (_) {
         return "";
     }
@@ -13555,7 +13553,7 @@ function showToast(message, kind = "info", duration = 3000, options = {}) {
         success: "bg-emerald-500/20 border-emerald-400/40 text-emerald-100",
         error: "bg-rose-500/20 border-rose-400/40 text-rose-100",
     };
-    const position = String(options.position || "top-right").toLowerCase();
+    const position = String(options.position ?? "top-right").toLowerCase();
     const positionClass = position === "bottom-right"
         ? "bottom-5 right-5"
         : "top-5 right-5";
@@ -13571,7 +13569,7 @@ function showToast(message, kind = "info", duration = 3000, options = {}) {
     if (actionLabel && onAction) {
         els.toast.innerHTML = `
             <div class="flex items-center gap-2">
-                <span class="flex-1 min-w-0">${escapeHtml(String(message || ""))}</span>
+                <span class="flex-1 min-w-0">${escapeHtml(String(message ?? ""))}</span>
                 <button type="button" data-action="toast-action" class="shrink-0 rounded-md border border-current/45 px-2 py-1 text-[11px] font-medium hover:bg-white/10">
                     ${escapeHtml(actionLabel)}
                 </button>
@@ -13678,7 +13676,7 @@ async function runOpfsValidationSuite(options = {}) {
         throw new Error("OPFS가 지원되지 않아 검증을 수행할 수 없습니다.");
     }
 
-    const originalModule = getInjectedTransformersModule() || null;
+    const originalModule = getInjectedTransformersModule() ?? null;
     if (useMockRuntime) {
         setInjectedTransformersModule({
             env: {

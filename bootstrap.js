@@ -10,7 +10,7 @@ async function loadMainBundle() {
 }
 
 function isLocalhostHost(hostname) {
-    const host = String(hostname || "").toLowerCase();
+    const host = String(hostname ?? "").toLowerCase();
     return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 

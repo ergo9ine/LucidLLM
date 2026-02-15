@@ -29,7 +29,7 @@ function bytesToBase64(bytes) {
 }
 
 function base64ToBytes(value) {
-    const binary = atob(String(value || ""));
+    const binary = atob(String(value ?? ""));
     const out = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) {
         out[i] = binary.charCodeAt(i);
@@ -68,7 +68,7 @@ export async function createBackupUploadText(payload, options = {}) {
     } = options;
 
     const plainText = JSON.stringify(payload);
-    const normalizedPassphrase = String(passphrase || "").trim();
+    const normalizedPassphrase = String(passphrase ?? "").trim();
     if (!normalizedPassphrase) {
         return {
             text: plainText,
@@ -121,12 +121,12 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
         kdfIterations = 250000,
     } = options;
 
-    const parsed = JSON.parse(String(rawText || ""));
+    const parsed = JSON.parse(String(rawText ?? ""));
     if (!parsed || parsed.format !== "lucid-backup-envelope.v1" || !parsed.encrypted) {
         return parsed;
     }
 
-    const normalizedPassphrase = String(passphrase || "").trim();
+    const normalizedPassphrase = String(passphrase ?? "").trim();
     if (!normalizedPassphrase) {
         throw new Error("암호화된 백업입니다. 백업 암호 문구를 입력하세요.");
     }
@@ -143,7 +143,7 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
         encrypted,
     );
     let plainBytes = new Uint8Array(plainBuffer);
-    if (String(parsed.compression || "none").toLowerCase() === "gzip") {
+    if (String(parsed.compression ?? "none").toLowerCase() === "gzip") {
         plainBytes = await decompressBytesGzip(plainBytes);
     }
     const plainText = new TextDecoder().decode(plainBytes);

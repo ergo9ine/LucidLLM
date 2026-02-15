@@ -33,11 +33,11 @@ export function publishLucidApi(api = {}, options = {}) {
 export function publishLucidValue(key, value, options = {}) {
     const root = resolveHost(options.host);
     const namespace = ensureLucidAppGlobal(root);
-    const normalizedKey = String(key || "").trim();
+    const normalizedKey = String(key ?? "").trim();
     if (normalizedKey) {
         namespace[normalizedKey] = value;
     }
-    const legacyKey = String(options.legacyKey || "").trim();
+    const legacyKey = String(options.legacyKey ?? "").trim();
     if (legacyKey) {
         root[legacyKey] = value;
     }
