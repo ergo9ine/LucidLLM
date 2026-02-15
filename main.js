@@ -12843,11 +12843,10 @@ async function runInference(session, userText, options = {}) {
         shouldUseChatPrompt ? { label: "chat_messages", payload: buildPromptMessages(userText, { includeHistory }) } : null,
         preferMessagesOnly
             ? { label: "direct_prompt_fallback", payload: buildDirectPrompt(userText) }
-            : null,
-        !preferMessagesOnly ? { label: "direct_prompt", payload: buildDirectPrompt(userText) } : null,
-        !preferMessagesOnly ? { label: "plain_prompt", payload: String(userText || "").trim() } : null,
-        !preferMessagesOnly ? { label: "forced_answer_prompt", payload: buildForcedAnswerPrompt(userText) } : null,
-        (shouldUseChatPrompt && !preferMessagesOnly)
+            : { label: "direct_prompt", payload: buildDirectPrompt(userText) },
+        { label: "plain_prompt", payload: String(userText || "").trim() },
+        { label: "forced_answer_prompt", payload: buildForcedAnswerPrompt(userText) },
+        shouldUseChatPrompt
             ? { label: "chat_prompt_legacy", payload: buildPrompt(userText, { includeHistory }) }
             : null,
     ];
@@ -13777,5 +13776,4 @@ async function runOpfsValidationSuite(options = {}) {
         summary,
     };
 }
-
 
