@@ -1,0 +1,19 @@
+# GitHub Pages static deployment profile
+# Ignore everything by default, then allow only core runtime assets.
+/*
+
+# Keep this file
+!/.gitignore
+
+# Core static entry + runtime scripts/styles
+!/index.html
+!/style.css
+!/bootstrap.js
+!/main.js
+!/shared-utils.js
+!/global-api.js
+!/transformers-bridge.js
+!/drive-backup-crypto.js
+!/drive-backup-utils.js
+!/sw.js
+node_modules
