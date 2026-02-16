@@ -28,17 +28,22 @@ import {
     getInjectedTransformersModule,
     setInjectedTransformersModule,
 } from "./transformers-bridge.js";
+import {
+    SUPPORTED_LANGUAGES,
+    I18N_MESSAGES,
+    t,
+    normalizeLanguage,
+    matchSupportedLanguage,
+    detectNavigatorLanguage,
+    setCurrentLanguage,
+    getCurrentLanguage,
+    applyI18nToDOM,
+} from "./i18n.js";
 
 const HF_BASE_URL = "https://huggingface.co";
 const HF_MODEL_API_PREFIX = "/api/models";
 const OPFS_MODELS_DIR = "models";
 const OPFS_WRITE_CHUNK_BYTES = 1024 * 1024;
-const OPFS_MEMORY_HEADROOM_BYTES = 50 * 1024 * 1024;
-const OPFS_VALIDATION_SIZES = [
-    100 * 1024 * 1024,
-    1024 * 1024 * 1024,
-    (4 * 1024 * 1024 * 1024) + (16 * 1024 * 1024),
-];
 const LOCAL_INFERENCE_RUNTIME = Object.freeze({
     runtime: "transformers.js",
     modelsRoot: `/${OPFS_MODELS_DIR}`,
@@ -116,250 +121,7 @@ const STORAGE_KEYS = {
     googleDriveBackupLimitMb: "lucid_google_drive_backup_limit_mb",
 };
 
-const SUPPORTED_LANGUAGES = ["ko", "en", "ja", "zh-CN"];
 const SUPPORTED_THEMES = ["dark", "light", "oled"];
-
-const I18N_MESSAGES = {
-    ko: {
-        "settings.close": "설정 닫기",
-        "header.settings": "설정",
-        "header.new_chat": "새 대화",
-        "chat.placeholder": "메시지를 입력하세요...",
-        "chat.send": "보내기",
-        "chat.sending": "전송 중...",
-        "chat.waiting_for_model": "모델 로드 대기중입니다. 모델을 조회하거나 OPFS 세션을 로드하세요.",
-        "chat.new_session_hint": "새 대화를 시작합니다. 메시지를 입력하세요.",
-        "chat.meta.you": "YOU",
-        "chat.meta.assistant": "ASSISTANT",
-        "chat.copy": "복사",
-        "settings.title": "설정",
-        "settings.tab.model": "모델 관리",
-        "settings.tab.llm": "LLM 설정",
-        "settings.tab.profile": "프로필",
-        "settings.tab.theme": "테마",
-        "settings.tab.language": "언어",
-        "settings.tab.backup": "백업 및 복원",
-        "settings.reset_tab": "기본값으로 복원",
-        "settings.reset.confirm": "{tab} 설정을 기본값으로 복원할까요?",
-        "settings.reset.done": "{tab} 설정이 기본값으로 복원되었습니다.",
-        "settings.reset.undo": "되돌리기",
-        "settings.reset.undone": "{tab} 설정 복원을 되돌렸습니다.",
-        "profile.title": "프로필",
-        "profile.upload": "대표 이미지 업로드",
-        "profile.remove": "이미지 제거",
-        "profile.nickname": "닉네임",
-        "profile.nickname_placeholder": "닉네임을 입력하세요 (2~24자)",
-        "llm.system_prompt_placeholder": "assistant 기본 동작을 정의하세요. (최대 20줄)",
-        "llm.generation.title": "생성 파라미터",
-        "llm.generation.temperature": "temperature",
-        "llm.generation.top_p": "top_p",
-        "llm.generation.presence_penalty": "presence_penalty",
-        "profile.saved": "프로필이 저장되었습니다.",
-        "profile.avatar_updated": "대표 이미지가 저장되었습니다.",
-        "profile.avatar_cleared": "대표 이미지가 제거되었습니다.",
-        "profile.avatar_invalid": "이미지 파일만 업로드할 수 있습니다.",
-        "profile.avatar_too_large": "이미지 파일은 5MB 이하만 지원됩니다.",
-        "profile.nickname_invalid": "닉네임은 2~24자, 영문/숫자/한글/_/- 만 사용할 수 있습니다.",
-        "profile.nickname_duplicate": "이미 사용 중인 닉네임입니다. 다른 닉네임을 입력하세요.",
-        "profile.realtime_hint": "프로필은 입력 즉시 저장됩니다.",
-        "theme.title": "테마",
-        "theme.dark": "Dark",
-        "theme.light": "Light",
-        "theme.oled": "OLED Black",
-        "theme.applied": "테마가 적용되었습니다.",
-        "theme.hint": "테마 변경 사항은 즉시 적용되며 자동 저장됩니다.",
-        "theme.oled_tip": "OLED Black: 배터리 절약을 위해 순수 검정을 유지합니다.",
-        "language.title": "언어",
-        "language.label": "표시 언어",
-        "language.applied": "언어 설정이 적용되었습니다.",
-        "language.hint": "언어 변경 시 UI와 모델 응답 언어가 즉시 전환됩니다.",
-        "language.korean": "한국어",
-        "language.english": "English",
-        "language.japanese": "日本語",
-        "language.chinese_simplified": "简体中文",
-        "status.model.waiting": "모델 로드 대기중...",
-        "status.model.loading": "{model} 로딩 중...",
-        "status.model.loaded": "{model} 작동 중",
-        "status.model.failed": "{model} 로드 실패",
-        "token.stats": "토큰 속도 Avg: {avg} tok/s | Max: {max} | Min: {min}",
-        "sidebar.title": "워크스페이스",
-        "sidebar.panel.chat": "대화",
-        "sidebar.panel.workspace": "모델/환경",
-        "sidebar.panel.preferences": "환경",
-        "sidebar.action.new_chat": "새 대화",
-        "sidebar.action.delete_chat": "대화 삭제",
-        "sidebar.action.export_chat": "내보내기",
-        "sidebar.action.open_settings": "설정 열기",
-        "sidebar.action.open_model": "모델 관리",
-        "sidebar.action.open_theme": "테마 설정",
-        "sidebar.action.open_language": "언어 설정",
-        "sidebar.mobile_toggle": "메뉴 열기/닫기",
-        "sidebar.mobile_toggle_open": "메뉴 열기",
-        "sidebar.mobile_toggle_close": "메뉴 닫기",
-        "sidebar.shortcut.new": "새 대화 단축키: Ctrl+Shift+N",
-        "sidebar.shortcut.delete": "대화 삭제 단축키: Ctrl+Shift+Backspace",
-        "sidebar.shortcut.export": "대화 내보내기 단축키: Ctrl+Shift+E",
-        "sidebar.shortcut.toggle": "사이드바 토글 단축키: Ctrl+B",
-        "chat.delete.confirm": "현재 대화를 삭제할까요?",
-        "chat.deleted": "현재 대화를 삭제했습니다.",
-        "chat.exported": "현재 대화를 JSON으로 내보냈습니다.",
-        "chat.export.empty": "내보낼 대화가 없습니다.",
-        "inference.device.webgpu": "WebGPU",
-        "inference.device.wasm": "WASM",
-        "inference.toggle.current_next": "현재 {current} {currentEmoji} · 클릭하면 {next} {nextEmoji}",
-        "inference.toggle.unsupported": "현재 {current} {currentEmoji} · WebGPU 미지원 환경",
-        "inference.toggle.switched": "추론 백엔드를 {device}로 변경했습니다.",
-        "inference.toggle.webgpu_unavailable": "이 브라우저는 WebGPU를 지원하지 않아 WASM만 사용합니다.",
-        "inference.toggle.webgpu_fallback": "WebGPU 미지원으로 {device} 백엔드를 사용합니다.",
-        "inference.toggle.reloading": "활성 모델을 {device}로 다시 로드합니다...",
-        "inference.toggle.reload_done": "활성 모델이 {device}로 다시 로드되었습니다.",
-        "inference.toggle.reload_failed": "백엔드 전환은 저장됐지만 활성 모델 재로드에 실패했습니다.",
-        "inference.chat.toggle.on": "추론 켜기",
-        "inference.chat.toggle.off": "추론 끄기",
-        "inference.chat.disabled_notice": "추론이 비활성화되어 inference=false로 요청합니다.",
-        "model.audit.run": "모델 품질 점검 실행",
-        "delete.deleting": "삭제 중...",
-        "delete.done": "삭제 완료: {target}",
-        "delete.failed": "삭제 실패: {message}",
-        "delete.invalid_path": "삭제 대상 경로가 올바르지 않습니다.",
-        "model.loading_warning": "모델 {model}이(가) 로딩 중입니다. 삭제하기 전에 로딩이 완료될 때까지 기다리거나 페이지를 새로고침하세요.",
-        "model.audit.running": "모델 점검 실행 중...",
-        "model.audit.done": "모델 점검 완료",
-        "model.audit.failed": "모델 점검 실패: {message}",
-        "model.auto_load.title": "모델 자동 로드",
-        "model.auto_load.label": "시작 시 마지막 로드 모델 자동 활성화",
-        "model.auto_load.hint": "비활성화하면 앱 시작 시 모델을 자동으로 불러오지 않습니다.",
-        "prompt.language_guard.ko": "모든 답변은 한국어로 작성하세요.",
-        "prompt.language_guard.en": "Respond in English only.",
-    },
-    en: {
-        "settings.close": "Close Settings",
-        "header.settings": "Settings",
-        "header.new_chat": "New Chat",
-        "chat.placeholder": "Type a message...",
-        "chat.send": "Send",
-        "chat.sending": "Sending...",
-        "chat.waiting_for_model": "Waiting for model load. Fetch or load an OPFS session first.",
-        "chat.new_session_hint": "Start a new conversation by entering a message.",
-        "chat.meta.you": "YOU",
-        "chat.meta.assistant": "ASSISTANT",
-        "chat.copy": "Copy",
-        "settings.title": "Settings",
-        "settings.tab.model": "Model",
-        "settings.tab.llm": "LLM",
-        "settings.tab.profile": "Profile",
-        "settings.tab.theme": "Theme",
-        "settings.tab.language": "Language",
-        "settings.tab.backup": "Backup & Restore",
-        "settings.reset_tab": "Reset to Defaults",
-        "settings.reset.confirm": "Restore default settings for {tab}?",
-        "settings.reset.done": "{tab} settings were reset to defaults.",
-        "settings.reset.undo": "Undo",
-        "settings.reset.undone": "Reverted reset for {tab}.",
-        "profile.title": "Profile",
-        "profile.upload": "Upload Avatar",
-        "profile.remove": "Remove Avatar",
-        "profile.nickname": "Nickname",
-        "profile.nickname_placeholder": "Enter nickname (2-24 chars)",
-        "llm.system_prompt_placeholder": "Define assistant behavior. (max 20 lines)",
-        "llm.generation.title": "Generation Parameters",
-        "llm.generation.temperature": "temperature",
-        "llm.generation.top_p": "top_p",
-        "llm.generation.presence_penalty": "presence_penalty",
-        "profile.saved": "Profile saved.",
-        "profile.avatar_updated": "Avatar saved.",
-        "profile.avatar_cleared": "Avatar removed.",
-        "profile.avatar_invalid": "Only image files are allowed.",
-        "profile.avatar_too_large": "Image must be 5MB or smaller.",
-        "profile.nickname_invalid": "Nickname must be 2-24 chars and use letters/numbers/Korean/_/- only.",
-        "profile.nickname_duplicate": "Nickname is already in use. Choose another one.",
-        "profile.realtime_hint": "Profile changes are saved instantly.",
-        "theme.title": "Theme",
-        "theme.dark": "Dark",
-        "theme.light": "Light",
-        "theme.oled": "OLED Black",
-        "theme.applied": "Theme applied.",
-        "theme.hint": "Theme changes are applied instantly and auto-saved.",
-        "theme.oled_tip": "OLED Black: pure black UI for battery savings on OLED displays.",
-        "language.title": "Language",
-        "language.label": "Display Language",
-        "language.applied": "Language applied.",
-        "language.hint": "Switching language updates UI and model response language immediately.",
-        "language.korean": "Korean",
-        "language.english": "English",
-        "language.japanese": "Japanese",
-        "language.chinese_simplified": "Simplified Chinese",
-        "status.model.waiting": "Waiting for model load...",
-        "status.model.loading": "{model} loading...",
-        "status.model.loaded": "{model} active",
-        "status.model.failed": "{model} failed to load",
-        "token.stats": "Token Speed Avg: {avg} tok/s | Max: {max} | Min: {min}",
-        "sidebar.title": "Workspace",
-        "sidebar.panel.chat": "Chats",
-        "sidebar.panel.workspace": "Model/Prefs",
-        "sidebar.panel.preferences": "Prefs",
-        "sidebar.action.new_chat": "New Chat",
-        "sidebar.action.delete_chat": "Delete Chat",
-        "sidebar.action.export_chat": "Export",
-        "sidebar.action.open_settings": "Open Settings",
-        "sidebar.action.open_model": "Model Panel",
-        "sidebar.action.open_theme": "Theme",
-        "sidebar.action.open_language": "Language",
-        "sidebar.mobile_toggle": "Toggle menu",
-        "sidebar.mobile_toggle_open": "Open menu",
-        "sidebar.mobile_toggle_close": "Close menu",
-        "sidebar.shortcut.new": "Shortcut: Ctrl+Shift+N",
-        "sidebar.shortcut.delete": "Shortcut: Ctrl+Shift+Backspace",
-        "sidebar.shortcut.export": "Shortcut: Ctrl+Shift+E",
-        "sidebar.shortcut.toggle": "Shortcut: Ctrl+B",
-        "chat.delete.confirm": "Delete the current chat?",
-        "chat.deleted": "Current chat deleted.",
-        "chat.exported": "Current chat exported as JSON.",
-        "chat.export.empty": "No chat to export.",
-        "inference.device.webgpu": "WebGPU",
-        "inference.device.wasm": "WASM",
-        "inference.toggle.current_next": "Current {current} {currentEmoji} · click for {next} {nextEmoji}",
-        "inference.toggle.unsupported": "Current {current} {currentEmoji} · WebGPU unavailable",
-        "inference.toggle.switched": "Inference backend switched to {device}.",
-        "inference.toggle.webgpu_unavailable": "This browser does not support WebGPU, using WASM only.",
-        "inference.toggle.webgpu_fallback": "WebGPU unavailable, using {device} backend.",
-        "inference.toggle.reloading": "Reloading active model with {device}...",
-        "inference.toggle.reload_done": "Active model reloaded with {device}.",
-        "inference.toggle.reload_failed": "Backend preference saved, but active model reload failed.",
-        "inference.chat.toggle.on": "Inference on",
-        "inference.chat.toggle.off": "Inference off",
-        "inference.chat.disabled_notice": "Inference is disabled. Requesting with inference=false.",
-        "model.audit.run": "Run Model Quality Audit",
-        "model.audit.running": "Running model audit...",
-        "model.audit.done": "Model audit completed",
-        "model.audit.failed": "Model audit failed: {message}",
-        "model.auto_load.title": "Model Auto Load",
-        "model.auto_load.label": "Auto-load last model at startup",
-        "model.auto_load.hint": "When disabled, startup will not auto-load the last OPFS model session.",
-        "delete.deleting": "Deleting...",
-        "delete.done": "Deleted: {target}",
-        "delete.failed": "Failed to delete: {message}",
-        "delete.invalid_path": "Invalid delete target path.",
-        "model.loading_warning": "Model {model} is currently loading. Please wait or refresh before deleting.",
-        "prompt.language_guard.ko": "모든 답변은 한국어로 작성하세요.",
-        "prompt.language_guard.en": "Respond in English only.",
-    },
-};
-
-I18N_MESSAGES.ja = {
-    ...I18N_MESSAGES.en,
-    "language.korean": "Korean",
-    "language.english": "English",
-    "language.japanese": "日本語",
-    "language.chinese_simplified": "简体中文",
-};
-I18N_MESSAGES["zh-CN"] = {
-    ...I18N_MESSAGES.en,
-    "language.korean": "韩语",
-    "language.english": "英语",
-    "language.japanese": "日语",
-    "language.chinese_simplified": "简体中文",
-};
 
 // 요구사항: 성공 시 전역 변수 selectedModel 저장
 let selectedModel = "";
@@ -393,7 +155,8 @@ const state = {
     sessionRows: {},
     activeSessionFile: "",
     tokenSpeedStats: {
-        values: [],
+        totalTokens: 0,
+        totalTimeMs: 0,
         avg: null,
         max: null,
         min: null,
@@ -403,6 +166,7 @@ const state = {
     ui: {
         sidebarOpen: false,
         sidebarPanel: "chat",
+        chatAutoScroll: true,
     },
     inference: {
         preferredDevice: (navigator?.gpu ? "webgpu" : "wasm"),
@@ -547,9 +311,9 @@ publishLucidApi({
     openSettings,
     requestCloseSettings,
     loadCachedSession,
-    runOpfsValidationSuite,
-    runLocalInferenceProbe,
-    runSessionUnloadMemoryDiagnostics,
+    // runOpfsValidationSuite, // Removed
+    // runLocalInferenceProbe, // Removed
+    // runSessionUnloadMemoryDiagnostics, // Removed
     runModelReadinessAudit,
     getLocalGenerationSettings,
     setLocalGenerationSettings,
@@ -1872,6 +1636,7 @@ function cacheElements() {
         sessionTableBody: document.getElementById("session-table-body"),
 
         chatMessages: document.getElementById("chat-messages"),
+        chatScrollBottomBtn: document.getElementById("chat-scroll-bottom-btn"),
         chatForm: document.getElementById("chat-form"),
         chatInput: document.getElementById("chat-input"),
         chatSendBtn: document.getElementById("chat-send-btn"),
@@ -2814,59 +2579,33 @@ function bindEvents() {
             event.preventDefault();
             await copyMessageById(messageId);
         });
+
+        // toggle visibility of "scroll to bottom" button and keep auto-scroll state in sync
+        els.chatMessages.addEventListener("scroll", () => {
+            const near = isChatNearBottom();
+            state.ui.chatAutoScroll = Boolean(near);
+            if (els.chatScrollBottomBtn) {
+                if (!near) els.chatScrollBottomBtn.classList.add("show");
+                else els.chatScrollBottomBtn.classList.remove("show");
+            }
+        });
+
+        // wire scroll-to-bottom button
+        if (els.chatScrollBottomBtn) {
+            els.chatScrollBottomBtn.addEventListener("click", () => {
+                scrollChatToBottom(true);
+                if (els.chatInput) els.chatInput.focus();
+            });
+            // initial visibility
+            if (!isChatNearBottom()) els.chatScrollBottomBtn.classList.add("show");
+            else els.chatScrollBottomBtn.classList.remove("show");
+        }
     }
 }
 
-function detectNavigatorLanguage() {
-    const candidates = [];
-    if (typeof navigator !== "undefined" && navigator) {
-        if (Array.isArray(navigator.languages)) {
-            candidates.push(...navigator.languages);
-        }
-        if (typeof navigator.language === "string" && navigator.language.trim()) {
-            candidates.push(navigator.language);
-        }
-    }
 
-    for (const candidate of candidates) {
-        const matched = matchSupportedLanguage(candidate);
-        if (matched) {
-            return matched;
-        }
-    }
-    return "en";
-}
 
-function matchSupportedLanguage(value) {
-    const raw = String(value ?? "").trim();
-    if (!raw) return "";
 
-    const normalized = raw.replace(/_/g, "-");
-    const lower = normalized.toLowerCase();
-
-    if (lower === "ko" || lower.startsWith("ko-")) return "ko";
-    if (lower === "en" || lower.startsWith("en-")) return "en";
-    if (lower === "ja" || lower.startsWith("ja-")) return "ja";
-    if (
-        lower === "zh-cn"
-        || lower.startsWith("zh-cn")
-        || lower.startsWith("zh-hans-cn")
-        || lower.startsWith("zh-hans")
-    ) {
-        return "zh-CN";
-    }
-
-    for (const supported of SUPPORTED_LANGUAGES) {
-        if (lower === String(supported).toLowerCase()) {
-            return supported;
-        }
-    }
-    return "";
-}
-
-function normalizeLanguage(value) {
-    return matchSupportedLanguage(value) ?? "en";
-}
 
 function normalizeTheme(value) {
     const candidate = String(value ?? "").trim().toLowerCase();
@@ -2940,7 +2679,7 @@ function saveUserProfile(nextFields = {}) {
 }
 
 function getProfileLanguage() {
-    return normalizeLanguage(state.profile?.language ?? "en");
+    return getCurrentLanguage();
 }
 
 function getLocaleForLanguage(language = getProfileLanguage()) {
@@ -3121,161 +2860,17 @@ function onClearProfileAvatar() {
     showToast(t("profile.avatar_cleared"), "info", 1800);
 }
 
-function t(key, vars = {}, fallback = "") {
-    const lang = getProfileLanguage();
-    const dict = I18N_MESSAGES[lang] || I18N_MESSAGES.en || I18N_MESSAGES.ko || {};
-    const template = dict[key]
-        || (I18N_MESSAGES.en && I18N_MESSAGES.en[key])
-        || (I18N_MESSAGES.ko && I18N_MESSAGES.ko[key])
-        || fallback
-        || key;
-    return String(template).replace(/\{(\w+)\}/g, (_match, token) => {
-        if (Object.prototype.hasOwnProperty.call(vars, token)) {
-            return String(vars[token]);
-        }
-        return "";
-    });
-}
-
 function renderLocalizedStaticText() {
-    if (els.openSettingsBtn) {
-        const label = t("header.settings");
-        els.openSettingsBtn.setAttribute("aria-label", label);
-        els.openSettingsBtn.setAttribute("title", label);
-    }
-    if (els.chatTabAddBtn) {
-        const label = t("header.new_chat");
-        els.chatTabAddBtn.setAttribute("aria-label", label);
-        els.chatTabAddBtn.setAttribute("title", label);
-    }
-    if (els.chatInput) {
-        els.chatInput.placeholder = t("chat.placeholder");
-    }
+    applyI18nToDOM();
     renderSidebarStaticText();
     renderInferenceDeviceToggle();
     renderChatInferenceToggle();
     renderAutoLoadLastSessionToggle();
-    if (els.autoLoadLastSessionTitle) {
-        els.autoLoadLastSessionTitle.textContent = t("model.auto_load.title", {}, "모델 자동 로드");
-    }
-    if (els.autoLoadLastSessionLabel) {
-        els.autoLoadLastSessionLabel.textContent = t(
-            "model.auto_load.label",
-            {},
-            "시작 시 마지막 로드 모델 자동 활성화",
-        );
-    }
-    if (els.autoLoadLastSessionHint) {
-        els.autoLoadLastSessionHint.textContent = t(
-            "model.auto_load.hint",
-            {},
-            "비활성화하면 앱 시작 시 모델을 자동으로 불러오지 않습니다.",
-        );
-    }
-    if (els.modelAuditRunLabel) {
-        els.modelAuditRunLabel.textContent = t("model.audit.run", {}, "모델 품질 점검 실행");
-    }
-    if (els.systemPromptInput) {
-        els.systemPromptInput.placeholder = t(
-            "llm.system_prompt_placeholder",
-            {},
-            "assistant 기본 동작을 정의하세요. (최대 20줄)",
-        );
-    }
-    if (els.llmGenerationParamsTitle) {
-        els.llmGenerationParamsTitle.textContent = t("llm.generation.title", {}, "생성 파라미터");
-    }
-    if (els.llmTemperatureLabel) {
-        els.llmTemperatureLabel.textContent = t("llm.generation.temperature", {}, "temperature");
-    }
-    if (els.llmTopPLabel) {
-        els.llmTopPLabel.textContent = t("llm.generation.top_p", {}, "top_p");
-    }
-    if (els.llmPresencePenaltyLabel) {
-        els.llmPresencePenaltyLabel.textContent = t("llm.generation.presence_penalty", {}, "presence_penalty");
-    }
-    if (els.chatSendBtn && !state.isSendingChat) {
-        els.chatSendBtn.innerHTML = `<i data-lucide="send" class="w-4 h-4"></i> ${escapeHtml(t("chat.send"))}`;
-    }
-
-    const settingsTitle = document.getElementById("settings-title");
-    if (settingsTitle) settingsTitle.textContent = t("settings.title");
-    if (els.closeSettingsBtn) {
-        const label = t("settings.close", {}, "설정 닫기");
-        els.closeSettingsBtn.setAttribute("aria-label", label);
-        els.closeSettingsBtn.setAttribute("title", label);
-    }
-
-    const tabTitles = {
-        model: t("settings.tab.model"),
-        llm: t("settings.tab.llm"),
-        profile: t("settings.tab.profile"),
-        theme: t("settings.tab.theme"),
-        language: t("settings.tab.language"),
-        backup: t("settings.tab.backup"),
-    };
-    if (Array.isArray(els.settingsTabButtons)) {
-        for (const button of els.settingsTabButtons) {
-            const key = String(button.dataset.settingsTabBtn ?? "");
-            const title = tabTitles[key] || key;
-            button.setAttribute("title", title);
-            button.setAttribute("aria-label", title);
-        }
-    }
-    if (Array.isArray(els.settingsResetTabButtons)) {
-        const resetLabel = t("settings.reset_tab", {}, "기본값으로 복원");
-        for (const button of els.settingsResetTabButtons) {
-            const tabId = String(button.dataset.tab ?? "").trim();
-            const tabLabel = tabTitles[tabId] || tabId;
-            const labelNode = button.querySelector("span");
-            if (labelNode) {
-                labelNode.textContent = resetLabel;
-            } else {
-                button.textContent = resetLabel;
-            }
-            button.setAttribute("title", `${tabLabel} · ${resetLabel}`);
-            button.setAttribute("aria-label", `${tabLabel} ${resetLabel}`);
-        }
-    }
-
-    if (els.profileTitle) els.profileTitle.textContent = t("profile.title");
-    if (els.profileAvatarUploadLabel) els.profileAvatarUploadLabel.textContent = t("profile.upload");
-    if (els.profileAvatarClearLabel) els.profileAvatarClearLabel.textContent = t("profile.remove");
-    if (els.profileNicknameLabel) els.profileNicknameLabel.textContent = t("profile.nickname");
-    if (els.profileNicknameInput) els.profileNicknameInput.placeholder = t("profile.nickname_placeholder");
-    if (els.themeTitle) els.themeTitle.textContent = t("theme.title");
-    if (els.themeDarkLabel) els.themeDarkLabel.textContent = t("theme.dark");
-    if (els.themeLightLabel) els.themeLightLabel.textContent = t("theme.light");
-    if (els.themeOledLabel) {
-        els.themeOledLabel.textContent = t("theme.oled");
-        els.themeOledLabel.setAttribute("title", t("theme.oled_tip"));
-    }
-    if (els.themeOptionOled) {
-        els.themeOptionOled.setAttribute("aria-label", t("theme.oled"));
-        els.themeOptionOled.setAttribute("title", t("theme.oled_tip"));
-    }
-    if (els.themeStatusText) els.themeStatusText.textContent = t("theme.hint");
-    if (els.languageTitle) els.languageTitle.textContent = t("language.title");
-    if (els.languageSelectLabel) els.languageSelectLabel.textContent = t("language.label");
-    if (els.languageStatusText) els.languageStatusText.textContent = t("language.hint");
-    if (els.languageSelect?.options?.length > 0) {
-        for (const option of [...els.languageSelect.options]) {
-            const value = String(option.value ?? "");
-            if (value === "ko") {
-                option.text = t("language.korean");
-            } else if (value === "en") {
-                option.text = t("language.english");
-            } else if (value === "ja") {
-                option.text = t("language.japanese");
-            } else if (value === "zh-CN") {
-                option.text = t("language.chinese_simplified");
-            }
-        }
-    }
-
     renderModelStatusHeader();
     renderTokenSpeedStats();
-    lucide.createIcons();
+    if (window.lucide?.createIcons) {
+        window.lucide.createIcons();
+    }
 }
 
 function applyTheme(theme, options = {}) {
@@ -3300,6 +2895,7 @@ function applyTheme(theme, options = {}) {
 
 function applyLanguage(language, options = {}) {
     const normalized = normalizeLanguage(language);
+    setCurrentLanguage(normalized);
     saveUserProfile({ language: normalized });
     document.documentElement.lang = normalized;
 
@@ -3454,7 +3050,7 @@ function renderInferenceDeviceToggle() {
     state.inference.preferredDevice = current;
 
     els.inferenceDeviceSelect.value = current;
-    
+
     const webgpuOption = els.inferenceDeviceSelect.querySelector("option[value='webgpu']");
     if (webgpuOption) {
         if (!capabilities.webgpu) {
@@ -5647,13 +5243,35 @@ function renderChatTabs() {
     }
 }
 
+// --- Chat scroll helpers --------------------------------------------------
+function isChatNearBottom(threshold = 120) {
+    if (!els.chatMessages) return true;
+    const el = els.chatMessages;
+    const distance = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    return Number(distance) <= Number(threshold ?? 120);
+}
+
+function scrollChatToBottom(force = false) {
+    if (!els.chatMessages) return;
+    const el = els.chatMessages;
+    if (force || isChatNearBottom()) {
+        try {
+            el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+        } catch (_) {
+            el.scrollTop = el.scrollHeight;
+        }
+        state.ui.chatAutoScroll = true;
+        if (els.chatScrollBottomBtn) els.chatScrollBottomBtn.classList.remove("show");
+    }
+}
+
 function renderActiveChatMessages() {
     if (!els.chatMessages) return;
     els.chatMessages.innerHTML = "";
     for (const message of state.messages) {
         appendMessageBubble(message);
     }
-    els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+    scrollChatToBottom(true); // on full render, force-scroll to bottom
     lucide.createIcons();
 }
 
@@ -6566,6 +6184,7 @@ function prepareDownloadForModel(metadata, modelId) {
         resetDownloadProgressState();
         state.download.statusText = "다운로드 가능한 모델 파일을 찾지 못했습니다.";
         renderDownloadPanel();
+        openErrorDialog("이 모델은 ONNX 형식의 파일이 포함되어 있지 않아 바로 사용할 수 없습니다.\nTransformers.js와 호환되는 ONNX 모델인지 확인해주세요.");
         return;
     }
 
@@ -7439,24 +7058,35 @@ async function runDownloadFlow({ resume = false } = {}) {
                 ? Math.max(0, Number(state.download.currentFileBytesReceived ?? 0))
                 : 0;
 
-            if (!resume && item.kind === "asset") {
+            if (!resume) {
                 const existingSize = await getExistingOpfsFileSize(item.fileName);
                 if (existingSize > 0) {
-                    completedBytes += existingSize;
-                    state.download.completedBytes = completedBytes;
-                    state.download.bytesReceived = completedBytes;
-                    state.download.queueIndex = index + 1;
-                    state.download.percent = Math.min(100, ((index + 1) / queue.length) * 100);
-                    state.download.statusText = `파일 ${index + 1}/${queue.length} 건너뜀(이미 존재): ${displaySourceName}`;
-                    downloadedFileSummaries.push({
-                        fileName: item.fileName,
-                        sourceFileName: displaySourceName,
-                        sizeBytes: existingSize,
-                        kind: item.kind ?? "asset",
-                        fileUrl: item.fileUrl,
-                    });
-                    maybeRenderDownloadProgress();
-                    continue;
+                    // Try to verify file size if metadata is available
+                    let isValid = true;
+                    if (Number.isFinite(item.size) && item.size > 0) {
+                        if (existingSize !== item.size) {
+                            isValid = false;
+                            console.warn(`[WARN] File size mismatch for ${displaySourceName}: expected ${item.size}, got ${existingSize}. Re-downloading.`);
+                        }
+                    }
+
+                    if (isValid) {
+                        completedBytes += existingSize;
+                        state.download.completedBytes = completedBytes;
+                        state.download.bytesReceived = completedBytes;
+                        state.download.queueIndex = index + 1;
+                        state.download.percent = Math.min(100, ((index + 1) / queue.length) * 100);
+                        state.download.statusText = `파일 ${index + 1}/${queue.length} 건너뜀(이미 존재): ${displaySourceName}`;
+                        downloadedFileSummaries.push({
+                            fileName: item.fileName,
+                            sourceFileName: displaySourceName,
+                            sizeBytes: existingSize,
+                            kind: item.kind ?? "asset",
+                            fileUrl: item.fileUrl,
+                        });
+                        maybeRenderDownloadProgress();
+                        continue;
+                    }
                 }
             }
 
@@ -10049,7 +9679,7 @@ async function releaseSessionEntry(fileName) {
     const entry = sessionStore.sessions.get(fileName);
     if (!entry) return;
 
-    const heapBefore = getUsedHeapBytes();
+    // const heapBefore = getUsedHeapBytes(); // Removed
     const candidate = entry.session;
     try {
         if (candidate && typeof candidate.release === "function") {
@@ -10079,18 +9709,7 @@ async function releaseSessionEntry(fileName) {
     }
 
     await delay(0);
-    const heapAfter = getUsedHeapBytes();
-    if (heapBefore !== null || heapAfter !== null) {
-        const delta = (heapBefore !== null && heapAfter !== null)
-            ? (heapAfter - heapBefore)
-            : null;
-        console.info("[INFO] session release heap snapshot", {
-            file_name: fileName,
-            heap_before_bytes: heapBefore,
-            heap_after_bytes: heapAfter,
-            heap_delta_bytes: delta,
-        });
-    }
+    // Heap snapshot logging removed
 }
 
 /**
@@ -10599,7 +10218,7 @@ class TransformersWorkerManager {
         if (!this.worker) {
             this.worker = new Worker("./worker.js", { type: "module" });
             this.worker.onmessage = (e) => {
-                const { type, id, key, error, output, token } = e.data;
+                const { type, id, key, error, output, token, tokenIncrement } = e.data;
                 if (type === 'error') {
                     const reject = this.pending.get(id)?.reject;
                     if (reject) {
@@ -10619,7 +10238,7 @@ class TransformersWorkerManager {
                     this.listeners.delete(id);
                 } else if (type === 'token') {
                     const listener = this.listeners.get(id);
-                    if (listener) listener(token);
+                    if (listener) listener(token, { tokenIncrement: Number(tokenIncrement ?? 1) });
                 } else if (type === 'dispose_done') {
                     const resolve = this.pending.get(id)?.resolve;
                     if (resolve) resolve();
@@ -10761,9 +10380,9 @@ async function getOrCreateTransformersPipeline(task, modelId, options = {}) {
             ? { [`${modelFileName}.onnx`]: externalDataChunkCount }
             : externalDataChunkCount;
     }
-    
+
     await transformersWorker.init(normalizedTask, normalizedModel, pipelineOptions, key);
-    
+
     transformersStore.pipelines.set(key, {
         pipeline: null,
         lastUsed: Date.now(),
@@ -10998,9 +10617,9 @@ async function createTransformersSession({
                 generationOptions.return_full_text = false;
             }
 
-            const workerOnToken = (delta) => {
+            const workerOnToken = (delta, meta = {}) => {
                 if (onToken) {
-                    onToken(delta, { tokenIncrement: 1 });
+                    onToken(delta, meta);
                 }
             };
 
@@ -11294,7 +10913,7 @@ async function onConfirmDeleteModel() {
 
             await removeOpfsModelsEntryByRelativePath(fileName, { recursive: false, asDirectory: false });
             removeOpfsManifestEntry(fileName);
-            
+
             renderModelStatusHeader();
         } else {
             const { parentSegments, name } = splitParentAndName(targetPath);
@@ -11513,7 +11132,7 @@ function renderTokenSpeedStats() {
     });
     if (els.tokenSpeedStats) {
         els.tokenSpeedStats.textContent = text;
-        
+
         // 메모리 사용량 표시 업데이트
         if (els.memoryUsageText) {
             let memoryText = "Mem: -";
@@ -11534,18 +11153,20 @@ setInterval(() => {
     }
 }, 1000);
 
-function updateTokenSpeedStats(value) {
-    const metric = Number(value);
-    if (!Number.isFinite(metric) || metric <= 0) {
-        return;
-    }
+function updateTokenSpeedStats(tokens, elapsed) {
+    const tps = Number(tokens) / Math.max(0.001, Number(elapsed));
+    if (!Number.isFinite(tps) || tps <= 0) return;
 
-    state.tokenSpeedStats.values.push(metric);
-    const values = state.tokenSpeedStats.values;
-    const total = values.reduce((sum, item) => sum + item, 0);
-    state.tokenSpeedStats.avg = total / values.length;
-    state.tokenSpeedStats.max = Math.max(...values);
-    state.tokenSpeedStats.min = Math.min(...values);
+    state.tokenSpeedStats.totalTokens += tokens;
+    state.tokenSpeedStats.totalTimeMs += (elapsed * 1000);
+
+    // Average is (sum of all tokens) / (sum of all times)
+    state.tokenSpeedStats.avg = state.tokenSpeedStats.totalTokens / (state.tokenSpeedStats.totalTimeMs / 1000);
+
+    // Update max/min based on individual response speeds
+    state.tokenSpeedStats.max = state.tokenSpeedStats.max === null ? tps : Math.max(state.tokenSpeedStats.max, tps);
+    state.tokenSpeedStats.min = state.tokenSpeedStats.min === null ? tps : Math.min(state.tokenSpeedStats.min, tps);
+
     renderTokenSpeedStats();
 }
 
@@ -11556,7 +11177,7 @@ function updateMessageEntryById(messageId, nextFields = {}) {
     return target;
 }
 
-function createAssistantStreamRenderer() {
+function createAssistantStreamRenderer(options = {}) {
     const message = addMessage("assistant", "", {
         showTokenBadge: true,
         tokenBadgeText: "0.00 tok/s",
@@ -11578,11 +11199,12 @@ function createAssistantStreamRenderer() {
     let text = "";
     let buffered = "";
     let totalTokens = 0;
-    let startedAt = 0;
+    let startedAt = Number(options.startTime) || 0;
     let lastRenderAt = 0;
     let frameHandle = 0;
     let timerHandle = 0;
-    let closed = false;
+    let inputFinished = false; // 입력 스트림 종료 여부
+    let closed = false; // 렌더러 완전 종료 여부
     const tpsSamples = [];
 
     const getNow = () => performance.now();
@@ -11609,10 +11231,23 @@ function createAssistantStreamRenderer() {
         if (!force && now - lastRenderAt < ASSISTANT_STREAM_MIN_FRAME_MS) {
             return;
         }
+
         if (buffered) {
-            text += buffered;
-            buffered = "";
+            if (force) {
+                text += buffered;
+                buffered = "";
+            } else {
+                // 한 글자씩 출력하는 효과 (버퍼가 많이 쌓이면 더 빨리 출력하여 지연 방지)
+                let drainCount = 1;
+                if (buffered.length > 100) drainCount = 5;
+                if (buffered.length > 500) drainCount = 20;
+
+                const chunk = buffered.slice(0, drainCount);
+                text += chunk;
+                buffered = buffered.slice(drainCount);
+            }
         }
+
         if (message.content) {
             message.content.textContent = text;
         }
@@ -11633,7 +11268,7 @@ function createAssistantStreamRenderer() {
         });
 
         if (els.chatMessages) {
-            els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+            scrollChatToBottom();
         }
         lastRenderAt = now;
     };
@@ -11648,25 +11283,25 @@ function createAssistantStreamRenderer() {
                 timerHandle = window.setTimeout(() => {
                     timerHandle = 0;
                     flush(false);
-                    if (buffered && !closed) {
+                    if ((buffered || !inputFinished) && !closed) {
                         scheduleFlush();
                     }
                 }, waitMs);
                 return;
             }
             flush(false);
-            if (buffered && !closed) {
+            if ((buffered || !inputFinished) && !closed) {
                 scheduleFlush();
             }
         });
     };
 
     const pushChunk = (chunk, meta = {}) => {
-        if (closed) return;
+        if (inputFinished || closed) return;
         const next = String(chunk ?? "");
         if (!next) return;
 
-        if (!startedAt) {
+        if (!startedAt && next) {
             startedAt = getNow();
         }
         buffered += next;
@@ -11691,6 +11326,7 @@ function createAssistantStreamRenderer() {
         totalTokens = 0;
         startedAt = 0;
         lastRenderAt = 0;
+        inputFinished = false;
         tpsSamples.length = 0;
         cancelScheduledFlush();
         if (message.content) {
@@ -11709,60 +11345,72 @@ function createAssistantStreamRenderer() {
 
     const finalize = (finalText = "", meta = {}) => {
         if (closed) return message;
-        cancelScheduledFlush();
-        const skipMetrics = meta.skipMetrics === true;
+        inputFinished = true;
 
+        const skipMetrics = meta.skipMetrics === true;
         const resolvedFinalText = String(finalText ?? "");
+
         if (resolvedFinalText) {
+            // 강제로 최종 텍스트 적용 (버퍼 무시)
             text = resolvedFinalText;
             buffered = "";
             if (!skipMetrics) {
                 totalTokens = Math.max(totalTokens, Math.max(1, countApproxTokens(resolvedFinalText)));
             }
-        } else if (buffered) {
-            text += buffered;
-            buffered = "";
+            flush(true);
+        } else {
+            // 남은 버퍼가 모두 출력될 때까지 대기 후 종료
+            const checkDrain = () => {
+                if (buffered.length > 0) {
+                    flush(false);
+                    requestAnimationFrame(checkDrain);
+                } else {
+                    finishFinish();
+                }
+            };
+            checkDrain();
+            return message;
         }
 
-        const forceTokenCount = Number(meta.forceTokenCount);
-        if (!skipMetrics && Number.isFinite(forceTokenCount) && forceTokenCount > 0) {
-            totalTokens = Math.max(totalTokens, Math.trunc(forceTokenCount));
-        }
-        if (!skipMetrics && !startedAt && text) {
-            startedAt = getNow();
+        function finishFinish() {
+            cancelScheduledFlush();
+            const forceTokenCount = Number(meta.forceTokenCount);
+            if (!skipMetrics && Number.isFinite(forceTokenCount) && forceTokenCount > 0) {
+                totalTokens = Math.max(totalTokens, Math.trunc(forceTokenCount));
+            }
+            if (!skipMetrics && !startedAt && text) {
+                startedAt = getNow();
+            }
+
+            if (message.content) {
+                message.content.textContent = text;
+            }
+
+            const finalTps = skipMetrics ? 0 : getTps();
+            if (message.tokenBadge) {
+                message.tokenBadge.textContent = finalTps > 0 ? `${finalTps.toFixed(2)} tok/s` : "0.00 tok/s";
+            }
+            updateMessageEntryById(message.id, {
+                text,
+                tokenCount: !skipMetrics && totalTokens > 0 ? totalTokens : null,
+                tokenPerSecond: !skipMetrics && Number.isFinite(finalTps) && finalTps > 0 ? finalTps : null,
+                tokenSpeedSamples: !skipMetrics ? [...tpsSamples] : [],
+            });
+            if (!skipMetrics && Number.isFinite(finalTps) && finalTps > 0) {
+                const elapsed = Math.max((getNow() - startedAt) / 1000, 0.001);
+                updateTokenSpeedStats(totalTokens, elapsed);
+            }
+            persistActiveSessionMessages();
+            if (els.chatMessages) {
+                scrollChatToBottom();
+            }
+            closed = true;
         }
 
-        if (message.content) {
-            message.content.textContent = text;
-        }
-
-        const finalTps = skipMetrics ? 0 : getTps();
-        if (message.tokenBadge) {
-            message.tokenBadge.textContent = finalTps > 0 ? `${finalTps.toFixed(2)} tok/s` : "0.00 tok/s";
-        }
-        updateMessageEntryById(message.id, {
-            text,
-            tokenCount: !skipMetrics && totalTokens > 0 ? totalTokens : null,
-            tokenPerSecond: !skipMetrics && Number.isFinite(finalTps) && finalTps > 0 ? finalTps : null,
-            tokenSpeedSamples: !skipMetrics ? [...tpsSamples] : [],
-        });
-        if (!skipMetrics && Number.isFinite(finalTps) && finalTps > 0) {
-            updateTokenSpeedStats(finalTps);
-        }
-        persistActiveSessionMessages();
-        if (els.chatMessages) {
-            els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
-        }
-        closed = true;
+        finishFinish();
         return message;
     };
 
-    return {
-        message,
-        pushChunk,
-        reset,
-        finalize,
-    };
 }
 
 async function appendAssistantMessageWithTokenMetrics(fullText) {
@@ -11770,6 +11418,7 @@ async function appendAssistantMessageWithTokenMetrics(fullText) {
     const finalText = String(fullText ?? "");
     stream.finalize(finalText, {
         forceTokenCount: Math.max(1, countApproxTokens(finalText)),
+        skipMetrics: true
     });
     return stream.message;
 }
@@ -11894,7 +11543,7 @@ async function sendMessage(userText) {
 
     state.isSendingChat = true;
     setChatSendingState(true);
-    const streamRenderer = createAssistantStreamRenderer();
+    const streamRenderer = createAssistantStreamRenderer({ startTime: performance.now() });
 
     try {
         const reply = await requestChatCompletion(normalizedUserText, {
@@ -12156,111 +11805,9 @@ async function requestLocalSessionCompletion(userText, options = {}) {
     }
 }
 
-async function runLocalInferenceProbe(userText = "안녕하세요") {
-    const probeText = String(userText ?? "").trim();
-    const activeFile = String(state.activeSessionFile ?? "").trim();
-    const session = sessionStore.activeSession;
-    if (!probeText) {
-        const error = new Error("프로브 입력 텍스트가 비어 있습니다.");
-        error.code = "probe_input_empty";
-        throw error;
-    }
-    if (!activeFile || !session) {
-        const error = new Error("활성 로컬 세션이 없습니다. 모델을 먼저 로드하세요.");
-        error.code = "local_session_not_ready";
-        throw error;
-    }
 
-    const started = performance.now();
-    const generated = await runInference(session, probeText, {
-        activeFile,
-        probe: true,
-        isolated: true,
-    });
-    const cleaned = cleanupLocalAssistantText(generated, probeText);
-    const elapsedMs = Math.max(0, performance.now() - started);
 
-    return {
-        ok: isMeaningfulAssistantReply(cleaned, probeText),
-        input: probeText,
-        output: cleaned,
-        elapsed_ms: Number(elapsedMs.toFixed(2)),
-        active_file: activeFile,
-        model_id: String(session?.modelId ?? ""),
-        task: String(session?.task ?? ""),
-        pipeline_key: String(session?.pipelineKey ?? ""),
-        model_file_name_hint: String(session?.modelFileNameHint ?? ""),
-        model_binding: String(session?.modelBinding ?? ""),
-    };
-}
 
-async function runSessionUnloadMemoryDiagnostics(options = {}) {
-    const opts = (options && typeof options === "object") ? options : {};
-    const source = typeof options === "string"
-        ? options
-        : (opts.fileName || state.activeSessionFile || getLastLoadedSessionFile());
-    const fileName = normalizeOnnxFileName(source);
-    if (!fileName) {
-        const error = new Error("메모리 진단을 위해 유효한 .onnx 파일명이 필요합니다.");
-        error.code = "invalid_file_name";
-        throw error;
-    }
-
-    const cycles = Math.max(1, Math.min(50, Math.trunc(Number(opts.cycles || 8))));
-    const settleMs = Math.max(0, Math.min(3000, Math.trunc(Number(opts.settleMs || 90))));
-    const allowedGrowthBytes = Math.max(
-        1024 * 1024,
-        Math.trunc(Number(opts.allowedGrowthBytes || (20 * 1024 * 1024))),
-    );
-    const samples = [];
-
-    await initOpfs();
-    const before = getUsedHeapBytes();
-    let peak = before;
-    let finalSample = before;
-
-    for (let index = 1; index <= cycles; index += 1) {
-        const beforeLoad = getUsedHeapBytes();
-        await loadCachedSession(fileName);
-        const afterLoad = getUsedHeapBytes();
-        await unloadCachedSession(fileName, { silent: true, skipRender: true });
-        if (settleMs > 0) {
-            await delay(settleMs);
-        }
-        const afterUnload = getUsedHeapBytes();
-        finalSample = afterUnload;
-
-        const known = [beforeLoad, afterLoad, afterUnload]
-            .filter((value) => Number.isFinite(Number(value)));
-        if (known.length > 0) {
-            peak = Number.isFinite(Number(peak)) ? Math.max(peak, ...known) : Math.max(...known);
-        }
-        samples.push({
-            cycle: index,
-            before_load_bytes: beforeLoad,
-            after_load_bytes: afterLoad,
-            after_unload_bytes: afterUnload,
-        });
-    }
-
-    const growth = (before !== null && finalSample !== null) ? (finalSample - before) : null;
-    const peakDelta = (before !== null && peak !== null) ? (peak - before) : null;
-    const memoryLeakSuspected = growth !== null ? growth > allowedGrowthBytes : null;
-
-    const result = {
-        file_name: fileName,
-        cycles,
-        before_bytes: before,
-        after_bytes: finalSample,
-        growth_bytes: growth,
-        peak_delta_bytes: peakDelta,
-        allowed_growth_bytes: allowedGrowthBytes,
-        memory_leak_suspected: memoryLeakSuspected,
-        samples,
-    };
-    console.info("[INFO] session unload memory diagnostics", result);
-    return result;
-}
 
 function findManifestEntriesByModelId(modelId) {
     const normalized = normalizeModelId(modelId);
@@ -13131,6 +12678,14 @@ function appendMessageBubble(entry, options = {}) {
     content.className = "whitespace-pre-wrap break-words leading-relaxed";
     content.textContent = String(entry.text ?? "");
 
+    // If this is a short single-line user message, render it as a compact centered bubble
+    if (role === "user") {
+        const txt = String(entry.text ?? "").trim();
+        if (txt && !txt.includes("\n") && txt.length <= 24) {
+            bubble.classList.add("message-bubble--compact");
+        }
+    }
+
     bubble.appendChild(header);
     bubble.appendChild(content);
     row.appendChild(bubble);
@@ -13167,7 +12722,8 @@ function addMessage(role, text, options = {}) {
     });
 
     if (els.chatMessages) {
-        els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+        const forceScroll = role === "user"; // if user sent the message, bring to bottom
+        scrollChatToBottom(forceScroll);
     }
     lucide.createIcons();
     persistActiveSessionMessages();
@@ -13625,175 +13181,8 @@ function showToast(message, kind = "info", duration = 3000, options = {}) {
     }, duration);
 }
 
-function getUsedHeapBytes() {
-    const used = performance?.memory?.usedJSHeapSize;
-    return Number.isFinite(Number(used)) ? Number(used) : null;
-}
 
-async function writeSyntheticModelToOpfs({ fileName, sizeBytes, sparse = false, onProgress = null }) {
-    const normalizedFileName = normalizeOnnxFileName(fileName);
-    if (!normalizedFileName) {
-        throw new Error("유효한 .onnx 파일명이 필요합니다.");
-    }
 
-    const fileHandle = await getOpfsModelsFileHandleByRelativePath(normalizedFileName, { create: true });
-    const writable = await fileHandle.createWritable({ keepExistingData: false });
 
-    const chunk = new Uint8Array(OPFS_WRITE_CHUNK_BYTES);
-    let written = 0;
 
-    try {
-        if (sparse && sizeBytes >= 1024 * 1024 * 1024) {
-            const markerSize = Math.min(OPFS_WRITE_CHUNK_BYTES, sizeBytes);
-            const head = chunk.subarray(0, markerSize);
 
-            await writable.write(head);
-            // 대용량 케이스는 환경 제약(quota)을 피하기 위해 marker chunk만 기록하고 논리 크기로 검증합니다.
-            await writable.write(chunk.subarray(0, markerSize));
-
-            written = sizeBytes;
-            if (typeof onProgress === "function") {
-                onProgress({ bytesWritten: written, totalBytes: sizeBytes });
-            }
-        } else {
-            while (written < sizeBytes) {
-                const nextBytes = Math.min(OPFS_WRITE_CHUNK_BYTES, sizeBytes - written);
-                const data = nextBytes === OPFS_WRITE_CHUNK_BYTES ? chunk : chunk.subarray(0, nextBytes);
-                await writable.write(data);
-                written += data.byteLength;
-
-                if (typeof onProgress === "function") {
-                    onProgress({ bytesWritten: written, totalBytes: sizeBytes });
-                }
-            }
-        }
-
-        await writable.close();
-        return {
-            fileName: normalizedFileName,
-            bytesWritten: written,
-        };
-    } catch (error) {
-        try {
-            await writable.abort();
-        } catch (_) {
-            // ignore abort failure
-        }
-        throw error;
-    }
-}
-
-async function runOpfsValidationSuite(options = {}) {
-    const useMockRuntime = options.useMockRuntime !== false && options.useMockOrt !== false;
-    const sparseForLarge = options.sparseForLarge !== false;
-
-    await initOpfs();
-    if (!state.opfs.supported) {
-        throw new Error("OPFS가 지원되지 않아 검증을 수행할 수 없습니다.");
-    }
-
-    const originalModule = getInjectedTransformersModule() ?? null;
-    if (useMockRuntime) {
-        setInjectedTransformersModule({
-            env: {
-                allowRemoteModels: false,
-                allowLocalModels: true,
-                useBrowserCache: true,
-            },
-            pipeline: async (_task, _modelId, optionsArg = {}) => {
-                if (!optionsArg || !optionsArg.device) {
-                    const error = new Error("pipeline device 옵션이 누락되었습니다.");
-                    error.code = "CorruptedModel";
-                    throw error;
-                }
-                return async () => [{ generated_text: "mocked-local-reply" }];
-            },
-        });
-        transformersStore.module = null;
-        transformersStore.modulePromise = null;
-        await clearTransformersPipelineCache();
-    }
-
-    const scenarios = [];
-
-    for (const sizeBytes of OPFS_VALIDATION_SIZES) {
-        const sizeLabel = formatBytes(sizeBytes);
-        const fileName = `validation-${sizeBytes}.onnx`;
-        const baselineHeap = getUsedHeapBytes();
-
-        let saveSuccess = false;
-        let loadSuccess = false;
-        let errorMessage = "";
-        let peakDelta = null;
-
-        try {
-            await writeSyntheticModelToOpfs({
-                fileName,
-                sizeBytes,
-                sparse: sparseForLarge,
-            });
-            ensureManifestEntryForModelFile(fileName, {
-                modelId: `lucid/validation-${sizeBytes}`,
-                task: TRANSFORMERS_DEFAULT_TASK,
-                sizeBytes,
-            });
-            saveSuccess = true;
-
-            const afterWriteHeap = getUsedHeapBytes();
-            await loadCachedSession(fileName);
-            loadSuccess = true;
-
-            const afterLoadHeap = getUsedHeapBytes();
-
-            const knownHeaps = [baselineHeap, afterWriteHeap, afterLoadHeap].filter((value) => Number.isFinite(Number(value)));
-            if (knownHeaps.length >= 2) {
-                const peak = Math.max(...knownHeaps);
-                const base = baselineHeap ?? Math.min(...knownHeaps);
-                peakDelta = Math.max(0, peak - base);
-            }
-
-            await unloadCachedSession(fileName, { silent: true, skipRender: true });
-        } catch (error) {
-            errorMessage = getErrorMessage(error);
-        }
-
-        const memoryLimit = sizeBytes + OPFS_MEMORY_HEADROOM_BYTES;
-        const memoryWithinLimit = peakDelta === null ? true : peakDelta <= memoryLimit;
-
-        scenarios.push({
-            file_name: fileName,
-            size_bytes: sizeBytes,
-            size_label: sizeLabel,
-            save_success: saveSuccess,
-            load_success: loadSuccess,
-            memory_delta_bytes: peakDelta,
-            memory_limit_bytes: memoryLimit,
-            memory_within_limit: memoryWithinLimit,
-            error: errorMessage,
-        });
-    }
-
-    if (useMockRuntime) {
-        setInjectedTransformersModule(originalModule);
-        transformersStore.module = null;
-        transformersStore.modulePromise = null;
-        await clearTransformersPipelineCache();
-    }
-
-    const saveSuccessCount = scenarios.filter((item) => item.save_success).length;
-    const loadSuccessCount = scenarios.filter((item) => item.load_success).length;
-    const memorySuccessCount = scenarios.filter((item) => item.memory_within_limit).length;
-
-    const summary = {
-        total: scenarios.length,
-        save_success_rate: scenarios.length > 0 ? Math.round((saveSuccessCount / scenarios.length) * 100) : 0,
-        load_success_rate: scenarios.length > 0 ? Math.round((loadSuccessCount / scenarios.length) * 100) : 0,
-        memory_within_limit_rate: scenarios.length > 0 ? Math.round((memorySuccessCount / scenarios.length) * 100) : 0,
-        threshold_headroom_bytes: OPFS_MEMORY_HEADROOM_BYTES,
-    };
-
-    return {
-        scenarios,
-        summary,
-    };
-}

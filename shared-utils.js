@@ -51,10 +51,20 @@ export function readFileAsDataUrl(file) {
 }
 
 export function countApproxTokens(text) {
-    const source = String(text ?? "").trim();
-    if (!source) return 0;
-    const tokens = source.match(/\S+/g);
-    return Array.isArray(tokens) ? tokens.length : 0;
+    const s = String(text ?? "");
+    if (!s) return 0;
+    let count = 0;
+    for (let i = 0; i < s.length; i++) {
+        const code = s.charCodeAt(i);
+        // ASCII characters (English, numbers, basic symbols) are roughly 4 chars/token
+        if (code <= 127) {
+            count += 0.25;
+        } else {
+            // CJK and other multi-byte characters are roughly 0.6-1.0 chars/token
+            count += 0.75;
+        }
+    }
+    return Math.max(1, Math.ceil(count));
 }
 
 export function normalizePromptText(value) {

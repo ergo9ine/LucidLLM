@@ -16,7 +16,7 @@ async function loadTransformersModule() {
         try {
             const mod = await import(url);
             transformersModule = mod;
-            
+
             // Configure environment
             const env = mod.env || mod.default?.env;
             if (env) {
@@ -62,7 +62,7 @@ self.onmessage = async (e) => {
 
 async function handleInit(id, data) {
     const { task, modelId, options, key } = data;
-    
+
     if (pipelines.has(key)) {
         self.postMessage({ type: 'init_done', id, key });
         return;
@@ -70,10 +70,10 @@ async function handleInit(id, data) {
 
     const mod = await loadTransformersModule();
     const pipelineFactory = getPipelineFactory(mod);
-    
+
     // Create pipeline
     const pipe = await pipelineFactory(task, modelId, options);
-    
+
     pipelines.set(key, pipe);
     self.postMessage({ type: 'init_done', id, key });
 }
@@ -100,21 +100,26 @@ function extractTokenIdsFromGenerationBeamPayload(payload) {
 async function handleGenerate(id, data) {
     const { key, prompt, options } = data;
     const pipe = pipelines.get(key);
-    
+
     if (!pipe) {
         throw new Error(`Pipeline not found for key: ${key}`);
     }
 
     let streamedText = "";
+    let lastTokenCount = 0;
     const callback_function = (beamPayload) => {
         try {
             const tokenIds = extractTokenIdsFromGenerationBeamPayload(beamPayload);
             if (!Array.isArray(tokenIds) || tokenIds.length === 0) return;
-            
+
+            const currentTokenCount = tokenIds.length;
+            const tokenIncrement = Math.max(0, currentTokenCount - lastTokenCount);
+            lastTokenCount = currentTokenCount;
+
             // Decode in worker
             if (pipe.tokenizer && typeof pipe.tokenizer.decode === "function") {
                 const decoded = pipe.tokenizer.decode(tokenIds, { skip_special_tokens: true });
-                
+
                 let delta = "";
                 if (decoded.startsWith(streamedText)) {
                     delta = decoded.slice(streamedText.length);
@@ -123,11 +128,12 @@ async function handleGenerate(id, data) {
                 }
                 streamedText = decoded;
 
-                if (delta) {
+                if (delta || tokenIncrement > 0) {
                     self.postMessage({
                         type: 'token',
                         id,
-                        token: delta
+                        token: delta,
+                        tokenIncrement
                     });
                 }
             }
@@ -142,7 +148,7 @@ async function handleGenerate(id, data) {
     };
 
     const output = await pipe(prompt, generateOptions);
-    
+
     // Serialize output if necessary, or just send back text
     // We usually want the full output object/array
     self.postMessage({

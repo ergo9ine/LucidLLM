@@ -20,4 +20,5 @@
 !/worker.js
 !/*.md
 !/LICENSE
+!/docs/
 !/docs/*.md
