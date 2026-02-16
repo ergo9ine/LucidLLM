@@ -8,16 +8,8 @@
 # Core static entry + runtime scripts/styles
 !/index.html
 !/style.css
-!/bootstrap.js
-!/main.js
-!/shared-utils.js
-!/global-api.js
-!/transformers-bridge.js
-!/drive-backup-crypto.js
-!/drive-backup-utils.js
-!/sw.js
+!/*.js
 !/favicon.svg
-!/worker.js
 !/*.md
 !/LICENSE
 !/docs/
