@@ -103,24 +103,20 @@ export function isHttpsUrl(value, options = {}) {
 export function resolveInferenceBackendChain(preferredDevice, capabilities = {}) {
     const preferred = String(preferredDevice ?? "").trim().toLowerCase();
     const hasWebGpu = capabilities.webgpu === true;
-    const hasWebGl = capabilities.webgl === true;
     const hasWasm = capabilities.wasm !== false;
 
     const supported = new Set();
     if (hasWebGpu) supported.add("webgpu");
-    if (hasWebGl) supported.add("webgl");
     if (hasWasm) supported.add("wasm");
     if (supported.size === 0) {
         return ["wasm"];
     }
 
-    let order = ["wasm", "webgl", "webgpu"];
+    let order = ["wasm", "webgpu"];
     if (preferred === "webgpu") {
-        order = ["webgpu", "webgl", "wasm"];
-    } else if (preferred === "webgl") {
-        order = ["webgl", "wasm", "webgpu"];
+        order = ["webgpu", "wasm"];
     } else if (preferred === "wasm") {
-        order = ["wasm", "webgl", "webgpu"];
+        order = ["wasm", "webgpu"];
     }
 
     const deduped = [];

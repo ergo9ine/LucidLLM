@@ -11,7 +11,7 @@ const APP_SHELL_ASSETS = [
     "./transformers-bridge.js",
     "./global-api.js",
     "./favicon.svg",
-    "./favicon.ico",
+    "./worker.js",
 ];
 
 self.addEventListener("install", (event) => {

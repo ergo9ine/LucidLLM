@@ -47,13 +47,13 @@ const LOCAL_INFERENCE_RUNTIME = Object.freeze({
     eosTokenIds: [0, 2],
 });
 const LLM_DEFAULT_SETTINGS = Object.freeze({
-    systemPrompt: "",
-    maxOutputTokens: 4096,
+    systemPrompt: "You are a helpful assistant.",
+    maxOutputTokens: 512,
     contextWindow: "8k",
     token: "",
 });
 const LOCAL_GENERATION_DEFAULT_SETTINGS = Object.freeze({
-    temperature: 0.7,
+    temperature: 0.9,
     topP: 0.9,
     presencePenalty: 0,
     maxLength: 512,
@@ -79,6 +79,7 @@ const LOCAL_MAX_NEW_TOKENS_QWEN_CAP = 384;
 const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const GOOGLE_DRIVE_API_BASE = "https://www.googleapis.com/drive/v3";
 const GOOGLE_DRIVE_UPLOAD_API_BASE = "https://www.googleapis.com/upload/drive/v3";
+const GOOGLE_CLIENT_ID_DEFAULT = "721355891669-gcj22fgcj3g3v1o4jl2q8k4i66li6tq8.apps.googleusercontent.com";
 const DRIVE_BACKUP_PREFIX = "backup_";
 const DRIVE_BACKUP_FOLDER_NAME = "LucidLLM Backups";
 const DRIVE_BACKUP_DEFAULT_LIMIT_MB = 25;
@@ -204,7 +205,6 @@ const I18N_MESSAGES = {
         "chat.exported": "현재 대화를 JSON으로 내보냈습니다.",
         "chat.export.empty": "내보낼 대화가 없습니다.",
         "inference.device.webgpu": "WebGPU",
-        "inference.device.webgl": "WebGL",
         "inference.device.wasm": "WASM",
         "inference.toggle.current_next": "현재 {current} {currentEmoji} · 클릭하면 {next} {nextEmoji}",
         "inference.toggle.unsupported": "현재 {current} {currentEmoji} · WebGPU 미지원 환경",
@@ -218,6 +218,11 @@ const I18N_MESSAGES = {
         "inference.chat.toggle.off": "추론 끄기",
         "inference.chat.disabled_notice": "추론이 비활성화되어 inference=false로 요청합니다.",
         "model.audit.run": "모델 품질 점검 실행",
+        "delete.deleting": "삭제 중...",
+        "delete.done": "삭제 완료: {target}",
+        "delete.failed": "삭제 실패: {message}",
+        "delete.invalid_path": "삭제 대상 경로가 올바르지 않습니다.",
+        "model.loading_warning": "모델 {model}이(가) 로딩 중입니다. 삭제하기 전에 로딩이 완료될 때까지 기다리거나 페이지를 새로고침하세요.",
         "model.audit.running": "모델 점검 실행 중...",
         "model.audit.done": "모델 점검 완료",
         "model.audit.failed": "모델 점검 실패: {message}",
@@ -312,7 +317,6 @@ const I18N_MESSAGES = {
         "chat.exported": "Current chat exported as JSON.",
         "chat.export.empty": "No chat to export.",
         "inference.device.webgpu": "WebGPU",
-        "inference.device.webgl": "WebGL",
         "inference.device.wasm": "WASM",
         "inference.toggle.current_next": "Current {current} {currentEmoji} · click for {next} {nextEmoji}",
         "inference.toggle.unsupported": "Current {current} {currentEmoji} · WebGPU unavailable",
@@ -332,6 +336,11 @@ const I18N_MESSAGES = {
         "model.auto_load.title": "Model Auto Load",
         "model.auto_load.label": "Auto-load last model at startup",
         "model.auto_load.hint": "When disabled, startup will not auto-load the last OPFS model session.",
+        "delete.deleting": "Deleting...",
+        "delete.done": "Deleted: {target}",
+        "delete.failed": "Failed to delete: {message}",
+        "delete.invalid_path": "Invalid delete target path.",
+        "model.loading_warning": "Model {model} is currently loading. Please wait or refresh before deleting.",
         "prompt.language_guard.ko": "모든 답변은 한국어로 작성하세요.",
         "prompt.language_guard.en": "Respond in English only.",
     },
@@ -500,7 +509,7 @@ const state = {
         accessToken: "",
         tokenExpiresAt: 0,
         tokenClient: null,
-        clientId: "",
+        clientId: GOOGLE_CLIENT_ID_DEFAULT,
         clientSecret: "",
         connected: false,
         inProgress: false,
@@ -649,7 +658,7 @@ function ensureLlmGenerationControls() {
         <div class="space-y-2">
             <div class="flex items-center justify-between gap-2 text-xs">
                 <label id="llm-temperature-label" for="llm-temperature-input" class="text-slate-300">temperature</label>
-                <span id="llm-temperature-value" class="text-cyan-100">0.70</span>
+                <span id="llm-temperature-value" class="text-cyan-100">0.90</span>
             </div>
             <input
                 id="llm-temperature-input"
@@ -825,8 +834,11 @@ async function bootstrapApplication() {
     renderLocalizedStaticText();
 
     window.setInterval(() => {
-        refreshStorageEstimate().catch(() => {});
+        refreshStorageEstimate().catch(() => { });
     }, 5000);
+
+    // Auto-open settings on startup
+    openSettings();
 }
 
 function scheduleBootstrapApplication() {
@@ -1872,7 +1884,8 @@ function cacheElements() {
         modelAuditRunLabel: document.getElementById("model-audit-run-label"),
         modelAuditOutput: document.getElementById("model-audit-output"),
         tokenSpeedStats: document.getElementById("token-speed-stats"),
-        inferenceDeviceToggleBtn: document.getElementById("inference-device-toggle-btn"),
+        memoryUsageText: document.getElementById("memory-usage-text"),
+        inferenceDeviceSelect: document.getElementById("inference-device-select"),
         sidebar: document.getElementById("app-sidebar"),
         sidebarTitleText: document.getElementById("sidebar-title-text"),
         sidebarMobileToggle: document.getElementById("sidebar-mobile-toggle"),
@@ -2163,8 +2176,8 @@ function bindEvents() {
         els.sidebarOpenLanguageBtn.addEventListener("click", handleSidebarOpenLanguageClick);
     }
 
-    if (els.inferenceDeviceToggleBtn) {
-        els.inferenceDeviceToggleBtn.addEventListener("click", onInferenceDeviceToggleClick);
+    if (els.inferenceDeviceSelect) {
+        els.inferenceDeviceSelect.addEventListener("change", onInferenceDeviceSelectChange);
     }
 
     if (els.chatInferenceToggleBtn) {
@@ -3308,12 +3321,6 @@ function normalizeInferenceDevice(value) {
     const capabilities = getRuntimeCapabilities();
     if (lower === "webgpu") {
         if (capabilities.webgpu) return "webgpu";
-        if (capabilities.webgl) return "webgl";
-        return "wasm";
-    }
-    if (lower === "webgl") {
-        if (capabilities.webgl) return "webgl";
-        if (capabilities.webgpu) return "webgpu";
         return "wasm";
     }
     if (lower === "wasm") return "wasm";
@@ -3324,7 +3331,6 @@ function normalizeInferenceDevice(value) {
 function getInferenceDeviceEmoji(device) {
     const normalized = normalizeInferenceDevice(device);
     if (normalized === "webgpu") return "⚡";
-    if (normalized === "webgl") return "🖼️";
     return "🧩";
 }
 
@@ -3333,35 +3339,7 @@ function getInferenceDeviceDisplayName(device) {
     if (normalized === "webgpu") {
         return t("inference.device.webgpu", {}, "WebGPU");
     }
-    if (normalized === "webgl") {
-        return t("inference.device.webgl", {}, "WebGL");
-    }
     return t("inference.device.wasm", {}, "WASM");
-}
-
-function detectWebGlSupport() {
-    try {
-        const canvas = document.createElement("canvas");
-        canvas.width = 1;
-        canvas.height = 1;
-        const gl2 = canvas.getContext("webgl2");
-        if (gl2) {
-            const lose = gl2.getExtension("WEBGL_lose_context");
-            if (lose && typeof lose.loseContext === "function") {
-                lose.loseContext();
-            }
-            return true;
-        }
-        const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-        if (!gl) return false;
-        const lose = gl.getExtension("WEBGL_lose_context");
-        if (lose && typeof lose.loseContext === "function") {
-            lose.loseContext();
-        }
-        return true;
-    } catch (_) {
-        return false;
-    }
 }
 
 function getRuntimeCapabilities(options = {}) {
@@ -3372,7 +3350,6 @@ function getRuntimeCapabilities(options = {}) {
 
     runtimeCapabilitiesCache = {
         webgpu: !!navigator?.gpu,
-        webgl: detectWebGlSupport(),
         wasm: typeof WebAssembly === "object",
         sharedArrayBufferReady: typeof SharedArrayBuffer === "function" && !!globalThis.crossOriginIsolated,
         crossOriginIsolated: !!globalThis.crossOriginIsolated,
@@ -3470,38 +3447,24 @@ function hydrateAutoLoadLastSessionPreference() {
 }
 
 function renderInferenceDeviceToggle() {
-    if (!els.inferenceDeviceToggleBtn) return;
+    if (!els.inferenceDeviceSelect) return;
 
     const capabilities = getRuntimeCapabilities();
     const current = normalizeInferenceDevice(state.inference.preferredDevice);
     state.inference.preferredDevice = current;
 
-    const currentName = getInferenceDeviceDisplayName(current);
-    const currentEmoji = getInferenceDeviceEmoji(current);
-    const nextCandidate = current === "webgpu" ? "wasm" : "webgpu";
-    const fallbackChain = resolveInferenceBackendChain("webgpu", capabilities);
-    const webGpuFallback = fallbackChain.find((item) => item !== "webgpu") ?? "wasm";
-    const next = nextCandidate === "webgpu" && !capabilities.webgpu
-        ? webGpuFallback
-        : nextCandidate;
-    const nextName = getInferenceDeviceDisplayName(next);
-    const nextEmoji = getInferenceDeviceEmoji(next);
-    const tooltip = nextCandidate === "webgpu" && !capabilities.webgpu
-        ? t(
-            "inference.toggle.unsupported",
-            { current: currentName, currentEmoji },
-            `현재 ${currentName} ${currentEmoji} · WebGPU 미지원 환경`,
-        )
-        : t(
-            "inference.toggle.current_next",
-            { current: currentName, currentEmoji, next: nextName, nextEmoji },
-            `현재 ${currentName} ${currentEmoji} · 클릭하면 ${nextName} ${nextEmoji}`,
-        );
-
-    els.inferenceDeviceToggleBtn.textContent = currentEmoji;
-    els.inferenceDeviceToggleBtn.dataset.device = current;
-    els.inferenceDeviceToggleBtn.setAttribute("aria-label", tooltip);
-    els.inferenceDeviceToggleBtn.setAttribute("title", tooltip);
+    els.inferenceDeviceSelect.value = current;
+    
+    const webgpuOption = els.inferenceDeviceSelect.querySelector("option[value='webgpu']");
+    if (webgpuOption) {
+        if (!capabilities.webgpu) {
+            webgpuOption.disabled = true;
+            webgpuOption.textContent = "⚡ WebGPU (미지원)";
+        } else {
+            webgpuOption.disabled = false;
+            webgpuOption.textContent = "⚡ WebGPU";
+        }
+    }
 }
 
 function modelSupportsChatInference() {
@@ -3599,38 +3562,24 @@ async function reloadActiveSessionForInferenceDevice(preferredDevice) {
     }
 }
 
-async function onInferenceDeviceToggleClick() {
+async function onInferenceDeviceSelectChange(event) {
     if (state.isSendingChat) {
         showToast("응답 생성 중에는 추론 백엔드를 변경할 수 없습니다.", "error", 2200);
+        renderInferenceDeviceToggle();
         return;
     }
 
+    const next = normalizeInferenceDevice(event.target.value);
     const capabilities = getRuntimeCapabilities();
-    const current = normalizeInferenceDevice(state.inference.preferredDevice);
-    const nextRequested = current === "webgpu" ? "wasm" : "webgpu";
-    if (nextRequested === "webgpu" && !capabilities.webgpu) {
-        const fallbackChain = resolveInferenceBackendChain("webgpu", capabilities);
-        const fallbackDevice = fallbackChain.find((item) => item !== "webgpu") ?? "wasm";
-        const fallbackLabel = getInferenceDeviceDisplayName(fallbackDevice);
-        showToast(
-            t(
-                "inference.toggle.webgpu_fallback",
-                { device: fallbackLabel },
-                `WebGPU 미지원으로 ${fallbackLabel} 백엔드를 사용합니다.`,
-            ),
-            "info",
-            2600,
-        );
-        state.inference.preferredDevice = fallbackDevice;
-        setStoredInferenceDevice(fallbackDevice);
+
+    if (next === "webgpu" && !capabilities.webgpu) {
+        showToast(t("inference.device.webgpu_unsupported", {}, "WebGPU를 지원하지 않는 환경입니다."), "error", 2200);
         renderInferenceDeviceToggle();
-        await reloadActiveSessionForInferenceDevice(fallbackDevice);
         return;
     }
 
-    const next = normalizeInferenceDevice(nextRequested);
+    const current = normalizeInferenceDevice(state.inference.preferredDevice);
     if (next === current) {
-        renderInferenceDeviceToggle();
         return;
     }
 
@@ -3646,7 +3595,7 @@ async function onInferenceDeviceToggleClick() {
             `추론 백엔드를 ${nextLabel}로 변경했습니다.`,
         ),
         "success",
-        1800,
+        2000,
     );
 
     await reloadActiveSessionForInferenceDevice(next);
@@ -3754,7 +3703,7 @@ function setStoredDriveLastSyncAt(value) {
 }
 
 function hydrateDriveBackupSettings() {
-    state.driveBackup.clientId = getStoredDriveClientId();
+    state.driveBackup.clientId = getStoredDriveClientId() || GOOGLE_CLIENT_ID_DEFAULT;
     state.driveBackup.clientSecret = getStoredDriveClientSecret();
     state.driveBackup.backupLimitMb = getStoredDriveBackupLimitMb();
     state.driveBackup.autoEnabled = getStoredDriveAutoBackupEnabled();
@@ -4012,6 +3961,18 @@ async function onDriveConnectClick() {
         setDriveProgress(10, "Google 인증 준비 중...");
         renderDriveBackupUi();
 
+        // Check if user has entered a Client ID in the settings input, even if not saved yet
+        if (!state.driveBackup.clientId && els.driveClientIdInput && els.driveClientIdInput.value.trim()) {
+            const inputVal = els.driveClientIdInput.value.trim();
+            state.driveBackup.clientId = inputVal;
+            setStoredDriveClientId(inputVal);
+        }
+
+        const clientId = String(state.driveBackup.clientId ?? getStoredDriveClientId() ?? "").trim();
+        if (!clientId) {
+            throw new Error("설정 > 백업 및 복원 탭에서 Client ID를 먼저 입력해야 합니다.");
+        }
+
         await ensureDriveAccessToken({ interactive: true });
         setDriveProgress(35, "Drive 백업 폴더 확인 중...");
         await ensureDriveBackupFolder();
@@ -4032,7 +3993,7 @@ async function onDriveConnectClick() {
 function disconnectDriveSession() {
     try {
         if (state.driveBackup.accessToken && window.google?.accounts?.oauth2?.revoke) {
-            window.google.accounts.oauth2.revoke(state.driveBackup.accessToken, () => {});
+            window.google.accounts.oauth2.revoke(state.driveBackup.accessToken, () => { });
         }
     } catch (_) {
         // no-op
@@ -4060,7 +4021,7 @@ function startDriveFileListPolling() {
     stopDriveFileListPolling();
     if (!state.driveBackup.connected) return;
     state.driveBackup.pollTimer = window.setInterval(() => {
-        refreshDriveBackupFileList({ silent: true, interactiveAuth: false }).catch(() => {});
+        refreshDriveBackupFileList({ silent: true, interactiveAuth: false }).catch(() => { });
     }, DRIVE_FILE_LIST_POLL_MS);
 }
 
@@ -4650,9 +4611,9 @@ function scheduleAutoBackup(reason = "change") {
 function hydrateSettings() {
     let rawSystemPrompt = "";
     try {
-        rawSystemPrompt = localStorage.getItem(STORAGE_KEYS.systemPrompt) ?? "";
+        rawSystemPrompt = localStorage.getItem(STORAGE_KEYS.systemPrompt) ?? LLM_DEFAULT_SETTINGS.systemPrompt;
     } catch (_) {
-        rawSystemPrompt = "";
+        rawSystemPrompt = LLM_DEFAULT_SETTINGS.systemPrompt;
     }
     const normalizedSystemPrompt = clampSystemPromptLines(rawSystemPrompt);
     if (normalizedSystemPrompt.trimmed) {
@@ -5465,7 +5426,7 @@ function initChatSessionSystem() {
     persistChatSessions();
 
     if (state.messages.length === 0) {
-        addMessage("assistant", t("chat.waiting_for_model", {}, "모델 로드 대기중입니다. 모델을 조회하거나 OPFS 세션을 로드하세요."));
+        // addMessage("assistant", t("chat.waiting_for_model", {}, "모델 로드 대기중입니다. 모델을 조회하거나 OPFS 세션을 로드하세요."));
     }
 }
 
@@ -5791,8 +5752,8 @@ function openSettings() {
     if (focusTarget) {
         focusTarget.focus();
     }
-    refreshOpfsExplorer({ silent: true }).catch(() => {});
-    refreshModelSessionList({ silent: true }).catch(() => {});
+    refreshOpfsExplorer({ silent: true }).catch(() => { });
+    refreshModelSessionList({ silent: true }).catch(() => { });
 }
 
 function requestCloseSettings() {
@@ -5956,7 +5917,7 @@ async function handleModelLookup(rawInput, options = {}) {
         prepareDownloadForModel(metadataWithReadme, selectedModel);
         renderModelCardWindow(metadataWithReadme, selectedModel);
         setSelectedModelLoadState("loaded", selectedModel, "");
-        openModelCardWindow();
+        // openModelCardWindow(); // User requested to disable auto-open
 
         showToast(`모델 선택 완료: ${selectedModel}`, "success", 2500);
 
@@ -7279,9 +7240,8 @@ function renderDownloadPanel() {
 
     if (els.downloadProgressBar) {
         els.downloadProgressBar.style.width = `${percent}%`;
-        els.downloadProgressBar.className = `h-full transition-[width] duration-200 ${
-            isComplete ? "bg-emerald-400" : (isFailure ? "bg-rose-400" : "bg-cyan-400")
-        }`;
+        els.downloadProgressBar.className = `h-full transition-[width] duration-200 ${isComplete ? "bg-emerald-400" : (isFailure ? "bg-rose-400" : "bg-cyan-400")
+            }`;
     }
 
     if (els.downloadPercentText) {
@@ -9377,7 +9337,7 @@ function renderModelSessionList() {
     if (!state.opfs.supported) {
         els.sessionTableBody.innerHTML = `
         <tr>
-            <td colspan="8" class="py-4 text-slate-400">현재 브라우저에서는 OPFS를 지원하지 않습니다.</td>
+            <td colspan="9" class="py-4 text-slate-400">현재 브라우저에서는 OPFS를 지원하지 않습니다.</td>
         </tr>`;
         return;
     }
@@ -9385,7 +9345,7 @@ function renderModelSessionList() {
     if (state.opfs.files.length === 0) {
         els.sessionTableBody.innerHTML = `
         <tr>
-            <td colspan="8" class="py-4 text-slate-400">OPFS /models 에 저장된 ONNX 파일이 없습니다.</td>
+            <td colspan="9" class="py-4 text-slate-400">OPFS /models 에 저장된 ONNX 파일이 없습니다.</td>
         </tr>`;
         return;
     }
@@ -9403,6 +9363,8 @@ function renderModelSessionList() {
         const modelPageUrl = normalizedModelId
             ? `${HF_BASE_URL}/${normalizedModelId.split("/").map((part) => encodeURIComponent(part)).join("/")}`
             : "";
+        const quantInfo = resolveQuantizationInfoFromFileName(fileName);
+        const quantLabel = quantInfo?.label ?? "-";
         const revision = manifestEntry?.revision ?? "main";
         const downloadStatus = manifestEntry?.downloadStatus ?? "downloaded";
         const canUpdate = !!(manifestEntry?.fileUrl || isValidModelId(modelId));
@@ -9419,10 +9381,11 @@ function renderModelSessionList() {
                 <div class="inline-flex items-center gap-1 max-w-[240px]">
                     <span class="truncate" title="${escapeHtml(modelId)}">${escapeHtml(modelId)}</span>
                     ${modelPageUrl
-                        ? `<a href="${escapeHtml(modelPageUrl)}" target="_blank" rel="noopener noreferrer" class="text-cyan-200 hover:text-cyan-100" aria-label="${escapeHtml(`${modelId} Hugging Face 열기`)}" title="Hugging Face에서 열기">🔗</a>`
-                        : ""}
+                ? `<a href="${escapeHtml(modelPageUrl)}" target="_blank" rel="noopener noreferrer" class="text-cyan-200 hover:text-cyan-100" aria-label="${escapeHtml(`${modelId} Hugging Face 열기`)}" title="Hugging Face에서 열기">🔗</a>`
+                : ""}
                 </div>
             </td>
+            <td class="py-2 px-2 text-slate-300 align-top">${escapeHtml(quantLabel)}</td>
             <td class="py-2 px-2 text-slate-300 align-top">${escapeHtml(revision)}</td>
             <td class="py-2 px-2 text-slate-300 align-top">${formatBytes(item.sizeBytes)}</td>
             <td class="py-2 px-2 text-slate-300 align-top">${formatModelDate(item.lastModified)}</td>
@@ -10624,6 +10587,79 @@ async function disposeTransformersPipeline(pipeline) {
     }
 }
 
+class TransformersWorkerManager {
+    constructor() {
+        this.worker = null;
+        this.pending = new Map();
+        this.nextId = 1;
+        this.listeners = new Map();
+    }
+
+    getWorker() {
+        if (!this.worker) {
+            this.worker = new Worker("./worker.js", { type: "module" });
+            this.worker.onmessage = (e) => {
+                const { type, id, key, error, output, token } = e.data;
+                if (type === 'error') {
+                    const reject = this.pending.get(id)?.reject;
+                    if (reject) {
+                        const err = new Error(error.message);
+                        err.stack = error.stack;
+                        reject(err);
+                    }
+                    this.pending.delete(id);
+                } else if (type === 'init_done') {
+                    const resolve = this.pending.get(id)?.resolve;
+                    if (resolve) resolve({ key });
+                    this.pending.delete(id);
+                } else if (type === 'generate_done') {
+                    const resolve = this.pending.get(id)?.resolve;
+                    if (resolve) resolve(output);
+                    this.pending.delete(id);
+                    this.listeners.delete(id);
+                } else if (type === 'token') {
+                    const listener = this.listeners.get(id);
+                    if (listener) listener(token);
+                } else if (type === 'dispose_done') {
+                    const resolve = this.pending.get(id)?.resolve;
+                    if (resolve) resolve();
+                    this.pending.delete(id);
+                }
+            };
+            this.worker.onerror = (e) => {
+                console.error("[Worker] Error:", e);
+            };
+        }
+        return this.worker;
+    }
+
+    request(type, data, onToken = null) {
+        return new Promise((resolve, reject) => {
+            const worker = this.getWorker();
+            const id = this.nextId++;
+            this.pending.set(id, { resolve, reject });
+            if (onToken) {
+                this.listeners.set(id, onToken);
+            }
+            worker.postMessage({ type, id, data });
+        });
+    }
+
+    async init(task, modelId, options, key) {
+        return this.request('init', { task, modelId, options, key });
+    }
+
+    async generate(key, prompt, options, onToken) {
+        return this.request('generate', { key, prompt, options }, onToken);
+    }
+
+    async dispose(key) {
+        return this.request('dispose', { key });
+    }
+}
+
+const transformersWorker = new TransformersWorkerManager();
+
 async function releaseTransformersPipeline(key, options = {}) {
     if (!key) return;
     const entry = transformersStore.pipelines.get(key);
@@ -10641,7 +10677,7 @@ async function releaseTransformersPipeline(key, options = {}) {
 
     transformersStore.pipelines.delete(key);
     try {
-        await disposeTransformersPipeline(entry.pipeline);
+        await transformersWorker.dispose(key);
     } catch (_) {
         // ignore dispose failure
     }
@@ -10678,7 +10714,7 @@ async function getOrCreateTransformersPipeline(task, modelId, options = {}) {
     const requestedDevice = String(options.device ?? "").trim().toLowerCase();
     const runtimeCapabilities = getRuntimeCapabilities();
     const fallbackDeviceChain = resolveInferenceBackendChain(requestedDevice ?? "webgpu", runtimeCapabilities);
-    const resolvedDevice = ["webgpu", "webgl", "wasm"].includes(requestedDevice)
+    const resolvedDevice = ["webgpu", "wasm"].includes(requestedDevice)
         ? requestedDevice
         : (fallbackDeviceChain[0] ?? "wasm");
     const requestedDtype = String(options.dtype ?? "").trim().toLowerCase();
@@ -10699,7 +10735,7 @@ async function getOrCreateTransformersPipeline(task, modelId, options = {}) {
         resolvedDtype,
     );
     const existing = transformersStore.pipelines.get(key);
-    if (existing?.pipeline) {
+    if (existing) {
         if (!Number.isFinite(Number(existing.refCount))) {
             existing.refCount = 0;
         }
@@ -10707,11 +10743,9 @@ async function getOrCreateTransformersPipeline(task, modelId, options = {}) {
             existing.refCount += 1;
         }
         existing.lastUsed = Date.now();
-        return { key, pipeline: existing.pipeline };
+        return { key, pipeline: null, device: resolvedDevice, dtype: resolvedDtype };
     }
 
-    const mod = await ensureTransformersModule();
-    const pipelineFactory = getPipelineFactory(mod);
     const pipelineOptions = {
         device: resolvedDevice,
     };
@@ -10727,16 +10761,18 @@ async function getOrCreateTransformersPipeline(task, modelId, options = {}) {
             ? { [`${modelFileName}.onnx`]: externalDataChunkCount }
             : externalDataChunkCount;
     }
-    const pipeline = await pipelineFactory(normalizedTask, normalizedModel, pipelineOptions);
+    
+    await transformersWorker.init(normalizedTask, normalizedModel, pipelineOptions, key);
+    
     transformersStore.pipelines.set(key, {
-        pipeline,
+        pipeline: null,
         lastUsed: Date.now(),
         refCount: shouldRetain ? 1 : 0,
         device: resolvedDevice,
         dtype: resolvedDtype,
     });
     await pruneTransformersPipelineCache();
-    return { key, pipeline, device: resolvedDevice, dtype: resolvedDtype };
+    return { key, pipeline: null, device: resolvedDevice, dtype: resolvedDtype };
 }
 
 function extractTextFromTransformersOutput(output, task) {
@@ -10927,7 +10963,7 @@ async function createTransformersSession({
         dtype: String(dtype ?? resolvedDtype ?? "auto").trim().toLowerCase() ?? "auto",
         externalDataChunkCount: normalizedExternalDataChunkCount,
         pipelineKey: key,
-        pipeline,
+        pipeline: null,
         async generateText(promptOrMessages, options = {}) {
             const chatMessages = normalizeTransformersChatMessages(promptOrMessages);
             const hasChatMessages = chatMessages.length > 0;
@@ -10949,7 +10985,6 @@ async function createTransformersSession({
             const maxLength = clampGenerationMaxLength(
                 options.maxLength ?? options.max_length ?? LOCAL_GENERATION_DEFAULT_SETTINGS.maxLength,
             );
-            let streamedText = "";
             const generationOptions = {
                 max_new_tokens: maxNewTokens,
                 max_length: Math.max(maxLength, maxNewTokens),
@@ -10963,50 +10998,14 @@ async function createTransformersSession({
                 generationOptions.return_full_text = false;
             }
 
-            if (onToken && pipeline?.tokenizer && typeof pipeline.tokenizer.decode === "function") {
-                generationOptions.callback_function = (beamPayload) => {
-                    try {
-                        const tokenIds = extractTokenIdsFromGenerationBeamPayload(beamPayload);
-                        if (!Array.isArray(tokenIds) || tokenIds.length === 0) return;
-
-                        let decoded = String(
-                            pipeline.tokenizer.decode(tokenIds, { skip_special_tokens: true }) ?? "",
-                        );
-                        if (!decoded) return;
-                        if (!hasChatMessages && decoded.startsWith(text)) {
-                            decoded = decoded.slice(text.length);
-                        }
-
-                        const delta = decoded.startsWith(streamedText)
-                            ? decoded.slice(streamedText.length)
-                            : decoded;
-                        if (!delta) return;
-
-                        streamedText = decoded;
-                        onToken(delta, {
-                            totalTokens: tokenIds.length,
-                            source: "pipeline_callback",
-                        });
-                    } catch (_) {
-                        // ignore streaming callback decode errors
-                    }
-                };
-            }
-
-            const output = await pipeline(inputPayload, generationOptions);
-            const extracted = extractTextFromTransformersOutput(output, resolvedTask);
-            if (onToken) {
-                const finalDelta = extracted.startsWith(streamedText)
-                    ? extracted.slice(streamedText.length)
-                    : (streamedText ? "" : extracted);
-                if (finalDelta) {
-                    onToken(finalDelta, {
-                        tokenIncrement: Math.max(1, countApproxTokens(finalDelta)),
-                        source: "pipeline_final_text",
-                    });
+            const workerOnToken = (delta) => {
+                if (onToken) {
+                    onToken(delta, { tokenIncrement: 1 });
                 }
-            }
-            return extracted;
+            };
+
+            const output = await transformersWorker.generate(key, inputPayload, generationOptions, workerOnToken);
+            return extractTextFromTransformersOutput(output, resolvedTask);
         },
         async release() {
             if (released) return;
@@ -11265,54 +11264,42 @@ async function onConfirmDeleteModel() {
     state.deleteDialog.isDeleting = true;
     if (els.deleteDialogConfirmBtn) {
         els.deleteDialogConfirmBtn.disabled = true;
-        els.deleteDialogConfirmBtn.innerHTML = '<i data-lucide="loader-circle" class="w-3 h-3 animate-spin"></i> 삭제 중...';
+        els.deleteDialogConfirmBtn.innerHTML = `<i data-lucide="loader-circle" class="w-3 h-3 animate-spin"></i> ${t("delete.deleting")}`;
         lucide.createIcons();
     }
 
     try {
         if (mode === "model") {
-            const manifest = getOpfsManifest();
-            const segments = splitOpfsModelRelativePathSegments(fileName);
-            const bundlePath = segments.slice(0, -1).join("/");
-            const affectedModelFiles = bundlePath
-                ? Object.keys(manifest).filter((key) => key === fileName || key.startsWith(`${bundlePath}/`))
-                : [fileName];
-            if (bundlePath) {
-                const scannedModelFiles = (Array.isArray(state.opfs.files) ? state.opfs.files : [])
-                    .map((item) => normalizeOnnxFileName(item?.fileName ?? ""))
-                    .filter((name) => !!name && (name === fileName || name.startsWith(`${bundlePath}/`)));
-                for (const scannedName of scannedModelFiles) {
-                    if (!affectedModelFiles.includes(scannedName)) {
-                        affectedModelFiles.push(scannedName);
-                    }
-                }
-            }
-            if (!affectedModelFiles.includes(fileName)) {
-                affectedModelFiles.push(fileName);
-            }
+            const affectedModelFiles = [fileName];
 
             for (const affectedFileName of affectedModelFiles) {
+                const rowState = getSessionRowState(affectedFileName);
+                if (rowState === "loading") {
+                    showToast(t("model.loading_warning", { model: affectedFileName }), "warning", 3500);
+                    state.deleteDialog.isDeleting = false;
+                    if (els.deleteDialogConfirmBtn) {
+                        els.deleteDialogConfirmBtn.disabled = false;
+                        els.deleteDialogConfirmBtn.innerHTML = '<i data-lucide="trash-2" class="w-3 h-3"></i> 삭제';
+                        lucide.createIcons();
+                    }
+                    closeDeleteDialog();
+                    return;
+                }
+
                 if (state.activeSessionFile === affectedFileName || sessionStore.sessions.has(affectedFileName)) {
                     await unloadCachedSession(affectedFileName, { silent: true, skipRender: true });
                 }
                 delete state.sessionRows[affectedFileName];
             }
 
-            if (bundlePath) {
-                await removeOpfsModelsEntryByRelativePath(bundlePath, {
-                    recursive: true,
-                    asDirectory: true,
-                });
-                removeOpfsManifestEntriesByPrefix(bundlePath);
-            } else {
-                await removeOpfsModelsEntryByRelativePath(fileName, { recursive: false, asDirectory: false });
-                removeOpfsManifestEntry(fileName);
-            }
+            await removeOpfsModelsEntryByRelativePath(fileName, { recursive: false, asDirectory: false });
+            removeOpfsManifestEntry(fileName);
+            
             renderModelStatusHeader();
         } else {
             const { parentSegments, name } = splitParentAndName(targetPath);
             if (!name) {
-                throw new Error("삭제 대상 경로가 올바르지 않습니다.");
+                throw new Error(t("delete.invalid_path"));
             }
 
             const parentHandle = await resolveDirectoryHandleBySegments(parentSegments, { create: false });
@@ -11340,6 +11327,10 @@ async function onConfirmDeleteModel() {
                     }
                 }
                 for (const affectedFileName of affectedModelFiles) {
+                    const rowState = getSessionRowState(affectedFileName);
+                    if (rowState === "loading") {
+                        showToast(t("model.loading_warning", { model: affectedFileName }), "warning", 3500);
+                    }
                     if (state.activeSessionFile === affectedFileName || sessionStore.sessions.has(affectedFileName)) {
                         await unloadCachedSession(affectedFileName, { silent: true, skipRender: true });
                     }
@@ -11347,7 +11338,11 @@ async function onConfirmDeleteModel() {
                 }
             }
             if (modelFileName) {
-                if (state.activeSessionFile === modelFileName) {
+                const rowState = getSessionRowState(modelFileName);
+                if (rowState === "loading") {
+                    showToast(t("model.loading_warning", { model: modelFileName }), "warning", 3500);
+                }
+                if (state.activeSessionFile === modelFileName || sessionStore.sessions.has(modelFileName)) {
                     await unloadCachedSession(modelFileName, { silent: true, skipRender: true });
                 }
                 delete state.sessionRows[modelFileName];
@@ -11366,9 +11361,9 @@ async function onConfirmDeleteModel() {
         await refreshOpfsExplorer({ silent: true });
         closeDeleteDialog(true);
         if (mode === "model") {
-            showToast(`삭제 완료: ${fileName}`, "success", 2600);
+            showToast(t("delete.done", { target: fileName }), "success", 2600);
         } else {
-            showToast(`삭제 완료: ${targetPath}`, "success", 2600);
+            showToast(t("delete.done", { target: targetPath }), "success", 2600);
         }
     } catch (error) {
         if (error instanceof DOMException) {
@@ -11380,7 +11375,7 @@ async function onConfirmDeleteModel() {
             });
             openErrorDialog("삭제할 수 없습니다. 페이지 새로고침 후 다시 시도하세요.");
         } else {
-            showToast(`삭제 실패: ${getErrorMessage(error)}`, "error", 3200);
+            showToast(t("delete.failed", { message: getErrorMessage(error) }), "error", 3200);
         }
     } finally {
         state.deleteDialog.isDeleting = false;
@@ -11516,8 +11511,28 @@ function renderTokenSpeedStats() {
         max: max === null ? "-" : max.toFixed(2),
         min: min === null ? "-" : min.toFixed(2),
     });
-    els.tokenSpeedStats.textContent = text;
+    if (els.tokenSpeedStats) {
+        els.tokenSpeedStats.textContent = text;
+        
+        // 메모리 사용량 표시 업데이트
+        if (els.memoryUsageText) {
+            let memoryText = "Mem: -";
+            if (performance && performance.memory) {
+                const usedMB = performance.memory.usedJSHeapSize / (1024 * 1024);
+                memoryText = `Mem: ${usedMB.toFixed(1)} MB`;
+            }
+            els.memoryUsageText.textContent = memoryText;
+        }
+    }
 }
+
+// 메모리 사용량 주기적 업데이트 (1초마다)
+setInterval(() => {
+    if (els.memoryUsageText && performance && performance.memory) {
+        const usedMB = performance.memory.usedJSHeapSize / (1024 * 1024);
+        els.memoryUsageText.textContent = `Mem: ${usedMB.toFixed(1)} MB`;
+    }
+}, 1000);
 
 function updateTokenSpeedStats(value) {
     const metric = Number(value);
@@ -11550,8 +11565,8 @@ function createAssistantStreamRenderer() {
     if (!message || !message.content) {
         return {
             message,
-            pushChunk: () => {},
-            reset: () => {},
+            pushChunk: () => { },
+            reset: () => { },
             finalize: (finalText = "") => {
                 updateMessageEntryById(message?.id ?? 0, { text: String(finalText ?? "") });
                 persistActiveSessionMessages();
@@ -11573,7 +11588,8 @@ function createAssistantStreamRenderer() {
     const getNow = () => performance.now();
     const getTps = () => {
         if (!startedAt || totalTokens <= 0) return 0;
-        const elapsedSec = Math.max((getNow() - startedAt) / 1000, 0.001);
+        const now = getNow();
+        const elapsedSec = Math.max((now - startedAt) / 1000, 0.001);
         return totalTokens / elapsedSec;
     };
     const cancelScheduledFlush = () => {

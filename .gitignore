@@ -16,4 +16,8 @@
 !/drive-backup-crypto.js
 !/drive-backup-utils.js
 !/sw.js
-node_modules
+!/favicon.svg
+!/worker.js
+!/*.md
+!/LICENSE
+!/docs/*.md
