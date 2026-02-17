@@ -5,11 +5,11 @@
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
 ![Transformers.js](https://img.shields.io/badge/Transformers.js-v3.8.1-yellow)
 ![WebGPU](https://img.shields.io/badge/WebGPU-Supported-green)
-![PWA](https://img.shields.io/badge/PWA-Enabled-blue)
+![PWA](https://img.shields.io/badge/PWA-Planned-blue)
 
 **LucidLLM** 是一个完全在浏览器内运行的本地大型语言模型（LLM）聊天应用程序。它使用 [Transformers.js](https://huggingface.co/docs/transformers.js) 和 WebGPU 技术，无需将任何数据发送到外部服务器，即可在浏览器内安全地运行 AI 模型。
 
-> **主要特点：** 17,600+ 行代码 • 4 种语言 • WebGPU/WASM 推理 • AES-256 加密备份 • OPFS 模型缓存 • 多会话聊天
+> **主要特点：** 18,200+ 行代码 • 4 种语言 • WebGPU/WASM 推理 • 令牌流式传输 • 自定义虚拟 DOM • AES-256 加密备份 • OPFS 模型缓存
 
 ## ✨ 主要功能
 
@@ -57,7 +57,7 @@
 | **4 种语言支持** | 韩语、英语、日语、简体中文，自动语言检测 |
 | **3 种主题选项** | 深色、浅色、OLED 黑色（适用于 OLED 显示屏的纯黑） |
 | **响应式设计** | 移动优先，完全支持智能手机/平板电脑 |
-| **PWA 支持** | 基于 Service Worker 的离线功能 |
+| **PWA 支持** | 渐进式 Web 应用功能（计划中） |
 | **侧边栏导航** | 带聊天和工作区面板的可折叠侧边栏 |
 | **键盘快捷键** | Ctrl+Shift+N（新建聊天）、Ctrl+Shift+E（导出）、Ctrl+B（切换侧边栏） |
 
@@ -69,7 +69,7 @@
 |------|------|
 | **最低浏览器** | Chrome 113+ / Edge 113+（支持 WebGPU） |
 | **回退支持** | 任何支持 WASM 的浏览器 |
-| **安全上下文** | 需要 HTTPS 或 localhost（OPFS、Service Worker） |
+| **安全上下文** | 需要 HTTPS 或 localhost（OPFS） |
 | **JavaScript** | ES2020+ 模块支持 |
 
 ### 硬件要求
@@ -201,7 +201,7 @@ LucidLLM/
 └── tests/                      # 测试套件 (Vitest)
 ```
 
-**总计：~17,600+ 行代码**
+**总计：~18,200+ 行代码**
 
 ## 🛠️ 技术栈
 
@@ -215,7 +215,7 @@ LucidLLM/
 | **样式** | Tailwind CSS v3 (CDN) + 自定义 CSS 变量 |
 | **图标** | Lucide Icons (CDN) |
 | **字体** | Space Grotesk (Google Fonts) |
-| **离线** | Service Worker（仅网络策略） |
+| **离线** | 计划中（Service Worker） |
 | **备份认证** | Google Identity Services (OAuth 2.0) |
 | **加密** | Web Crypto API (PBKDF2、AES-GCM-256) |
 | **压缩** | CompressionStream API (Gzip) |
@@ -249,7 +249,7 @@ LucidLLM/
 
 - **ES Modules** — 所有应用代码使用 ES Module 语法。
 - **集中状态管理** — 全局状态在 `main.js` 的单一 `state` 对象中管理。
-- **直接 DOM 操作** — 使用原生 DOM API，无框架或虚拟 DOM。
+- **原生架构** — Vanilla JS 核心，配备用于高性能动态 UI 渲染的自定义虚拟 DOM (vdom.js)。
 - **国际化 (i18n)** — 200+ 翻译键，带层次回退。
 - **可访问性** — 遵循 ARIA 属性、键盘导航、焦点管理。
 - **响应式设计** — 使用媒体查询和 Tailwind CSS 的移动优先方法。
@@ -323,7 +323,7 @@ npm test
 
 ### 进行中
 
-- [ ] 逐令牌输出的流式响应
+- [x] 逐令牌输出的流式响应
 - [ ] 带代码语法高亮的 Markdown 渲染
 - [ ] 消息编辑和重新生成
 
@@ -412,7 +412,7 @@ npm test
 
 - [路线图](docs/roadmap.md) - 功能路线图和计划的改进
 - [兼容性](docs/compatibility.md) - 模型兼容性信息
-- [LICENSE](LICENSE) - ISC 许可证
+- [LICENSE](LICENSE) - MIT 许可证
 
 ## 🌐 国际化 (i18n)
 
@@ -442,32 +442,35 @@ const DE_SPECIFIC = {
 
 ## 🏆 值得注意的技术成就
 
-### 1. 零构建架构
+### 1. 高性能虚拟 DOM (Virtual DOM)
+为了高效处理复杂的 UI 更新（如模型表格、聊天列表等），应用使用了轻量级的自定义虚拟 DOM (`vdom.js`)。这在无需外部依赖的情况下实现了高性能渲染。
+
+### 2. 零构建架构
 整个应用无需任何构建过程即可直接从静态文件运行。所有依赖项均从 CDN 加载。
 
-### 2. OPFS Fetch 拦截器
-自定义 fetch 拦截器透明地从 OPFS 提供缓存的模型文件，使远程 Hugging Face 请求看起来像本地文件读取。
+### 3. OPFS Fetch 拦截器
+自定义 fetch 拦截器透明地从 OPFS 提供缓存的模型文件，使远程 Hugging Face 请求看起来像本地 file 读取。
 
-### 3. 层次化 i18n 系统
+### 4. 层次化 i18n 系统
 - 200+ 翻译键，带 `I18N_KEYS` 常量
 - 层次回退：当前语言 → 英语 → 韩语
 - 带缓存的延迟加载字典
 - 通过 `data-i18n` 属性自动翻译 DOM
 
-### 4. 客户端加密
+### 5. 客户端加密
 使用 Web Crypto API 进行完整的备份加密：
 - PBKDF2 密钥派生（250,000 轮迭代）
 - AES-GCM-256 加密
 - 支持 Gzip 压缩
 
-### 5. 流式令牌生成
+### 6. 流式令牌生成
 实时令牌流式传输：
 - 束搜索回调解析
 - 用于增量显示的增量计算
 - 令牌速度统计（平均/最大/最小）
 - 节流渲染（最高 60 FPS）
 
-### 6. 下载管理器
+### 7. 下载管理器
 强大的下载系统：
 - 支持暂停/恢复
 - 指数退避重试（3 次重试，800ms 基础）
@@ -476,7 +479,7 @@ const DE_SPECIFIC = {
 
 ## 📄 许可证
 
-本项目根据 **ISC 许可证** 授权 - 详见 [LICENSE](LICENSE) 文件。
+本项目根据 **MIT 许可证** 授权 - 详见 [LICENSE](LICENSE) 文件。
 
 ## 🙏 致谢
 

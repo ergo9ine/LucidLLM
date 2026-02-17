@@ -5,11 +5,11 @@
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
 ![Transformers.js](https://img.shields.io/badge/Transformers.js-v3.8.1-yellow)
 ![WebGPU](https://img.shields.io/badge/WebGPU-Supported-green)
-![PWA](https://img.shields.io/badge/PWA-Enabled-blue)
+![PWA](https://img.shields.io/badge/PWA-Planned-blue)
 
 **LucidLLM** is a browser-based local Large Language Model (LLM) chat application that runs AI models entirely within your browser using [Transformers.js](https://huggingface.co/docs/transformers.js) and WebGPU technology. With zero-build architecture and complete privacy, it delivers powerful AI capabilities without sending any data to external servers.
 
-> **Key Highlights:** 17,600+ lines of code • 4 languages • WebGPU/WASM inference • AES-256 encrypted backups • OPFS model caching • Multi-session chat
+> **Key Highlights:** 18,200+ lines of code • 4 languages • WebGPU/WASM inference • Token Streaming • Custom Virtual DOM • AES-256 encrypted backups • OPFS model caching
 
 ## ✨ Key Features
 
@@ -57,7 +57,7 @@
 | **4-Language Support** | Korean, English, Japanese, Simplified Chinese with auto-detection |
 | **3 Theme Options** | Dark, Light, OLED Black (pure black for OLED displays) |
 | **Responsive Design** | Mobile-first with full smartphone/tablet support |
-| **PWA Support** | Service Worker-based offline capability |
+| **PWA Support** | Progressive Web App features (Planned) |
 | **Sidebar Navigation** | Collapsible sidebar with chat and workspace panels |
 | **Keyboard Shortcuts** | Ctrl+Shift+N (new chat), Ctrl+Shift+E (export), Ctrl+B (toggle sidebar) |
 
@@ -69,7 +69,7 @@
 |-------------|---------|
 | **Minimum Browser** | Chrome 113+ / Edge 113+ (for WebGPU) |
 | **Fallback Support** | Any browser with WASM support |
-| **Security Context** | HTTPS or localhost required (OPFS, Service Worker) |
+| **Security Context** | HTTPS or localhost required (OPFS) |
 | **JavaScript** | ES2020+ with Module support |
 
 ### Hardware Requirements
@@ -201,7 +201,7 @@ LucidLLM/
 └── tests/                      # Test suite (Vitest)
 ```
 
-**Total: ~17,600+ lines of code**
+**Total: ~18,200+ lines of code**
 
 ## 🛠️ Tech Stack
 
@@ -215,7 +215,7 @@ LucidLLM/
 | **Styling** | Tailwind CSS v3 (CDN) + Custom CSS Variables |
 | **Icons** | Lucide Icons (CDN) |
 | **Fonts** | Space Grotesk (Google Fonts) |
-| **Offline** | Service Worker (Network-only strategy) |
+| **Offline** | Planned (Service Worker) |
 | **Backup Auth** | Google Identity Services (OAuth 2.0) |
 | **Encryption** | Web Crypto API (PBKDF2, AES-GCM-256) |
 | **Compression** | CompressionStream API (Gzip) |
@@ -249,7 +249,7 @@ LucidLLM/
 
 - **ES Modules** — All application code uses ES Module syntax.
 - **Centralized State Management** — Global state managed in single `state` object.
-- **Direct DOM Manipulation** — Native DOM APIs without frameworks or virtual DOM.
+- **Native Architecture** — Vanilla JS core with a custom Virtual DOM implementation for high-performance dynamic UI rendering.
 - **Internationalization (i18n)** — 200+ translation keys with hierarchical fallback.
 - **Accessibility** — ARIA attributes, keyboard navigation, focus management.
 - **Responsive Design** — Mobile-first with media queries and Tailwind CSS.
@@ -326,7 +326,7 @@ npm test
 
 ### In Progress
 
-- [ ] Streaming responses with token-by-token output
+- [x] Streaming responses with token-by-token output
 - [ ] Markdown rendering with code syntax highlighting
 - [ ] Message editing and regeneration
 
@@ -415,7 +415,7 @@ See [docs/compatibility.md](docs/compatibility.md) for known compatible models.
 
 - [Roadmap](docs/roadmap.md) - Feature roadmap and planned improvements
 - [Compatibility](docs/compatibility.md) - Model compatibility information
-- [LICENSE](LICENSE) - ISC License
+- [LICENSE](LICENSE) - MIT License
 
 ## 🌐 Internationalization (i18n)
 
@@ -445,32 +445,35 @@ const DE_SPECIFIC = {
 
 ## 🏆 Notable Technical Achievements
 
-### 1. Zero-Build Architecture
+### 1. High-Performance Virtual DOM
+The application uses a custom, lightweight Virtual DOM implementation (`vdom.js`) to handle complex UI updates (like model tables and chat lists) with minimal overhead while maintaining zero-dependency simplicity.
+
+### 2. Zero-Build Architecture
 The entire application runs directly from static files without any build process. All dependencies are loaded from CDN.
 
-### 2. OPFS Fetch Interceptor
+### 3. OPFS Fetch Interceptor
 Custom fetch interceptor transparently serves cached model files from OPFS, making remote Hugging Face requests appear as local file reads.
 
-### 3. Hierarchical i18n System
+### 4. Hierarchical i18n System
 - 200+ translation keys with `I18N_KEYS` constants
 - Hierarchical fallback: Current → English → Korean
 - Lazy-loaded dictionaries with caching
 - Automatic DOM translation via `data-i18n` attributes
 
-### 4. Client-Side Encryption
+### 5. Client-Side Encryption
 Complete backup encryption using Web Crypto API:
 - PBKDF2 key derivation (250,000 iterations)
 - AES-GCM-256 encryption
 - Gzip compression support
 
-### 5. Streaming Token Generation
+### 6. Streaming Token Generation
 Real-time token streaming with:
 - Beam search callback parsing
 - Delta computation for incremental display
 - Token speed statistics (avg/max/min)
 - Throttled rendering (60 FPS max)
 
-### 6. Download Manager
+### 7. Download Manager
 Robust download system with:
 - Pause/resume support
 - Exponential backoff retry (3 retries, 800ms base)
@@ -479,7 +482,7 @@ Robust download system with:
 
 ## 📄 License
 
-This project is licensed under the **ISC License** - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
