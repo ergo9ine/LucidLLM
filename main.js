@@ -1,29 +1,30 @@
-import { publishLucidApi, publishLucidValue } from "./global-api.js";
 import {
     calculateExponentialBackoffDelay,
-    calculatePerformanceDropPercent,
+    computeStreamDrainCount,
+    computeTokensPerSecond,
     countApproxTokens,
     delay,
     escapeHtml,
+    extractTokenIdsFromBeamPayload,
     formatBytes,
     formatEta,
     formatSpeed,
     getErrorMessage,
     isHttpsUrl,
     normalizePromptText,
+    publishLucidApi,
+    publishLucidValue,
     readFileAsDataUrl,
     resolveInferenceBackendChain,
 } from "./shared-utils.js";
 import {
     buildBackupSignature,
+    createBackupUploadText,
     escapeDriveQueryLiteral,
     estimateBackupPayloadBytes,
     formatBackupFileName,
-} from "./drive-backup-utils.js";
-import {
-    createBackupUploadText,
     parseBackupPayloadFromText,
-} from "./drive-backup-crypto.js";
+} from "./drive-backup.js";
 import {
     getInjectedTransformersModule,
     setInjectedTransformersModule,
@@ -31,6 +32,7 @@ import {
 import {
     SUPPORTED_LANGUAGES,
     I18N_MESSAGES,
+    I18N_KEYS,
     t,
     normalizeLanguage,
     matchSupportedLanguage,
@@ -95,7 +97,6 @@ const DRIVE_RETRY_BASE_DELAY_MS = 900;
 const DRIVE_MAX_RETRIES = 3;
 const DRIVE_AUTO_BACKUP_DEBOUNCE_MS = 25000;
 const DRIVE_FILE_LIST_POLL_MS = 45000;
-const AUTO_LOAD_LAST_SESSION_DEFAULT = true;
 const STORAGE_KEYS = {
     token: "lucid_hf_token",
     systemPrompt: "lucid_system_prompt",
@@ -106,8 +107,6 @@ const STORAGE_KEYS = {
     generationPresencePenalty: "lucid_generation_presence_penalty",
     generationMaxLength: "lucid_generation_max_length",
     inferenceDevice: "lucid_inference_device",
-    chatInferenceEnabled: "lucid_chat_inference_enabled",
-    autoLoadLastSession: "lucid_auto_load_last_session",
     opfsModelManifest: "lucid_opfs_model_manifest",
     lastLoadedSessionFile: "lucid_last_loaded_session_file",
     chatSessions: "lucid_chat_sessions_v1",
@@ -254,7 +253,7 @@ const state = {
         closeTimer: null,
         previousFocus: null,
         pendingResetUndo: null,
-        autoLoadLastSessionEnabled: AUTO_LOAD_LAST_SESSION_DEFAULT,
+
         generationTemperature: LOCAL_GENERATION_DEFAULT_SETTINGS.temperature,
         generationTopP: LOCAL_GENERATION_DEFAULT_SETTINGS.topP,
         generationPresencePenalty: LOCAL_GENERATION_DEFAULT_SETTINGS.presencePenalty,
@@ -314,100 +313,12 @@ publishLucidApi({
     // runOpfsValidationSuite, // Removed
     // runLocalInferenceProbe, // Removed
     // runSessionUnloadMemoryDiagnostics, // Removed
-    runModelReadinessAudit,
     getLocalGenerationSettings,
     setLocalGenerationSettings,
     getRuntimeCapabilities,
 });
 
-function ensureChatInferenceToggleControl() {
-    const sendBtn = document.getElementById("chat-send-btn");
-    if (!sendBtn) return;
-
-    let actionWrap = document.getElementById("chat-input-actions");
-    if (!actionWrap) {
-        actionWrap = document.createElement("div");
-        actionWrap.id = "chat-input-actions";
-        actionWrap.className = "chat-input-actions inline-flex items-center justify-end gap-2";
-        const parent = sendBtn.parentElement;
-        if (!parent) return;
-        parent.replaceChild(actionWrap, sendBtn);
-        actionWrap.appendChild(sendBtn);
-    }
-
-    if (!document.getElementById("chat-inference-toggle-btn")) {
-        const toggle = document.createElement("button");
-        toggle.type = "button";
-        toggle.id = "chat-inference-toggle-btn";
-        toggle.className = "chat-inference-toggle-btn";
-        toggle.setAttribute("aria-pressed", "true");
-        toggle.setAttribute("aria-label", "추론 켜기");
-        toggle.setAttribute("title", "추론 켜기");
-        toggle.innerHTML = `
-            <span class="chat-inference-icon chat-inference-icon-on" aria-hidden="true">🧠</span>
-            <span class="chat-inference-icon chat-inference-icon-off" aria-hidden="true">⏸</span>
-        `;
-        actionWrap.insertBefore(toggle, actionWrap.firstChild);
-    }
-}
-
-function ensureModelAutoLoadControl() {
-    const modelPanel = document.getElementById("settings-panel-model");
-    if (!modelPanel) return;
-
-    if (!document.getElementById("model-auto-load-card")) {
-        const card = document.createElement("article");
-        card.id = "model-auto-load-card";
-        card.className = "rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-3";
-        card.innerHTML = `
-            <h2 id="model-auto-load-title" class="text-sm font-semibold text-cyan-100">모델 자동 로드</h2>
-            <label class="inline-flex items-center gap-2 text-xs text-slate-200">
-                <input id="auto-load-last-session-toggle" type="checkbox" class="accent-cyan-400" checked>
-                <span id="auto-load-last-session-label">시작 시 마지막 로드 모델 자동 활성화</span>
-            </label>
-            <p id="auto-load-last-session-hint" class="text-[11px] text-slate-400">
-                비활성화하면 앱 시작 시 모델을 자동으로 불러오지 않습니다.
-            </p>
-        `;
-
-        const resetRow = modelPanel.querySelector("div.flex.justify-end");
-        const firstCard = modelPanel.querySelector("article");
-        if (resetRow?.parentElement) {
-            resetRow.parentElement.insertBefore(card, resetRow.nextSibling);
-        } else if (firstCard?.parentElement) {
-            firstCard.parentElement.insertBefore(card, firstCard);
-        } else {
-            modelPanel.appendChild(card);
-        }
-    }
-}
-
-function ensureModelAuditControl() {
-    const modelPanel = document.getElementById("settings-panel-model");
-    if (!modelPanel) return;
-    if (document.getElementById("model-audit-card")) return;
-
-    const card = document.createElement("article");
-    card.id = "model-audit-card";
-    card.className = "rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-3";
-    card.innerHTML = `
-        <div class="flex flex-wrap items-center justify-between gap-2">
-            <h2 class="text-sm font-semibold text-cyan-100">모델 품질 점검</h2>
-            <button id="model-audit-run-btn" type="button" class="inline-flex items-center gap-1 rounded-lg border border-cyan-300/35 hover:bg-cyan-500/15 px-3 py-2 text-xs">
-                <i data-lucide="stethoscope" class="w-3 h-3"></i>
-                <span id="model-audit-run-label">모델 품질 점검 실행</span>
-            </button>
-        </div>
-        <pre id="model-audit-output" class="max-h-52 overflow-auto rounded-lg border border-slate-700/70 bg-slate-950/75 p-3 text-[11px] text-slate-300 whitespace-pre-wrap">아직 실행되지 않았습니다.</pre>
-    `;
-
-    const anchor = document.getElementById("model-auto-load-card");
-    if (anchor?.parentElement) {
-        anchor.parentElement.insertBefore(card, anchor.nextSibling);
-        return;
-    }
-    modelPanel.appendChild(card);
-}
+/* chat inference toggle UI removed */
 
 function ensureLlmGenerationControls() {
     const llmPanel = document.getElementById("settings-panel-llm");
@@ -546,9 +457,6 @@ async function bootstrapApplication() {
     if (hasAppBootstrapped) return;
     hasAppBootstrapped = true;
 
-    ensureChatInferenceToggleControl();
-    ensureModelAutoLoadControl();
-    ensureModelAuditControl();
     ensureLlmGenerationControls();
     ensureDriveBackupControls();
     cacheElements();
@@ -557,8 +465,6 @@ async function bootstrapApplication() {
     installMonitoringApi();
     hydrateUserProfile();
     hydrateInferenceDevicePreference();
-    hydrateChatInferencePreference();
-    hydrateAutoLoadLastSessionPreference();
     applyTheme(getProfileTheme(), { silent: true });
     applyLanguage(getProfileLanguage(), { silent: true });
     bindEvents();
@@ -584,9 +490,7 @@ async function bootstrapApplication() {
     try {
         await initOpfs();
         await refreshModelSessionList({ silent: true });
-        if (state.settings.autoLoadLastSessionEnabled) {
-            await autoLoadLastSessionOnStartup();
-        }
+    
         await refreshOpfsExplorer({ silent: true });
     } catch (error) {
         showToast(`OPFS 초기화 실패: ${getErrorMessage(error)}`, "error", 3200);
@@ -932,7 +836,7 @@ function moveLegacyToolbarIntoSidebar() {
 
     if (els.chatTabAddBtn) {
         els.chatTabAddBtn.className = "app-sidebar-action-btn";
-        els.chatTabAddBtn.innerHTML = `<i data-lucide="square-pen" class="w-4 h-4"></i><span>${escapeHtml(t("sidebar.action.new_chat", {}, "새 대화"))}</span>`;
+        els.chatTabAddBtn.innerHTML = `<i data-lucide="square-pen" class="w-4 h-4"></i><span>${escapeHtml(t("common.new_chat", {}, "새 대화"))}</span>`;
         els.sidebarChatActions.appendChild(els.chatTabAddBtn);
     }
 
@@ -988,16 +892,16 @@ function renderSidebarStaticText() {
     };
     updateButtonText("sidebar-delete-chat-btn", "sidebar.action.delete_chat", "대화 삭제");
     updateButtonText("sidebar-export-chat-btn", "sidebar.action.export_chat", "내보내기");
-    updateButtonText("sidebar-open-model-btn", "sidebar.action.open_model", "모델 관리");
+    updateButtonText("sidebar-open-model-btn", "common.model_management", "모델 관리");
     updateButtonText("sidebar-open-settings-btn", "sidebar.action.open_settings", "설정 열기");
     updateButtonText("sidebar-open-theme-btn", "sidebar.action.open_theme", "테마 설정");
     updateButtonText("sidebar-open-language-btn", "sidebar.action.open_language", "언어 설정");
 
     if (els.chatTabAddBtn) {
         const span = els.chatTabAddBtn.querySelector("span");
-        if (span) span.textContent = t("sidebar.action.new_chat", {}, "새 대화");
-        els.chatTabAddBtn.setAttribute("title", t("sidebar.action.new_chat", {}, "새 대화"));
-        els.chatTabAddBtn.setAttribute("aria-label", t("sidebar.action.new_chat", {}, "새 대화"));
+        if (span) span.textContent = t("common.new_chat", {}, "새 대화");
+        els.chatTabAddBtn.setAttribute("title", t("common.new_chat", {}, "새 대화"));
+        els.chatTabAddBtn.setAttribute("aria-label", t("common.new_chat", {}, "새 대화"));
         els.chatTabAddBtn.setAttribute("aria-keyshortcuts", "Control+Shift+N Meta+Shift+N");
     }
 
@@ -1497,6 +1401,7 @@ async function trackedFetch(url, options = {}, context = {}) {
 function cacheElements() {
     els = {
         openSettingsBtn: document.getElementById("open-settings-btn"),
+        chatExportBtn: document.getElementById("chat-export-btn"),
         modelStatusText: document.getElementById("model-status-text"),
         chatTabsScroll: document.getElementById("chat-tabs-scroll"),
         chatTabsList: document.getElementById("chat-tabs-list"),
@@ -1640,14 +1545,6 @@ function cacheElements() {
         chatForm: document.getElementById("chat-form"),
         chatInput: document.getElementById("chat-input"),
         chatSendBtn: document.getElementById("chat-send-btn"),
-        chatInferenceToggleBtn: document.getElementById("chat-inference-toggle-btn"),
-        autoLoadLastSessionToggle: document.getElementById("auto-load-last-session-toggle"),
-        autoLoadLastSessionTitle: document.getElementById("model-auto-load-title"),
-        autoLoadLastSessionLabel: document.getElementById("auto-load-last-session-label"),
-        autoLoadLastSessionHint: document.getElementById("auto-load-last-session-hint"),
-        modelAuditRunBtn: document.getElementById("model-audit-run-btn"),
-        modelAuditRunLabel: document.getElementById("model-audit-run-label"),
-        modelAuditOutput: document.getElementById("model-audit-output"),
         tokenSpeedStats: document.getElementById("token-speed-stats"),
         memoryUsageText: document.getElementById("memory-usage-text"),
         inferenceDeviceSelect: document.getElementById("inference-device-select"),
@@ -1761,39 +1658,7 @@ function handleDriveAutoBackupToggleChange() {
     setDriveAutoBackupEnabled(!!els.driveAutoBackupToggle?.checked);
 }
 
-function handleAutoLoadLastSessionToggleChange() {
-    setAutoLoadLastSessionEnabled(!!els.autoLoadLastSessionToggle?.checked);
-}
-
-async function handleModelAuditRunClick() {
-    if (!els.modelAuditRunBtn || !els.modelAuditOutput) return;
-    if (els.modelAuditRunBtn.disabled) return;
-
-    const expectedModelId = "onnx-community/Qwen3-0.6B-ONNX";
-    els.modelAuditRunBtn.disabled = true;
-    els.modelAuditOutput.textContent = t("model.audit.running", {}, "모델 점검 실행 중...");
-    if (els.modelAuditRunLabel) {
-        els.modelAuditRunLabel.textContent = t("model.audit.running", {}, "모델 점검 실행 중...");
-    }
-    try {
-        const report = await runModelReadinessAudit({ expectedModelId });
-        els.modelAuditOutput.textContent = JSON.stringify(report, null, 2);
-        showToast(t("model.audit.done", {}, "모델 점검 완료"), "success", 2200);
-    } catch (error) {
-        const message = getErrorMessage(error);
-        els.modelAuditOutput.textContent = `ERROR: ${message}`;
-        showToast(
-            t("model.audit.failed", { message }, `모델 점검 실패: ${message}`),
-            "error",
-            3600,
-        );
-    } finally {
-        els.modelAuditRunBtn.disabled = false;
-        if (els.modelAuditRunLabel) {
-            els.modelAuditRunLabel.textContent = t("model.audit.run", {}, "모델 품질 점검 실행");
-        }
-    }
-}
+/* auto-load toggle handler removed */
 
 async function handleDriveBackupNowClick() {
     await backupChatsToGoogleDrive({ manual: true });
@@ -1875,6 +1740,10 @@ function bindEvents() {
         els.openSettingsBtn.addEventListener("click", openSettings);
     }
 
+    if (els.chatExportBtn) {
+        els.chatExportBtn.addEventListener("click", exportActiveChatSessionToFile);
+    }
+
     if (els.chatTabAddBtn) {
         els.chatTabAddBtn.addEventListener("click", handleChatTabAddClick);
     }
@@ -1945,16 +1814,6 @@ function bindEvents() {
         els.inferenceDeviceSelect.addEventListener("change", onInferenceDeviceSelectChange);
     }
 
-    if (els.chatInferenceToggleBtn) {
-        els.chatInferenceToggleBtn.addEventListener("click", onChatInferenceToggleClick);
-    }
-
-    if (els.autoLoadLastSessionToggle) {
-        els.autoLoadLastSessionToggle.addEventListener("change", handleAutoLoadLastSessionToggleChange);
-    }
-    if (els.modelAuditRunBtn) {
-        els.modelAuditRunBtn.addEventListener("click", handleModelAuditRunClick);
-    }
 
     if (els.chatTabsList) {
         els.chatTabsList.addEventListener("click", (event) => {
@@ -2553,33 +2412,6 @@ function bindEvents() {
     }
 
     if (els.chatMessages) {
-        els.chatMessages.addEventListener("click", async (event) => {
-            const copyBtn = event.target.closest("button[data-action='copy-message']");
-            if (!copyBtn) return;
-            const messageId = Number(copyBtn.dataset.messageId ?? 0);
-            if (!Number.isFinite(messageId) || messageId <= 0) return;
-            await copyMessageById(messageId, copyBtn);
-        });
-
-        els.chatMessages.addEventListener("keydown", async (event) => {
-            const hasCopyShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c";
-            if (!hasCopyShortcut) return;
-            const active = document.activeElement;
-            if (!(active instanceof HTMLElement) || !active.classList.contains("message-bubble")) {
-                return;
-            }
-
-            const selection = window.getSelection ? window.getSelection() : null;
-            if (selection && String(selection).trim()) {
-                return;
-            }
-
-            const messageId = Number(active.dataset.messageId ?? 0);
-            if (!Number.isFinite(messageId) || messageId <= 0) return;
-            event.preventDefault();
-            await copyMessageById(messageId);
-        });
-
         // toggle visibility of "scroll to bottom" button and keep auto-scroll state in sync
         els.chatMessages.addEventListener("scroll", () => {
             const near = isChatNearBottom();
@@ -2865,7 +2697,6 @@ function renderLocalizedStaticText() {
     renderSidebarStaticText();
     renderInferenceDeviceToggle();
     renderChatInferenceToggle();
-    renderAutoLoadLastSessionToggle();
     renderModelStatusHeader();
     renderTokenSpeedStats();
     if (window.lucide?.createIcons) {
@@ -2924,12 +2755,6 @@ function normalizeInferenceDevice(value) {
     return preferredChain[0] ?? "wasm";
 }
 
-function getInferenceDeviceEmoji(device) {
-    const normalized = normalizeInferenceDevice(device);
-    if (normalized === "webgpu") return "⚡";
-    return "🧩";
-}
-
 function getInferenceDeviceDisplayName(device) {
     const normalized = normalizeInferenceDevice(device);
     if (normalized === "webgpu") {
@@ -2970,43 +2795,7 @@ function setStoredInferenceDevice(device) {
     }
 }
 
-function getStoredChatInferenceEnabled() {
-    try {
-        const raw = String(localStorage.getItem(STORAGE_KEYS.chatInferenceEnabled) ?? "").trim().toLowerCase();
-        if (!raw) return true;
-        if (raw === "false" || raw === "0" || raw === "off") return false;
-        return true;
-    } catch (_) {
-        return true;
-    }
-}
-
-function setStoredChatInferenceEnabled(enabled) {
-    try {
-        localStorage.setItem(STORAGE_KEYS.chatInferenceEnabled, enabled ? "true" : "false");
-    } catch (_) {
-        // no-op
-    }
-}
-
-function getStoredAutoLoadLastSessionEnabled() {
-    try {
-        const raw = String(localStorage.getItem(STORAGE_KEYS.autoLoadLastSession) ?? "").trim().toLowerCase();
-        if (!raw) return AUTO_LOAD_LAST_SESSION_DEFAULT;
-        if (raw === "false" || raw === "0" || raw === "off") return false;
-        return true;
-    } catch (_) {
-        return AUTO_LOAD_LAST_SESSION_DEFAULT;
-    }
-}
-
-function setStoredAutoLoadLastSessionEnabled(enabled) {
-    try {
-        localStorage.setItem(STORAGE_KEYS.autoLoadLastSession, enabled ? "true" : "false");
-    } catch (_) {
-        // no-op
-    }
-}
+/* auto-load storage helpers removed */
 
 function hydrateInferenceDevicePreference() {
     const stored = getStoredInferenceDevice();
@@ -3015,32 +2804,13 @@ function hydrateInferenceDevicePreference() {
     setStoredInferenceDevice(resolved);
 }
 
-function hydrateChatInferencePreference() {
-    const enabled = getStoredChatInferenceEnabled();
-    state.inference.enabled = enabled;
-    setStoredChatInferenceEnabled(enabled);
-}
+/* chat inference preference (storage) removed */
 
-function renderAutoLoadLastSessionToggle() {
-    if (!els.autoLoadLastSessionToggle) return;
-    const enabled = !!state.settings.autoLoadLastSessionEnabled;
-    els.autoLoadLastSessionToggle.checked = enabled;
-    els.autoLoadLastSessionToggle.setAttribute("aria-checked", enabled ? "true" : "false");
-}
+/* renderAutoLoadLastSessionToggle removed */
 
-function setAutoLoadLastSessionEnabled(enabled) {
-    const next = !!enabled;
-    state.settings.autoLoadLastSessionEnabled = next;
-    setStoredAutoLoadLastSessionEnabled(next);
-    renderAutoLoadLastSessionToggle();
-}
+/* setAutoLoadLastSessionEnabled removed */
 
-function hydrateAutoLoadLastSessionPreference() {
-    const enabled = getStoredAutoLoadLastSessionEnabled();
-    state.settings.autoLoadLastSessionEnabled = enabled;
-    setStoredAutoLoadLastSessionEnabled(enabled);
-    renderAutoLoadLastSessionToggle();
-}
+/* hydrateAutoLoadLastSessionPreference removed */
 
 function renderInferenceDeviceToggle() {
     if (!els.inferenceDeviceSelect) return;
@@ -3063,40 +2833,14 @@ function renderInferenceDeviceToggle() {
     }
 }
 
-function modelSupportsChatInference() {
-    if (!canUseLocalSessionForChat()) return false;
-    return typeof sessionStore.activeSession?.generateText === "function";
-}
-
 function renderChatInferenceToggle() {
-    if (!els.chatInferenceToggleBtn) return;
-
-    const supported = modelSupportsChatInference();
-    const enabled = !!state.inference.enabled;
-    const nextPressed = supported && enabled;
-    const label = nextPressed
-        ? t("inference.chat.toggle.on", {}, "추론 켜기")
-        : t("inference.chat.toggle.off", {}, "추론 끄기");
-
-    els.chatInferenceToggleBtn.classList.toggle("hidden", !supported);
-    els.chatInferenceToggleBtn.disabled = !supported || state.isSendingChat;
-    els.chatInferenceToggleBtn.setAttribute("aria-pressed", nextPressed ? "true" : "false");
-    els.chatInferenceToggleBtn.setAttribute("aria-label", label);
-    els.chatInferenceToggleBtn.setAttribute("title", label);
-    els.chatInferenceToggleBtn.dataset.inference = nextPressed ? "true" : "false";
+    // removed: chat inference toggle UI (no-op)
+    return;
 }
 
 function onChatInferenceToggleClick() {
-    if (!modelSupportsChatInference() || state.isSendingChat) {
-        renderChatInferenceToggle();
-        return;
-    }
-    state.inference.enabled = !state.inference.enabled;
-    setStoredChatInferenceEnabled(state.inference.enabled);
-    renderChatInferenceToggle();
-    if (!state.inference.enabled) {
-        showToast(t("inference.chat.disabled_notice", {}, "추론이 비활성화되어 inference=false로 요청합니다."), "info", 1800);
-    }
+    // removed: chat inference toggle handler (no-op)
+    return;
 }
 
 async function reloadActiveSessionForInferenceDevice(preferredDevice) {
@@ -3799,7 +3543,7 @@ function buildBackupPayload() {
             theme: getProfileTheme(),
             language: getProfileLanguage(),
             inferenceDevice: normalizeInferenceDevice(state.inference.preferredDevice),
-            autoLoadLastSession: !!state.settings.autoLoadLastSessionEnabled,
+    
             hfTokenConfigured: !!String(getToken() ?? "").trim(),
         },
     };
@@ -4134,9 +3878,7 @@ function applyBackupPayload(payload, { overwrite = true } = {}) {
                 maxLength: settings.generationMaxLength,
             });
         }
-        if (typeof settings.autoLoadLastSession === "boolean") {
-            setAutoLoadLastSessionEnabled(settings.autoLoadLastSession);
-        }
+        
     }
 
     initChatSessionSystem();
@@ -4245,7 +3987,6 @@ function hydrateSettings() {
         els.llmPresencePenaltyInput.value = String(state.settings.generationPresencePenalty);
     }
     hydrateProfileSettings();
-    renderAutoLoadLastSessionToggle();
     enforceSystemPromptEditorLimit({ notifyWhenTrimmed: false, notifyWhenReached: false });
     renderLlmDraftStatus();
     renderLocalizedStaticText();
@@ -4500,12 +4241,12 @@ function applyLlmSettingsFromDraft(options = {}) {
 
 function getSettingsTabTitle(tabId) {
     const key = String(tabId ?? "").trim();
-    if (key === "model") return t("settings.tab.model");
-    if (key === "llm") return t("settings.tab.llm");
-    if (key === "profile") return t("settings.tab.profile");
-    if (key === "theme") return t("settings.tab.theme");
-    if (key === "language") return t("settings.tab.language");
-    if (key === "backup") return t("settings.tab.backup");
+    if (key === "model") return t("common.model_management");
+    if (key === "llm") return t("common.llm_settings");
+    if (key === "profile") return t("common.profile");
+    if (key === "theme") return t("common.theme");
+    if (key === "language") return t("common.language");
+    if (key === "backup") return t("common.backup_and_restore");
     return key || t("settings.title");
 }
 
@@ -4613,7 +4354,7 @@ function captureSettingsTabSnapshot(tabId) {
         return {
             modelInput: String(els.modelIdInput?.value ?? ""),
             modelLoadingVisible: !!(els.modelLoadingRow && !els.modelLoadingRow.classList.contains("hidden")),
-            autoLoadLastSessionEnabled: !!state.settings.autoLoadLastSessionEnabled,
+
             download: snapshotDownloadPanelState(),
         };
     }
@@ -4697,7 +4438,7 @@ function resetModelTabDefaults() {
         attempt: 0,
         statusText: "모델 조회 후 다운로드 메뉴가 자동 활성화됩니다.",
     });
-    setAutoLoadLastSessionEnabled(AUTO_LOAD_LAST_SESSION_DEFAULT);
+
     renderDownloadPanel();
 }
 
@@ -4713,9 +4454,7 @@ function restoreModelTabFromSnapshot(snapshot) {
         restoreDownloadPanelState(snapshot.download);
         renderDownloadPanel();
     }
-    if (typeof snapshot.autoLoadLastSessionEnabled === "boolean") {
-        setAutoLoadLastSessionEnabled(snapshot.autoLoadLastSessionEnabled);
-    }
+    /* snapshot auto-load handling removed */
 }
 
 function resetLlmTabDefaults() {
@@ -6938,7 +6677,7 @@ async function onClickDownloadStart() {
 
     const queue = Array.isArray(state.download.queue) ? state.download.queue : [];
     if (queue.length === 0) {
-        showToast("다운로드할 파일 정보를 찾을 수 없습니다.", "error", 2600);
+        showToast("다운로드할 파일 정보를 찾을 ��� 없습니다.", "error", 2600);
         return;
     }
 
@@ -10509,27 +10248,6 @@ function extractTextFromTransformersOutput(output, task) {
     return coerceText(first) ?? "";
 }
 
-function extractTokenIdsFromGenerationBeamPayload(payload) {
-    if (!payload) return [];
-
-    if (Array.isArray(payload)) {
-        const first = payload[0];
-        if (first && typeof first === "object" && Array.isArray(first.output_token_ids)) {
-            return first.output_token_ids;
-        }
-        if (Array.isArray(first)) {
-            return first;
-        }
-    }
-
-    if (payload && typeof payload === "object") {
-        if (Array.isArray(payload.output_token_ids)) return payload.output_token_ids;
-        if (Array.isArray(payload.token_ids)) return payload.token_ids;
-        if (Array.isArray(payload.ids)) return payload.ids;
-    }
-
-    return [];
-}
 
 async function createTransformersSession({
     fileName,
@@ -11196,6 +10914,8 @@ function createAssistantStreamRenderer(options = {}) {
         };
     }
 
+    message.content.classList.add("llm-stream-cursor");
+
     let text = "";
     let buffered = "";
     let totalTokens = 0;
@@ -11203,17 +10923,12 @@ function createAssistantStreamRenderer(options = {}) {
     let lastRenderAt = 0;
     let frameHandle = 0;
     let timerHandle = 0;
-    let inputFinished = false; // 입력 스트림 종료 여부
-    let closed = false; // 렌더러 완전 종료 여부
+    let inputFinished = false;
+    let closed = false;
     const tpsSamples = [];
 
     const getNow = () => performance.now();
-    const getTps = () => {
-        if (!startedAt || totalTokens <= 0) return 0;
-        const now = getNow();
-        const elapsedSec = Math.max((now - startedAt) / 1000, 0.001);
-        return totalTokens / elapsedSec;
-    };
+    const getTps = () => computeTokensPerSecond(totalTokens, startedAt, getNow());
     const cancelScheduledFlush = () => {
         if (frameHandle) {
             cancelAnimationFrame(frameHandle);
@@ -11237,11 +10952,7 @@ function createAssistantStreamRenderer(options = {}) {
                 text += buffered;
                 buffered = "";
             } else {
-                // 한 글자씩 출력하는 효과 (버퍼가 많이 쌓이면 더 빨리 출력하여 지연 방지)
-                let drainCount = 1;
-                if (buffered.length > 100) drainCount = 5;
-                if (buffered.length > 500) drainCount = 20;
-
+                const drainCount = computeStreamDrainCount(buffered.length);
                 const chunk = buffered.slice(0, drainCount);
                 text += chunk;
                 buffered = buffered.slice(drainCount);
@@ -11331,6 +11042,7 @@ function createAssistantStreamRenderer(options = {}) {
         cancelScheduledFlush();
         if (message.content) {
             message.content.textContent = "";
+            message.content.classList.add("llm-stream-cursor");
         }
         if (message.tokenBadge) {
             message.tokenBadge.textContent = "0.00 tok/s";
@@ -11351,7 +11063,6 @@ function createAssistantStreamRenderer(options = {}) {
         const resolvedFinalText = String(finalText ?? "");
 
         if (resolvedFinalText) {
-            // 강제로 최종 텍스트 적용 (버퍼 무시)
             text = resolvedFinalText;
             buffered = "";
             if (!skipMetrics) {
@@ -11359,7 +11070,6 @@ function createAssistantStreamRenderer(options = {}) {
             }
             flush(true);
         } else {
-            // 남은 버퍼가 모두 출력될 때까지 대기 후 종료
             const checkDrain = () => {
                 if (buffered.length > 0) {
                     flush(false);
@@ -11384,6 +11094,7 @@ function createAssistantStreamRenderer(options = {}) {
 
             if (message.content) {
                 message.content.textContent = text;
+                message.content.classList.remove("llm-stream-cursor");
             }
 
             const finalTps = skipMetrics ? 0 : getTps();
@@ -11411,6 +11122,7 @@ function createAssistantStreamRenderer(options = {}) {
         return message;
     };
 
+    return { message, pushChunk, reset, finalize };
 }
 
 async function appendAssistantMessageWithTokenMetrics(fullText) {
@@ -11421,55 +11133,6 @@ async function appendAssistantMessageWithTokenMetrics(fullText) {
         skipMetrics: true
     });
     return stream.message;
-}
-
-async function copyTextToClipboard(text) {
-    const value = String(text ?? "");
-    if (navigator?.clipboard && typeof navigator.clipboard.writeText === "function") {
-        await navigator.clipboard.writeText(value);
-        return true;
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = value;
-    textarea.setAttribute("readonly", "readonly");
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
-    document.body.appendChild(textarea);
-    textarea.select();
-    let copied = false;
-    try {
-        copied = document.execCommand("copy");
-    } finally {
-        document.body.removeChild(textarea);
-    }
-    return copied;
-}
-
-async function copyMessageById(messageId, triggerButton = null) {
-    const entry = state.messages.find((item) => item.id === messageId);
-    if (!entry) {
-        showToast("복사할 메시지를 찾지 못했습니다.", "error", 2200);
-        return;
-    }
-
-    try {
-        await copyTextToClipboard(entry.text);
-        showToast("메시지를 클립보드에 복사했습니다.", "success", 1600);
-        if (triggerButton) {
-            const icon = triggerButton.querySelector("i");
-            if (icon) {
-                icon.setAttribute("data-lucide", "check");
-                lucide.createIcons();
-                window.setTimeout(() => {
-                    icon.setAttribute("data-lucide", "copy");
-                    lucide.createIcons();
-                }, 900);
-            }
-        }
-    } catch (error) {
-        showToast(`복사 실패: ${getErrorMessage(error)}`, "error", 2400);
-    }
 }
 
 async function onChatSubmit(event) {
@@ -11631,7 +11294,7 @@ function formatChatFailureMessage(error, diagnostics = {}, errorId = "") {
         if (code === "local_session_not_ready") {
             reason = "로컬 모델 세션이 준비되지 않았습니다. 모델을 다시 로드하세요.";
         } else if (code === "local_tokenization_failed") {
-            reason = "로컬 토크나이징에 실패했습니다. 모델과 입력 형식을 확인하세요.";
+            reason = "로컬 토크나이징에 실패했습니다. 모델과 입력 형식을 확인��세요.";
         } else if (code === "local_inference_empty_output") {
             reason = "모델 응답이 비어있거나 무의미하여 처리할 수 없습니다. 프롬프트 형식 또는 모델/파이프라인 호환성을 확인하세요.";
         } else if (code === "local_model_input_unsupported") {
@@ -11824,241 +11487,6 @@ function findManifestEntriesByModelId(modelId) {
             revision: String(entry?.revision ?? ""),
         }))
         .filter((item) => !!item.fileName);
-}
-
-function extractSessionInputNames(session) {
-    try {
-        const direct = session?.inputMetadata && typeof session.inputMetadata === "object"
-            ? Object.keys(session.inputMetadata)
-            : [];
-        if (direct.length > 0) {
-            return direct.map((name) => String(name ?? "").trim()).filter(Boolean);
-        }
-        const runtimeNames = session?.pipeline?.model?.session?.inputNames;
-        if (Array.isArray(runtimeNames)) {
-            return runtimeNames.map((name) => String(name ?? "").trim()).filter(Boolean);
-        }
-    } catch (_) {
-        // ignore runtime metadata lookup failures
-    }
-    return [];
-}
-
-async function runLocalPerformanceSample(session, promptText, generation) {
-    const startedAt = performance.now();
-    let firstTokenAt = null;
-    const output = await runInference(session, promptText, {
-        activeFile: state.activeSessionFile ?? "",
-        inferenceEnabled: true,
-        generation,
-        isolated: true,
-        onToken: () => {
-            if (firstTokenAt === null) {
-                firstTokenAt = performance.now();
-            }
-        },
-    });
-    const finishedAt = performance.now();
-    const elapsedMs = Math.max(0, finishedAt - startedAt);
-    const tokens = Math.max(1, countApproxTokens(output));
-    const tokensPerSecond = elapsedMs > 0 ? (tokens / (elapsedMs / 1000)) : null;
-    return {
-        output,
-        elapsedMs: Number(elapsedMs.toFixed(2)),
-        ttftMs: firstTokenAt === null ? null : Number((firstTokenAt - startedAt).toFixed(2)),
-        tokens,
-        tokensPerSecond: tokensPerSecond === null ? null : Number(tokensPerSecond.toFixed(2)),
-    };
-}
-
-async function runModelReadinessAudit(options = {}) {
-    const expectedModelId = normalizeModelId(
-        options.expectedModelId
-        ?? selectedModel
-        ?? state.selectedModelMeta?.id
-        ?? "onnx-community/Qwen3-0.6B-ONNX",
-    );
-    const report = {
-        started_at: new Date().toISOString(),
-        expected_model_id: expectedModelId,
-        runtime_capabilities: getRuntimeCapabilities(),
-        checks: {},
-    };
-
-    await initOpfs();
-    if (!state.opfs.supported) {
-        throw new Error("OPFS가 지원되지 않아 모델 점검을 실행할 수 없습니다.");
-    }
-
-    const candidates = findManifestEntriesByModelId(expectedModelId);
-    report.checks.cache_scan = {
-        candidate_count: candidates.length,
-        candidates: candidates.map((item) => ({
-            file_name: item.fileName,
-            size_bytes: item.sizeBytes,
-            revision: item.revision,
-        })),
-    };
-    if (candidates.length === 0) {
-        throw new Error(`OPFS 캐시에 '${expectedModelId}' 모델 항목이 없습니다.`);
-    }
-
-    const targetFile = normalizeOnnxFileName(
-        options.fileName
-        || state.activeSessionFile
-        || candidates[0].fileName,
-    );
-    const targetEntry = candidates.find((item) => item.fileName === targetFile) || candidates[0];
-    report.target_file = targetEntry.fileName;
-
-    const secureUrl = isHttpsUrl(targetEntry.fileUrl, { allowLocalhostHttp: true });
-    report.checks.secure_download_url = {
-        ok: secureUrl,
-        url: targetEntry.fileUrl ?? "",
-    };
-    if (!secureUrl) {
-        throw new Error(`HTTPS가 아닌 모델 URL이 감지되었습니다: ${targetEntry.fileUrl ?? "-"}`);
-    }
-
-    report.checks.bundle_integrity = await validateLocalModelBundleFilesForUpdate([
-        {
-            kind: "onnx",
-            sourceFileName: extractModelFileHintFromResolveUrl(targetEntry.fileUrl ?? "") ?? targetEntry.fileName,
-            fileName: targetEntry.fileName,
-            fileUrl: targetEntry.fileUrl,
-            expectedSizeBytes: targetEntry.sizeBytes,
-        },
-    ], {
-        primaryFileName: targetEntry.fileName,
-        primaryExpectedSizeBytes: targetEntry.sizeBytes,
-    });
-
-    const moduleStartedAt = performance.now();
-    await ensureTransformersModule();
-    report.checks.runtime_module_init = {
-        ok: true,
-        elapsed_ms: Number((performance.now() - moduleStartedAt).toFixed(2)),
-    };
-
-    const originallyActive = normalizeOnnxFileName(state.activeSessionFile ?? "");
-    if (originallyActive !== targetEntry.fileName || !sessionStore.activeSession) {
-        await onClickSessionLoad(targetEntry.fileName, {
-            silent: true,
-            persistLastLoaded: false,
-            skipSwitchConfirm: true,
-        });
-    }
-    const session = sessionStore.activeSession;
-    if (!session) {
-        throw new Error("점검용 로컬 세션을 로드하지 못했습니다.");
-    }
-
-    const inputNames = extractSessionInputNames(session);
-    report.checks.session_ready = {
-        ok: true,
-        device: String(session.device ?? ""),
-        dtype: String(session.dtype ?? ""),
-        runtime: String(session.runtime ?? ""),
-    };
-    report.checks.tokenizer_compatibility = {
-        available: !!session?.pipeline?.tokenizer,
-        decode_function: typeof session?.pipeline?.tokenizer?.decode === "function",
-    };
-    report.checks.attention_structure = {
-        input_names: inputNames,
-        has_attention_mask: inputNames.includes("attention_mask"),
-    };
-
-    const generationConfig = {
-        temperature: clampGenerationTemperature(
-            options.temperature ?? state.settings.generationTemperature,
-        ),
-        topP: clampGenerationTopP(
-            options.topP ?? state.settings.generationTopP,
-        ),
-        presencePenalty: clampGenerationPresencePenalty(
-            options.presencePenalty ?? options.presence_penalty ?? state.settings.generationPresencePenalty,
-        ),
-        maxLength: clampGenerationMaxLength(
-            options.maxLength ?? state.settings.generationMaxLength,
-        ),
-    };
-
-    const prompt = String(options.prompt ?? "짧게 자기소개 한 문장만 해줘.").trim();
-    const perfSample = await runLocalPerformanceSample(session, prompt, generationConfig);
-    report.checks.generation_params = {
-        config: generationConfig,
-        output_preview: String(perfSample.output ?? "").slice(0, 220),
-    };
-    report.checks.performance_single = {
-        ttft_ms: perfSample.ttftMs,
-        tokens_per_second: perfSample.tokensPerSecond,
-        elapsed_ms: perfSample.elapsedMs,
-        threshold: {
-            ttft_ms_max: 2000,
-            tokens_per_second_min: 10,
-        },
-        pass: {
-            ttft: perfSample.ttftMs === null ? false : perfSample.ttftMs <= 2000,
-            tokens_per_second: perfSample.tokensPerSecond === null ? false : perfSample.tokensPerSecond >= 10,
-        },
-    };
-
-    const sequentialPrompt = String(options.concurrentPrompt ?? "한 줄 요약으로 답해줘.").trim();
-    const sequentialA = await runLocalPerformanceSample(session, sequentialPrompt, generationConfig);
-    const sequentialB = await runLocalPerformanceSample(session, sequentialPrompt, generationConfig);
-    const sequentialAvgMs = (sequentialA.elapsedMs + sequentialB.elapsedMs) / 2;
-
-    const concurrentStart = performance.now();
-    await Promise.all([
-        runInference(session, sequentialPrompt, {
-            activeFile: state.activeSessionFile ?? "",
-            inferenceEnabled: true,
-            generation: generationConfig,
-        }),
-        runInference(session, sequentialPrompt, {
-            activeFile: state.activeSessionFile ?? "",
-            inferenceEnabled: true,
-            generation: generationConfig,
-        }),
-    ]);
-    const concurrentElapsedMs = Math.max(0, performance.now() - concurrentStart);
-    const baselineForTwoMs = sequentialAvgMs * 2;
-    const degradationPercent = calculatePerformanceDropPercent(baselineForTwoMs, concurrentElapsedMs);
-    report.checks.performance_concurrent = {
-        sequential_avg_ms: Number(sequentialAvgMs.toFixed(2)),
-        concurrent_elapsed_ms: Number(concurrentElapsedMs.toFixed(2)),
-        baseline_for_two_ms: Number(baselineForTwoMs.toFixed(2)),
-        degradation_percent: degradationPercent === null ? null : Number(degradationPercent.toFixed(2)),
-        threshold: {
-            degradation_percent_max: 20,
-        },
-        pass: {
-            degradation: degradationPercent === null ? false : degradationPercent <= 20,
-        },
-    };
-
-    report.checks.memory_leak = await runSessionUnloadMemoryDiagnostics({
-        fileName: targetEntry.fileName,
-        cycles: 3,
-        settleMs: 80,
-        allowedGrowthBytes: 20 * 1024 * 1024,
-    });
-
-    if (originallyActive) {
-        try {
-            await onClickSessionLoad(originallyActive, {
-                silent: true,
-                persistLastLoaded: false,
-                skipSwitchConfirm: true,
-            });
-        } catch (_) {
-            // ignore restore errors
-        }
-    }
-
-    report.finished_at = new Date().toISOString();
-    return report;
 }
 
 function getLocalInferenceConfig() {
@@ -12276,9 +11704,7 @@ function buildPromptInstructionText() {
     const roleLabelGuard = getProfileLanguage() === "ko"
         ? "역할 라벨(User, Assistant, System)을 출력하지 말고 답변 본문만 출력하세요."
         : "Do not output role labels (User, Assistant, System). Return answer content only.";
-    const reasoningGuard = getProfileLanguage() === "ko"
-        ? "내부 추론 과정(<think>...</think>)은 출력하지 말고 최종 답변만 출력하세요."
-        : "Do not reveal internal reasoning (<think>...</think>). Return only the final answer.";
+    const reasoningGuard = "Do not reveal internal reasoning. Return only the final answer.";
     return [systemPrompt, languageGuard, roleLabelGuard, reasoningGuard]
         .map((item) => String(item ?? "").trim())
         .filter(Boolean)
@@ -12662,17 +12088,7 @@ function appendMessageBubble(entry, options = {}) {
         headerLeading.appendChild(tokenBadge);
     }
 
-    const copyBtn = document.createElement("button");
-    copyBtn.type = "button";
-    copyBtn.dataset.action = "copy-message";
-    copyBtn.dataset.messageId = String(messageId);
-    copyBtn.className = "message-copy-btn inline-flex h-8 w-8 items-center justify-center rounded border border-slate-600/70 bg-slate-900/35 text-slate-200 hover:bg-slate-800/70";
-    copyBtn.setAttribute("aria-label", t("chat.copy"));
-    copyBtn.setAttribute("title", t("chat.copy"));
-    copyBtn.innerHTML = "<i data-lucide=\"copy\" class=\"w-3.5 h-3.5\" aria-hidden=\"true\"></i>";
-
     header.appendChild(headerLeading);
-    header.appendChild(copyBtn);
 
     const content = document.createElement("div");
     content.className = "whitespace-pre-wrap break-words leading-relaxed";
@@ -12695,7 +12111,6 @@ function appendMessageBubble(entry, options = {}) {
         bubble,
         content,
         tokenBadge,
-        copyBtn,
     };
 }
 
@@ -13074,48 +12489,7 @@ function clearLastLoadedSessionFile() {
     }
 }
 
-async function autoLoadLastSessionOnStartup() {
-    if (!state.settings.autoLoadLastSessionEnabled) return false;
-    if (!state.opfs.supported) return false;
-    if (state.activeSessionFile && sessionStore.activeSession) return true;
-
-    const lastFileName = getLastLoadedSessionFile();
-    if (!lastFileName) return false;
-
-    const manifest = getOpfsManifest();
-    if (!manifest[lastFileName]) {
-        clearLastLoadedSessionFile();
-        return false;
-    }
-
-    const maxAttempts = 2;
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        await onClickSessionLoad(lastFileName, {
-            silent: true,
-            persistLastLoaded: true,
-        });
-
-        const isLoaded = sessionStore.activeFileName === lastFileName && !!sessionStore.activeSession;
-        if (isLoaded) {
-            console.info("[INFO] auto loaded last session on startup", {
-                file_name: lastFileName,
-                attempt,
-            });
-            return true;
-        }
-
-        if (attempt < maxAttempts) {
-            await delay(250);
-        }
-    }
-
-    clearLastLoadedSessionFile();
-    console.warn("[WARN] failed to auto load last session on startup", {
-        file_name: lastFileName,
-        reason: "load_failed",
-    });
-    return false;
-}
+/* autoLoadLastSessionOnStartup removed — auto-load last session feature deleted */
 
 function showToast(message, kind = "info", duration = 3000, options = {}) {
     if (!els.toast) return;

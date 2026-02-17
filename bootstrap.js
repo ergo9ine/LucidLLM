@@ -5,7 +5,6 @@ import {
 } from "./i18n.js";
 
 const MAIN_MODULE_PATH = "./main.js";
-const SERVICE_WORKER_PATH = "./sw.js";
 const USER_PROFILE_KEY = "lucid_user_profile_v1";
 
 /**
@@ -38,33 +37,12 @@ async function loadMainBundle() {
     }
 }
 
-function isLocalhostHost(hostname) {
-    const host = String(hostname ?? "").toLowerCase();
-    return host === "localhost" || host === "127.0.0.1" || host === "::1";
-}
-
-async function registerServiceWorker() {
-    if (!("serviceWorker" in navigator)) return;
-    const secure = window.isSecureContext || isLocalhostHost(window.location.hostname);
-    if (!secure) {
-        console.info("[BOOT] Service worker skipped: insecure context");
-        return;
-    }
-    try {
-        await navigator.serviceWorker.register(SERVICE_WORKER_PATH, { scope: "./" });
-        console.info("[BOOT] Service worker registered");
-    } catch (error) {
-        console.warn("[BOOT] Service worker registration failed", error);
-    }
-}
-
 function bootstrapWithCodeSplitting() {
     // 1. i18n 즉시 초기화
     initEarlyI18n();
 
     const start = () => {
         void loadMainBundle();
-        void registerServiceWorker();
     };
 
     if (typeof window.requestIdleCallback === "function") {

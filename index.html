@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>LucidLLM Chat</title>
+    <title data-i18n="html.title">LucidLLM Chat</title>
     <link rel="icon" type="image/svg+xml" sizes="any" href="./favicon.svg">
     <link rel="shortcut icon" href="./favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -56,10 +56,13 @@
                     id="profile-chip-name" data-i18n="profile.chip.default_name"></span>
             </div> <button id="chat-tab-add-btn" type="button"
                 class="inline-flex items-center justify-center rounded-lg border border-cyan-300/40 hover:bg-cyan-500/15 w-8 h-8 text-cyan-100 text-base font-bold"
-                data-i18n-aria-label="header.new_chat" data-i18n-title="header.new_chat">+</button> <button
+                data-i18n-aria-label="common.new_chat" data-i18n-title="common.new_chat">+</button> <button
                 id="open-settings-btn" type="button"
                 class="inline-flex items-center justify-center rounded-lg border border-slate-500/70 hover:bg-slate-700/60 w-8 h-8 text-slate-100"
-                data-i18n-aria-label="header.settings" data-i18n-title="header.settings"> <i data-lucide="settings-2"
+                data-i18n-aria-label="common.settings" data-i18n-title="common.settings"> <i data-lucide="settings-2"
+                    class="w-4 h-4"></i> </button> <button id="chat-export-btn" type="button"
+                class="inline-flex items-center justify-center rounded-lg border border-slate-500/70 hover:bg-slate-700/60 w-8 h-8 text-slate-100"
+                data-i18n-aria-label="common.export_chat" data-i18n-title="common.export_chat"> <i data-lucide="download"
                     class="w-4 h-4"></i> </button>
         </div>
     </section>
@@ -108,14 +111,14 @@
     <div id="settings-overlay" class="hidden fixed inset-0 z-50 opacity-0 transition-opacity duration-300 ease-out"
         tabindex="-1" aria-hidden="true">
         <section id="settings-window" class="h-full w-full bg-slate-950 text-slate-100 flex flex-col" role="dialog"
-            aria-modal="true" aria-labelledby="settings-title" data-i18n-aria-label="settings.title" tabindex="-1">
+            aria-modal="true" aria-labelledby="settings-title" data-i18n-aria-label="common.settings" tabindex="-1">
             <div id="settings-drag-handle"
                 class="h-14 shrink-0 flex items-center justify-between gap-3 px-4 md:px-6 border-b border-slate-700/70 bg-slate-900">
                 <div class="inline-flex items-center gap-2 text-cyan-100 font-semibold"> <i data-lucide="panel-top"
-                        class="w-4 h-4"></i> <span id="settings-title" data-i18n="settings.title"></span> </div> <button
+                        class="w-4 h-4"></i> <span id="settings-title" data-i18n="common.settings"></span> </div> <button
                     id="close-settings-btn" type="button" data-action="close-settings"
                     class="inline-flex items-center justify-center rounded-lg border border-slate-500/70 hover:bg-slate-700/60 w-9 h-9 text-slate-100 text-lg leading-none"
-                    data-i18n-aria-label="settings.close" data-i18n-title="settings.close">&times;</button>
+                    data-i18n-aria-label="common.close" data-i18n-title="common.close">&times;</button>
             </div>
             <div class="flex-1 min-h-0 flex">
                 <aside
@@ -123,34 +126,34 @@
                     data-i18n-aria-label="settings.menu_label">
                     <nav class="space-y-2" data-i18n-aria-label="settings.tabs_label"> <button type="button"
                             class="settings-tab-btn" data-settings-tab-btn="model" aria-selected="true"
-                            aria-controls="settings-panel-model" data-i18n-aria-label="settings.tab.model"
-                            data-i18n-title="settings.tab.model"> <i data-lucide="box" class="w-5 h-5 shrink-0"></i>
-                            <span class="sr-only" data-i18n="settings.tab.model"></span>
+                            aria-controls="settings-panel-model" data-i18n-aria-label="common.model_management"
+                            data-i18n-title="common.model_management"> <i data-lucide="box" class="w-5 h-5 shrink-0"></i>
+                            <span class="sr-only" data-i18n="common.model_management"></span>
                         </button> <button type="button" class="settings-tab-btn" data-settings-tab-btn="llm"
                             aria-selected="false" aria-controls="settings-panel-llm"
-                            data-i18n-aria-label="settings.tab.llm" data-i18n-title="settings.tab.llm"> <i
+                            data-i18n-aria-label="common.llm_settings" data-i18n-title="common.llm_settings"> <i
                                 data-lucide="sliders-horizontal" class="w-5 h-5 shrink-0"></i> <span class="sr-only"
-                                data-i18n="settings.tab.llm"></span> </button> <button type="button"
+                                data-i18n="common.llm_settings"></span> </button> <button type="button"
                             class="settings-tab-btn" data-settings-tab-btn="profile" aria-selected="false"
-                            aria-controls="settings-panel-profile" data-i18n-aria-label="settings.tab.profile"
-                            data-i18n-title="settings.tab.profile"> <i data-lucide="user-round"
+                            aria-controls="settings-panel-profile" data-i18n-aria-label="common.profile"
+                            data-i18n-title="common.profile"> <i data-lucide="user-round"
                                 class="w-5 h-5 shrink-0"></i>
-                            <span class="sr-only" data-i18n="settings.tab.profile"></span>
+                            <span class="sr-only" data-i18n="common.profile"></span>
                         </button> <button type="button" class="settings-tab-btn" data-settings-tab-btn="theme"
                             aria-selected="false" aria-controls="settings-panel-theme"
-                            data-i18n-aria-label="settings.tab.theme" data-i18n-title="settings.tab.theme"> <i
+                            data-i18n-aria-label="common.theme" data-i18n-title="common.theme"> <i
                                 data-lucide="palette" class="w-5 h-5 shrink-0"></i> <span class="sr-only"
-                                data-i18n="settings.tab.theme"></span>
+                                data-i18n="common.theme"></span>
                         </button> <button type="button" class="settings-tab-btn" data-settings-tab-btn="language"
                             aria-selected="false" aria-controls="settings-panel-language"
-                            data-i18n-aria-label="settings.tab.language" data-i18n-title="settings.tab.language">
+                            data-i18n-aria-label="common.language" data-i18n-title="common.language">
                             <i data-lucide="languages" class="w-5 h-5 shrink-0"></i> <span class="sr-only"
-                                data-i18n="settings.tab.language"></span>
+                                data-i18n="common.language"></span>
                         </button> <button type="button" class="settings-tab-btn" data-settings-tab-btn="backup"
                             aria-selected="false" aria-controls="settings-panel-backup"
-                            data-i18n-aria-label="settings.tab.backup" data-i18n-title="settings.tab.backup"> <i
+                            data-i18n-aria-label="common.backup_and_restore" data-i18n-title="common.backup_and_restore"> <i
                                 data-lucide="hard-drive-upload" class="w-5 h-5 shrink-0"></i> <span class="sr-only"
-                                data-i18n="settings.tab.backup"></span> </button> </nav>
+                                data-i18n="common.backup_and_restore"></span> </button> </nav>
                 </aside>
                 <div class="flex-1 min-w-0">
                     <section id="settings-panel-model" data-settings-panel="model"
@@ -238,13 +241,13 @@
                                     id="opfs-create-file-input"> <button id="opfs-create-file-btn" type="button"
                                     data-i18n="opfs.btn_create_file"></button> <input id="opfs-upload-input" type="file"
                                     multiple="multiple"> <button id="opfs-upload-btn" type="button"
-                                    data-i18n="opfs.btn_upload"></button>
+                                    data-i18n="common.upload"></button>
                                 <div id="opfs-selected-entry-text" data-i18n="opfs.selected_none"></div> <input
                                     id="opfs-rename-input">
-                                <button id="opfs-rename-btn" type="button" data-i18n="opfs.btn_rename"></button> <input
+                                <button id="opfs-rename-btn" type="button" data-i18n="common.rename"></button> <input
                                     id="opfs-move-input">
-                                <button id="opfs-move-btn" type="button" data-i18n="opfs.btn_move"></button> <button
-                                    id="opfs-delete-btn" type="button" data-i18n="opfs.btn_delete"></button>
+                                <button id="opfs-move-btn" type="button" data-i18n="common.move"></button> <button
+                                    id="opfs-delete-btn" type="button" data-i18n="common.delete"></button>
                             </div>
                             <div id="opfs-context-menu"
                                 class="hidden fixed z-[95] min-w-[200px] rounded-xl border border-slate-600 bg-slate-900/95 shadow-2xl p-1">
@@ -259,16 +262,16 @@
                                     data-i18n="opfs.ctx_create_file"></button> <button data-action="opfs-context-upload"
                                     type="button"
                                     class="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-slate-700/70 border-b border-slate-700/80 mb-1"
-                                    data-i18n="opfs.ctx_upload"></button>
+                                    data-i18n="common.upload"></button>
                                 <button data-action="opfs-context-rename" type="button"
                                     class="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-slate-700/70"
-                                    data-i18n="opfs.ctx_rename"></button> <button data-action="opfs-context-move"
+                                    data-i18n="common.rename"></button> <button data-action="opfs-context-move"
                                     type="button"
                                     class="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-slate-700/70"
-                                    data-i18n="opfs.ctx_move"></button>
+                                    data-i18n="common.move"></button>
                                 <button data-action="opfs-context-delete" type="button"
                                     class="w-full text-left px-2 py-1.5 text-xs rounded text-rose-200 hover:bg-rose-500/20"
-                                    data-i18n="opfs.ctx_delete"></button>
+                                    data-i18n="common.delete"></button>
                             </div>
                         </article>
                         <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-3">
@@ -316,7 +319,7 @@
                                         class="inline-flex items-center gap-2 border border-cyan-300/35 hover:bg-cyan-500/15 rounded-lg px-3 py-2 text-xs disabled:opacity-50"
                                         disabled="disabled"> <i data-lucide="download" class="w-4 h-4"></i> <span
                                             id="download-start-btn-label"
-                                            data-i18n="model.download.btn_download"></span> </button> <button
+                                            data-i18n="common.download"></span> </button> <button
                                         id="download-pause-btn" type="button"
                                         class="inline-flex items-center gap-2 border border-amber-300/40 hover:bg-amber-500/15 rounded-lg px-3 py-2 text-xs disabled:opacity-50"
                                         disabled="disabled"> <i data-lucide="pause" class="w-4 h-4"></i> <span
@@ -364,7 +367,7 @@
                                             <th class="text-left py-2 px-2" data-i18n="model.th_version"></th>
                                             <th class="text-left py-2 px-2" data-i18n="model.th_size"></th>
                                             <th class="text-left py-2 px-2" data-i18n="model.th_modified"></th>
-                                            <th class="text-left py-2 px-2" data-i18n="model.th_download"></th>
+                                            <th class="text-left py-2 px-2" data-i18n="common.download"></th>
                                             <th class="text-left py-2 px-2" data-i18n="model.th_activate"></th>
                                             <th class="text-left py-2 pl-2" data-i18n="model.th_actions"></th>
                                         </tr>
@@ -381,7 +384,7 @@
                     </section>
                     <section id="settings-panel-llm" data-settings-panel="llm"
                         class="hidden h-full overflow-y-auto p-4 md:p-5 space-y-4"
-                        data-i18n-aria-label="settings.panel.llm_label">
+                        data-i18n-aria-label="common.llm_settings">
                         <div class="flex justify-end"> <button type="button" data-action="reset-settings-tab"
                                 data-tab="llm"
                                 class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[11px]">
@@ -389,24 +392,24 @@
                                     data-i18n="settings.reset_tab"></span> </button>
                         </div>
                         <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-3">
-                            <h2 class="text-sm font-semibold text-cyan-100" data-i18n="llm.system_prompt_title"></h2>
+                            <h2 class="text-sm font-semibold text-cyan-100" data-i18n="llm.system_prompt.title"></h2>
                             <textarea id="system-prompt-input" rows="12"
                                 class="w-full resize-y bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400"
                                 data-i18n-placeholder="llm.system_prompt_placeholder"></textarea>
                             <p id="system-prompt-line-count" class="text-[11px] text-slate-400"
-                                data-i18n="llm.system_prompt_line_count"></p>
+                                data-i18n="llm.line_count"></p>
                         </article>
                         <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-3">
-                            <h2 class="text-sm font-semibold text-cyan-100" data-i18n="llm.gen_params_title"></h2>
+                            <h2 class="text-sm font-semibold text-cyan-100" data-i18n="llm.generation.title"></h2>
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between gap-2 text-xs"> <label
                                         for="max-output-tokens-input" class="text-slate-300"
-                                        data-i18n="llm.max_new_tokens"></label> <span id="max-output-tokens-value"
+                                        data-i18n="llm.max_tokens"></label> <span id="max-output-tokens-value"
                                         class="text-cyan-100">512</span> </div> <input id="max-output-tokens-input"
                                     type="range" min="1" max="32768" step="1" value="512" class="w-full">
                             </div>
                             <div class="space-y-1"> <label for="context-window-select" class="text-xs text-slate-300"
-                                    data-i18n="llm.context_window_size"></label> <select id="context-window-select"
+                                    data-i18n="llm.context_window"></label> <select id="context-window-select"
                                     class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400">
                                     <option value="4k">4k</option>
                                     <option value="8k">8k</option>
@@ -417,13 +420,13 @@
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between gap-2 text-xs"> <label
                                         for="temperature-input" class="text-slate-300"
-                                        data-i18n="llm.temperature"></label> <span id="temperature-value"
+                                        data-i18n="llm.generation.temperature"></label> <span id="temperature-value"
                                         class="text-cyan-100">0.8</span> </div> <input id="temperature-input"
                                     type="range" min="0" max="2" step="0.01" value="0.8" class="w-full">
                             </div>
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between gap-2 text-xs"> <label for="top-p-input"
-                                        class="text-slate-300" data-i18n="llm.top_p"></label> <span id="top-p-value"
+                                        class="text-slate-300" data-i18n="llm.generation.top_p"></label> <span id="top-p-value"
                                         class="text-cyan-100">0.9</span> </div> <input id="top-p-input" type="range"
                                     min="0" max="1" step="0.01" value="0.9" class="w-full">
                             </div>
@@ -442,22 +445,21 @@
                             </div>
                         </article>
                         <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-2">
-                            <h2 class="text-sm font-semibold text-cyan-100" data-i18n="llm.token_title"></h2> <input
+                            <h2 class="text-sm font-semibold text-cyan-100" data-i18n="llm.token_settings"></h2> <input
                                 id="hf-token-input" type="password"
                                 class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400"
                                 data-i18n-placeholder="llm.hf_token_placeholder">
                             <div class="flex flex-wrap gap-2"> <button id="save-token-btn"
                                     class="border border-cyan-300/40 hover:bg-cyan-500/15 rounded-lg px-3 py-2 text-xs"
-                                    data-i18n="llm.save_token_btn"></button> <button id="clear-token-btn"
+                                    data-i18n="llm.btn_save_token"></button> <button id="clear-token-btn"
                                     class="border border-slate-600 hover:bg-slate-800/70 rounded-lg px-3 py-2 text-xs"
-                                    data-i18n="llm.clear_token_btn"></button> </div>
+                                    data-i18n="llm.btn_clear_token"></button> </div>
                         </article>
                         <article class="rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-4 space-y-3">
                             <p id="llm-settings-validation" class="text-[12px] text-slate-200"
-                                data-i18n="llm.validation_message">변경 사항을 검토한 뒤 저장 버튼을 눌러
-                                적용하세요.</p> <button id="save-system-prompt-btn"
+                                data-i18n="llm.validation_hint"></p> <button id="save-system-prompt-btn"
                                 class="inline-flex items-center gap-2 border border-cyan-300/50 hover:bg-cyan-500/20 rounded-lg px-4 py-2 text-xs">
-                                <i data-lucide="save" class="w-4 h-4"></i> <span data-i18n="llm.save_btn"></span>
+                                <i data-lucide="save" class="w-4 h-4"></i> <span data-i18n="common.save"></span>
                             </button>
                         </article>
                     </section>
@@ -472,27 +474,25 @@
                         </div>
                         <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-4">
                             <h2 id="profile-title" class="text-sm font-semibold text-cyan-100"
-                                data-i18n="profile.title">프로필</h2>
+                                data-i18n="common.profile"></h2>
                             <div class="flex flex-wrap items-center gap-4"> <img id="profile-avatar-preview"
-                                    class="profile-avatar-preview" alt="프로필 미리보기">
+                                    class="profile-avatar-preview" data-i18n-alt="profile.preview_alt">
                                 <div class="space-y-2"> <input id="profile-avatar-input" type="file" class="hidden"
                                         accept="image/*"> <button id="profile-avatar-upload-btn" type="button"
                                         class="inline-flex items-center gap-2 rounded-lg border border-cyan-300/40 hover:bg-cyan-500/15 px-3 py-2 text-xs">
                                         <i data-lucide="image-up" class="w-4 h-4"></i> <span
-                                            id="profile-avatar-upload-label" data-i18n="profile.upload_avatar_btn">대표
-                                            이미지 업로드</span> </button> <button id="profile-avatar-clear-btn" type="button"
+                                            id="profile-avatar-upload-label" data-i18n="profile.upload"></span> </button> <button id="profile-avatar-clear-btn" type="button"
                                         class="inline-flex items-center gap-2 rounded-lg border border-slate-500/60 hover:bg-slate-700/50 px-3 py-2 text-xs">
                                         <i data-lucide="image-minus" class="w-4 h-4"></i> <span
-                                            id="profile-avatar-clear-label" data-i18n="profile.clear_avatar_btn">이미지
-                                            제거</span> </button> </div>
+                                            id="profile-avatar-clear-label" data-i1e8n="profile.remove"></span> </button> </div>
                             </div>
                             <div class="space-y-2"> <label id="profile-nickname-label" for="profile-nickname-input"
-                                    class="text-xs text-slate-300" data-i18n="profile.nickname_label">닉네임</label> <input
+                                    class="text-xs text-slate-300" data-i18n="profile.nickname"></label> <input
                                     id="profile-nickname-input"
                                     class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400"
                                     data-i18n-placeholder="profile.nickname_placeholder">
                                 <p id="profile-nickname-status" class="text-[11px] text-slate-300"
-                                    data-i18n="profile.nickname_status">프로필은 입력 즉시 저장됩니다.</p>
+                                    data-i18n="profile.realtime_hint"></p>
                             </div>
                         </article>
                     </section>
@@ -506,21 +506,18 @@
                                     data-i18n="settings.reset_tab"></span> </button>
                         </div>
                         <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-3">
-                            <h2 id="theme-title" class="text-sm font-semibold text-cyan-100" data-i18n="theme.title">테마
-                            </h2>
+                            <h2 id="theme-title" class="text-sm font-semibold text-cyan-100" data-i18n="common.theme"></h2>
                             <div class="space-y-2"> <label class="flex items-center gap-2 text-sm"> <input
                                         id="theme-option-dark" type="radio" name="theme-option" value="dark"
                                         class="accent-cyan-400"> <span id="theme-dark-label"
-                                        data-i18n="theme.dark">Dark</span> </label> <label
+                                        data-i18n="theme.dark"></span> </label> <label
                                     class="flex items-center gap-2 text-sm"> <input id="theme-option-light" type="radio"
                                         name="theme-option" value="light" class="accent-cyan-400"> <span
-                                        id="theme-light-label" data-i18n="theme.light">Light</span> </label> <label
+                                        id="theme-light-label" data-i18n="theme.light"></span> </label> <label
                                     class="flex items-center gap-2 text-sm" data-i18n-title="theme.oled_tip"> <input
                                         id="theme-option-oled" type="radio" name="theme-option" value="oled"
-                                        class="accent-cyan-400"> <span id="theme-oled-label" data-i18n="theme.oled">OLED
-                                        Black</span> </label> </div>
-                            <p id="theme-status-text" class="text-[11px] text-slate-300" data-i18n="theme.status_text">
-                                테마 변경 사항은 즉시 적용되며 자동 저장됩니다.</p>
+                                        class="accent-cyan-400"> <span id="theme-oled-label" data-i18n="theme.oled"></span> </label> </div>
+                            <p id="theme-status-text" class="text-[11px] text-slate-300" data-i18n="theme.hint"></p>
                         </article>
                     </section>
                     <section id="settings-panel-language" data-settings-panel="language"
@@ -534,99 +531,94 @@
                         </div>
                         <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-3">
                             <h2 id="language-title" class="text-sm font-semibold text-cyan-100"
-                                data-i18n="language.title">언어</h2>
+                                data-i18n="common.language"></h2>
                             <div class="space-y-2"> <label id="language-select-label" for="language-select"
-                                    class="text-xs text-slate-300" data-i18n="language.display_language">표시 언어</label>
+                                    class="text-xs text-slate-300" data-i18n="language.label"></label>
                                 <select id="language-select"
                                     class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400">
-                                    <option value="ko">한국어</option>
-                                    <option value="en">English</option>
-                                    <option value="ja">日本語</option>
-                                    <option value="zh-CN">简体中文</option>
+                                    <option value="ko" data-i18n="language.korean"></option>
+                                    <option value="en" data-i18n="language.english"></option>
+                                    <option value="ja" data-i18n="language.japanese"></option>
+                                    <option value="zh-CN" data-i18n="language.chinese_simplified"></option>
                                 </select>
                             </div>
                             <p id="language-status-text" class="text-[11px] text-slate-300"
-                                data-i18n="language.status_text">언어 변경 시 UI와 모델 응답 언어가 즉시
-                                전환됩니다.</p>
+                                data-i18n="language.hint"></p>
                         </article>
                     </section>
                     <section id="settings-panel-backup" data-settings-panel="backup"
                         class="hidden h-full overflow-y-auto p-4 md:p-5 space-y-4"
-                        data-i18n-aria-label="settings.panel.backup_label">
+                        data-i18n-aria-label="common.backup_and_restore">
                         <div class="flex justify-end"> <button type="button" data-action="reset-settings-tab"
                                 data-tab="backup"
                                 class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[11px]">
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> <span
-                                    data-i18n="settings.reset_tab">기본값으로 복원</span> </button>
+                                    data-i18n="settings.reset_tab"></span> </button>
                         </div>
                         <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-3">
                             <h2 class="text-sm font-semibold text-cyan-100 flex items-center gap-2"
-                                data-i18n="backup.drive_connect_title">
-                                Google Drive 백업 연결
+                                data-i18n="backup.gdrive.title">
                                 <a href="https://console.cloud.google.com/apis/credentials" target="_blank"
                                     class="text-[10px] text-cyan-400/80 hover:text-cyan-300 hover:underline font-normal ml-auto"
-                                    title="Google Cloud Console 열기" data-i18n="backup.drive_client_id_link">Client ID
-                                    발급받기 &rarr;</a>
+                                    title="Google Cloud Console 열기" data-i18n="backup.gdrive.client_id_link"></a>
                             </h2>
                             <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-center">
                                 <input id="drive-client-id-input"
                                     class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400"
-                                    data-i18n-placeholder="backup.drive_client_id_placeholder"> <button
+                                    data-i18n-placeholder="backup.gdrive.client_id_placeholder"> <button
                                     id="drive-client-id-save-btn" type="button"
                                     class="inline-flex items-center justify-center gap-2 border border-cyan-300/40 hover:bg-cyan-500/15 rounded-xl px-4 py-2 text-xs">
                                     <i data-lucide="key-round" class="w-4 h-4"></i> <span
-                                        data-i18n="backup.save_client_id_btn">저장</span> </button>
+                                        data-i18n="common.save"></span> </button>
                             </div>
                             <div class="flex flex-wrap gap-2"> <button id="drive-connect-btn" type="button"
                                     class="inline-flex items-center gap-2 border border-emerald-300/40 hover:bg-emerald-500/15 rounded-lg px-3 py-2 text-xs">
                                     <i data-lucide="link-2" class="w-4 h-4"></i> <span
-                                        data-i18n="backup.connect_drive_btn">Google Drive 연결</span> </button> <button
+                                        data-i18n="backup.gdrive.btn_connect"></span> </button> <button
                                     id="drive-disconnect-btn" type="button"
                                     class="inline-flex items-center gap-2 border border-slate-500/60 hover:bg-slate-700/50 rounded-lg px-3 py-2 text-xs">
                                     <i data-lucide="unlink-2" class="w-4 h-4"></i> <span
-                                        data-i18n="backup.disconnect_drive_btn">연결 해제</span> </button> </div>
+                                        data-i18n="backup.gdrive.btn_disconnect"></span> </button> </div>
                             <div id="drive-auth-status" class="text-[11px] text-slate-300"
-                                data-i18n="backup.drive_status_disconnected">미연결</div>
+                                data-i18n="backup.gdrive.status_disconnected"></div>
                             <div id="drive-last-sync-text" class="text-[11px] text-slate-400"
-                                data-i18n="backup.last_sync">마지막 동기화: -</div> <label
+                                data-i18n="backup.gdrive.last_sync"></div> <label
                                 class="inline-flex items-center gap-2 text-xs text-slate-200"> <input
                                     id="drive-auto-backup-toggle" type="checkbox" class="accent-cyan-400"> <span
-                                    data-i18n="backup.auto_backup_toggle">자동 백업 활성화 (변경
-                                    시 자동 업로드)</span> </label>
+                                    data-i18n="backup.gdrive.auto_label"></span> </label>
                             <div class="flex flex-wrap gap-2"> <button id="drive-backup-now-btn" type="button"
                                     class="inline-flex items-center gap-2 border border-cyan-300/40 hover:bg-cyan-500/15 rounded-lg px-3 py-2 text-xs">
                                     <i data-lucide="upload-cloud" class="w-4 h-4"></i> <span
-                                        data-i18n="backup.backup_now_btn">지금 백업</span> </button> <button
+                                        data-i18n="backup.gdrive.btn_backup_now"></span> </button> <button
                                     id="drive-refresh-files-btn" type="button"
                                     class="inline-flex items-center gap-2 border border-slate-500/60 hover:bg-slate-700/50 rounded-lg px-3 py-2 text-xs">
                                     <i data-lucide="refresh-cw" class="w-4 h-4"></i> <span
-                                        data-i18n="backup.refresh_files_btn">파일 목록 새로고침</span> </button> </div>
+                                        data-i18n="backup.gdrive.btn_refresh_files"></span> </button> </div>
                             <div class="space-y-2">
                                 <div
                                     class="w-full h-2 rounded-full bg-slate-800/90 overflow-hidden border border-slate-700/70">
                                     <div id="drive-progress-bar"
                                         class="h-full w-0 bg-cyan-400 transition-[width] duration-200"></div>
                                 </div>
-                                <div class="text-[11px] text-slate-300"> <span data-i18n="backup.progress">진행률:</span>
+                                <div class="text-[11px] text-slate-300"> <span data-i18n="backup.gdrive.progress"></span>
                                     <span id="drive-progress-percent" class="text-cyan-100">0%</span>
                                 </div>
                                 <div id="drive-progress-status" class="text-[11px] text-slate-300"
-                                    data-i18n="backup.progress_idle">대기</div>
+                                    data-i18n="backup.gdrive.progress_status"></div>
                             </div>
                         </article>
                         <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-3">
-                            <h2 class="text-sm font-semibold text-cyan-100" data-i18n="backup.restore_title">백업 복원</h2>
+                            <h2 class="text-sm font-semibold text-cyan-100" data-i18n="backup.restore.title"></h2>
                             <div class="space-y-2"> <label for="drive-backup-file-select" class="text-xs text-slate-300"
-                                    data-i18n="backup.drive_snapshot_label">Drive 백업 스냅샷</label> <select
+                                    data-i18n="backup.restore.snapshot_label"></label> <select
                                     class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400"></select>
                             </div> <label class="inline-flex items-center gap-2 text-xs text-slate-200"> <input
                                     id="drive-backup-file-select" id="drive-restore-overwrite-toggle" type="checkbox"
                                     class="accent-cyan-400" checked="checked"> <span
-                                    data-i18n="backup.overwrite_conversations_toggle">현재 대화 목록
-                                    덮어쓰기</span> </label> <button id="drive-restore-btn" type="button"
-                                class="inline-flex items-center gap-2 border border-amber-300/40 hover:bg-amber-500/15 rounded-lg px-3 py-2 text-xs">
-                                <i data-lucide="download-cloud" class="w-4 h-4"></i> 선택 백업 복원 </button>
-                            <div id="drive-file-list-meta" class="text-[11px] text-slate-300">백업 파일 0개</div>
+                                    data-i18n="backup.restore.overwrite_label"></span> </label> <button id="drive-restore-btn" type="button"
+                                class="inline-flex items-center gap-2 border border-amber-300/40 hover:bg-amber-500/15 rounded-lg px-3 py-2 text-xs" data-i18n="backup.restore.btn_restore">
+                                <i data-lucide="download-cloud" class="w-4 h-4"></i></button>
+                            <div id="drive-file-list-meta" class="text-[11px] text-slate-300" data-i18n="backup.restore.file_count"></div>
                         </article>
                     </section>
                 </div>
@@ -645,41 +637,41 @@
             </div>
             <div class="p-4 md:p-5 space-y-4 overflow-y-auto text-sm" style="max-height:calc(100vh - 10rem)">
                 <div class="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4">
-                    <div class="text-[11px] uppercase tracking-[0.2em] text-emerald-200/90">선택된 모델</div>
+                    <div class="text-[11px] uppercase tracking-[0.2em] text-emerald-200/90" data-i18n="model_card.selected"></div>
                     <div id="model-card-name" class="mt-1 text-base font-semibold text-emerald-100">-</div>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400">업로더</div>
+                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400" data-i18n="model_card.uploader"></div>
                         <div id="model-card-uploader" class="mt-1 text-slate-100">-</div>
                     </div>
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400">태스크</div>
+                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400" data-i18n="model_card.task"></div>
                         <div id="model-card-task" class="mt-1 text-slate-100">-</div>
                     </div>
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400">다운로드</div>
+                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400" data-i18n="model_card.downloads"></div>
                         <div id="model-card-downloads" class="mt-1 text-slate-100">-</div>
                     </div>
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400">라이선스</div>
+                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400" data-i18n="model_card.license"></div>
                         <div id="model-card-license" class="mt-1 text-slate-100">-</div>
                     </div>
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400">좋아요</div>
+                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400" data-i18n="model_card.likes"></div>
                         <div id="model-card-likes" class="mt-1 text-slate-100">-</div>
                     </div>
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400">최종 업데이트</div>
+                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400" data-i18n="model_card.updated"></div>
                         <div id="model-card-updated" class="mt-1 text-slate-100">-</div>
                     </div>
                 </div>
                 <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                    <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400">태그</div>
+                    <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400" data-i18n="model_card.tags"></div>
                     <div id="model-card-tags" class="mt-1 text-slate-100 break-words">-</div>
                 </div>
                 <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                    <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400">설명</div>
+                    <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400" data-i18n="model_card.description"></div>
                     <div id="model-card-summary" class="mt-1 text-slate-100 whitespace-pre-wrap break-words">-</div>
                 </div>
             </div>
@@ -709,10 +701,10 @@
                 data-i18n="dialog.delete.message"></p>
             <div class="mt-5 flex items-center justify-end gap-2"> <button id="delete-dialog-cancel-btn" type="button"
                     class="rounded-lg border border-slate-600 px-4 py-2 text-xs hover:bg-slate-800/70"
-                    data-i18n="dialog.delete.cancel"></button>
+                    data-i18n="common.cancel"></button>
                 <button id="delete-dialog-confirm-btn" type="button"
                     class="inline-flex items-center gap-1 rounded-lg border border-rose-400/45 bg-rose-500/15 px-4 py-2 text-xs text-rose-100 hover:bg-rose-500/25">
-                    <i data-lucide="trash-2" class="w-3 h-3"></i> <span data-i18n="dialog.delete.confirm"></span>
+                    <i data-lucide="trash-2" class="w-3 h-3"></i> <span data-i18n="common.delete"></span>
                 </button>
             </div>
         </div>
@@ -724,7 +716,7 @@
                 data-i18n="dialog.error.message"></p>
             <div class="mt-5 flex items-center justify-end"> <button id="error-dialog-close-btn" type="button"
                     class="rounded-lg border border-slate-600 px-4 py-2 text-xs hover:bg-slate-800/70"
-                    data-i18n="dialog.error.close"></button>
+                    data-i18n="common.close"></button>
             </div>
         </div>
     </div>

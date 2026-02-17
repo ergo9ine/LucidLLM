@@ -532,23 +532,6 @@
             transition: transform 120ms ease, box-shadow 120ms ease;
         }
 
-        .message-copy-btn {
-            opacity: 0;
-            transform: translateY(-2px);
-            transition: opacity 160ms ease, transform 160ms ease;
-        }
-
-        .message-bubble:hover .message-copy-btn,
-        .message-bubble:focus-within .message-copy-btn {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .message-copy-btn:focus-visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
         .chat-input-actions {
             display: inline-flex;
             align-items: center;
@@ -556,72 +539,7 @@
             gap: 8px;
         }
 
-        .chat-inference-toggle-btn {
-            position: relative;
-            width: 24px;
-            height: 24px;
-            min-width: 24px;
-            border-radius: 8px;
-            border: 1px solid rgba(34, 211, 238, 0.4);
-            background: rgba(15, 23, 42, 0.55);
-            color: #e2e8f0;
-            opacity: 0.5;
-            transition: opacity 200ms ease, border-color 200ms ease, background-color 200ms ease;
-        }
 
-        .chat-inference-toggle-btn:disabled {
-            cursor: not-allowed;
-            opacity: 0.35;
-        }
-
-        .chat-inference-toggle-btn[aria-pressed="true"] {
-            opacity: 1;
-            border-color: rgba(34, 211, 238, 0.75);
-            background: rgba(34, 211, 238, 0.2);
-        }
-
-        .chat-inference-toggle-btn:focus-visible {
-            outline: none;
-            box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.55);
-        }
-
-        .chat-inference-icon {
-            position: absolute;
-            inset: 0;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 13px;
-            line-height: 1;
-            transition: opacity 200ms ease;
-        }
-
-        .chat-inference-icon-on {
-            opacity: 0;
-        }
-
-        .chat-inference-icon-off {
-            opacity: 1;
-        }
-
-        .chat-inference-toggle-btn[aria-pressed="true"] .chat-inference-icon-on {
-            opacity: 1;
-        }
-
-        .chat-inference-toggle-btn[aria-pressed="true"] .chat-inference-icon-off {
-            opacity: 0;
-        }
-
-        :root[data-theme="light"] .chat-inference-toggle-btn {
-            border-color: rgba(2, 132, 199, 0.45);
-            background: #f8fafc;
-            color: #0f172a;
-        }
-
-        :root[data-theme="light"] .chat-inference-toggle-btn[aria-pressed="true"] {
-            border-color: rgba(2, 132, 199, 0.75);
-            background: #dbeafe;
-        }
 
         .tabs-scroll {
             scrollbar-width: thin;
@@ -1207,5 +1125,18 @@
             border-color: #2a2a2a !important;
             color: #c4c4c4 !important;
             box-shadow: none !important;
+        }
+
+        /* ── Streaming cursor ── */
+        @keyframes llm-stream-blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        .llm-stream-cursor::after {
+            content: "▍";
+            display: inline;
+            color: var(--llm-color-brand-500);
+            animation: llm-stream-blink 0.6s steps(2, jump-none) infinite;
         }
 

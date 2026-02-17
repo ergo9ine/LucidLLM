@@ -1,3 +1,17 @@
+/**
+ * Shared Utilities & Global API Module
+ * 공통 유틸리티 함수와 전역 API 노출 기능을 제공합니다.
+ */
+
+// ============================================================================
+// Error & HTML Utilities
+// ============================================================================
+
+/**
+ * 오류 객체에서 메시지를 추출합니다.
+ * @param {*} error
+ * @returns {string}
+ */
 export function getErrorMessage(error) {
     if (!error) return "알 수 없는 오류";
     if (typeof error === "string") return error;
@@ -5,6 +19,11 @@ export function getErrorMessage(error) {
     return String(error);
 }
 
+/**
+ * HTML 특수 문자를 이스케이프합니다.
+ * @param {*} value
+ * @returns {string}
+ */
 export function escapeHtml(value) {
     return String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -14,10 +33,24 @@ export function escapeHtml(value) {
         .replace(/'/g, "&#39;");
 }
 
+/**
+ * 지정된 밀리초만큼 지연합니다.
+ * @param {number} ms
+ * @returns {Promise<void>}
+ */
 export function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ============================================================================
+// Formatting Utilities
+// ============================================================================
+
+/**
+ * 바이트 크기를 읽기 쉬운 형식으로 변환합니다.
+ * @param {number} bytes
+ * @returns {string}
+ */
 export function formatBytes(bytes) {
     const size = Number(bytes);
     if (!Number.isFinite(size) || size < 0) return "0 B";
@@ -27,12 +60,22 @@ export function formatBytes(bytes) {
     return `${(size / (1024 ** 3)).toFixed(2)} GB`;
 }
 
+/**
+ * 전송 속도를 포맷팅합니다.
+ * @param {number} bytesPerSecond
+ * @returns {string}
+ */
 export function formatSpeed(bytesPerSecond) {
     const speed = Number(bytesPerSecond);
     if (!Number.isFinite(speed) || speed <= 0) return "-";
     return `${formatBytes(speed)}/s`;
 }
 
+/**
+ * 예상 소요 시간을 포맷팅합니다.
+ * @param {number} seconds
+ * @returns {string}
+ */
 export function formatEta(seconds) {
     const value = Number(seconds);
     if (!Number.isFinite(value) || value < 0) return "-";
@@ -41,6 +84,15 @@ export function formatEta(seconds) {
     return `${Math.ceil(value / 3600)}시간`;
 }
 
+// ============================================================================
+// File & Text Utilities
+// ============================================================================
+
+/**
+ * 파일을 Data URL 로 읽습니다.
+ * @param {File} file
+ * @returns {Promise<string>}
+ */
 export function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -50,6 +102,11 @@ export function readFileAsDataUrl(file) {
     });
 }
 
+/**
+ * 텍스트의 대략적인 토큰 수를 계산합니다.
+ * @param {string} text
+ * @returns {number}
+ */
 export function countApproxTokens(text) {
     const s = String(text ?? "");
     if (!s) return 0;
@@ -67,12 +124,28 @@ export function countApproxTokens(text) {
     return Math.max(1, Math.ceil(count));
 }
 
+/**
+ * 프롬프트 텍스트를 정규화합니다.
+ * @param {*} value
+ * @returns {string}
+ */
 export function normalizePromptText(value) {
     return String(value ?? "")
         .trim()
         .replace(/\s+/g, " ");
 }
 
+// ============================================================================
+// Network & Backend Utilities
+// ============================================================================
+
+/**
+ * 지수 백오프 지연 시간을 계산합니다.
+ * @param {number} baseDelayMs
+ * @param {number} attempt
+ * @param {{maxDelayMs?: number}} options
+ * @returns {number}
+ */
 export function calculateExponentialBackoffDelay(baseDelayMs, attempt, options = {}) {
     const base = Math.max(0, Number(baseDelayMs) ?? 0);
     const step = Math.max(1, Math.trunc(Number(attempt) || 1));
@@ -84,6 +157,12 @@ export function calculateExponentialBackoffDelay(baseDelayMs, attempt, options =
     return Math.max(0, Math.trunc(bounded));
 }
 
+/**
+ * HTTPS URL 인지 확인합니다.
+ * @param {*} value
+ * @param {{allowLocalhostHttp?: boolean}} options
+ * @returns {boolean}
+ */
 export function isHttpsUrl(value, options = {}) {
     const text = String(value ?? "").trim();
     if (!text) return false;
@@ -110,6 +189,12 @@ export function isHttpsUrl(value, options = {}) {
     }
 }
 
+/**
+ * 추론 백엔드 체인을 해결합니다.
+ * @param {*} preferredDevice
+ * @param {{webgpu?: boolean, wasm?: boolean}} capabilities
+ * @returns {string[]}
+ */
 export function resolveInferenceBackendChain(preferredDevice, capabilities = {}) {
     const preferred = String(preferredDevice ?? "").trim().toLowerCase();
     const hasWebGpu = capabilities.webgpu === true;
@@ -141,14 +226,145 @@ export function resolveInferenceBackendChain(preferredDevice, capabilities = {})
     return deduped.length > 0 ? deduped : ["wasm"];
 }
 
-export function calculatePerformanceDropPercent(baselineDurationMs, loadedDurationMs) {
-    const baseline = Number(baselineDurationMs);
-    const loaded = Number(loadedDurationMs);
-    if (!Number.isFinite(baseline) || baseline <= 0 || !Number.isFinite(loaded) || loaded <= 0) {
-        return null;
+// ============================================================================
+// Streaming Utilities
+// ============================================================================
+
+/**
+ * 빔 서치/생성 결과에서 토큰 ID 배열을 추출합니다.
+ * Transformers.js 의 다양한 출력 형식을 지원합니다.
+ * @param {*} payload
+ * @returns {number[]}
+ */
+export function extractTokenIdsFromBeamPayload(payload) {
+    if (!payload) return [];
+    if (Array.isArray(payload)) {
+        const first = payload[0];
+        if (first && typeof first === "object" && Array.isArray(first.output_token_ids)) {
+            return first.output_token_ids;
+        }
+        if (Array.isArray(first)) {
+            return first;
+        }
     }
-    if (loaded <= baseline) {
-        return 0;
+    if (payload && typeof payload === "object") {
+        if (Array.isArray(payload.output_token_ids)) return payload.output_token_ids;
+        if (Array.isArray(payload.token_ids)) return payload.token_ids;
+        if (Array.isArray(payload.ids)) return payload.ids;
     }
-    return ((loaded - baseline) / baseline) * 100;
+    return [];
+}
+
+/**
+ * 누적 디코딩된 텍스트에서 이전 텍스트 대비 새로 생성된 델타를 계산합니다.
+ * @param {string} decoded - 현재까지 누적 디코딩된 전체 텍스트
+ * @param {string} previousText - 이전 단계까지의 텍스트
+ * @returns {{ delta: string, fullText: string }}
+ */
+export function computeStreamTokenDelta(decoded, previousText) {
+    const prev = String(previousText ?? "");
+    const current = String(decoded ?? "");
+    if (!current) return { delta: "", fullText: prev };
+    const delta = current.startsWith(prev) ? current.slice(prev.length) : current;
+    return { delta, fullText: current };
+}
+
+/**
+ * 버퍼링된 텍스트의 길이에 따라 한 번에 드레인할 문자 수를 결정합니다.
+ * 버퍼가 클수록 더 많이 드레인하여 렌더링 지연을 방지합니다.
+ * @param {number} bufferedLength
+ * @returns {number}
+ */
+export function computeStreamDrainCount(bufferedLength) {
+    const len = Math.max(0, Math.trunc(Number(bufferedLength) || 0));
+    if (len <= 0) return 0;
+    if (len > 500) return 20;
+    if (len > 100) return 5;
+    return 1;
+}
+
+/**
+ * 토큰 생성 속도를 계산합니다 (tokens per second).
+ * @param {number} totalTokens
+ * @param {number} startedAtMs - 생성 시작 시각 (밀리초)
+ * @param {number} nowMs - 현재 시각 (밀리초)
+ * @returns {number}
+ */
+export function computeTokensPerSecond(totalTokens, startedAtMs, nowMs) {
+    if (!startedAtMs || totalTokens <= 0) return 0;
+    const elapsedSec = Math.max((nowMs - startedAtMs) / 1000, 0.001);
+    return totalTokens / elapsedSec;
+}
+
+// ============================================================================
+// Global API Utilities
+// ============================================================================
+
+const LUCID_APP_GLOBAL_KEY = "LucidApp";
+
+/**
+ * 호스트 객체를 해결합니다.
+ * @param {*} hostCandidate
+ * @returns {*}
+ */
+function resolveHost(hostCandidate) {
+    if (hostCandidate && (typeof hostCandidate === "object" || typeof hostCandidate === "function")) {
+        return hostCandidate;
+    }
+    return globalThis;
+}
+
+/**
+ * Lucid 앱 전역 객체를 보장합니다.
+ * @param {*} host
+ * @returns {Object}
+ */
+function ensureLucidAppGlobal(host = globalThis) {
+    const root = resolveHost(host);
+    const existing = root[LUCID_APP_GLOBAL_KEY];
+    if (existing && typeof existing === "object") {
+        return existing;
+    }
+    const created = {};
+    root[LUCID_APP_GLOBAL_KEY] = created;
+    return created;
+}
+
+/**
+ * Lucid API 를 전역에 노출합니다.
+ * @param {Object} api
+ * @param {{host?: any, exposeLegacy?: boolean}} options
+ * @returns {Object}
+ */
+export function publishLucidApi(api = {}, options = {}) {
+    const root = resolveHost(options.host);
+    const namespace = ensureLucidAppGlobal(root);
+    if (api && typeof api === "object") {
+        Object.assign(namespace, api);
+        if (options.exposeLegacy === true) {
+            Object.assign(root, api);
+        }
+    }
+    return namespace;
+}
+
+/**
+ * 값을 전역에 노출합니다.
+ * @param {string} key
+ * @param {*} value
+ * @param {{host?: any, legacyKey?: string}} options
+ * @returns {*}
+ */
+export function publishLucidValue(key, value, options = {}) {
+    const root = resolveHost(options.host);
+    const namespace = ensureLucidAppGlobal(root);
+    const normalizedKey = String(key ?? "").trim();
+    if (normalizedKey) {
+        namespace[normalizedKey] = value;
+    }
+    const legacyKey = String(options.legacyKey ?? "").trim();
+    if (legacyKey) {
+        root[legacyKey] = value;
+    }
+    return value;
 }

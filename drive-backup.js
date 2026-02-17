@@ -1,3 +1,12 @@
+/**
+ * Drive Backup Module
+ * 백업 파일 생성, 암호화, 복호화 및 유틸리티 기능을 제공합니다.
+ */
+
+// ============================================================================
+// Compression Utilities
+// ============================================================================
+
 function supportsCompressionStream() {
     return typeof CompressionStream === "function" && typeof DecompressionStream === "function";
 }
@@ -18,6 +27,10 @@ async function decompressBytesGzip(bytes) {
     return new Uint8Array(await blob.arrayBuffer());
 }
 
+// ============================================================================
+// Encoding Utilities
+// ============================================================================
+
 function bytesToBase64(bytes) {
     let binary = "";
     const step = 0x8000;
@@ -37,7 +50,11 @@ function base64ToBytes(value) {
     return out;
 }
 
-async function deriveDriveBackupAesKey(passphrase, saltBytes, iterations) {
+// ============================================================================
+// Cryptography Utilities
+// ============================================================================
+
+async function deriveBackupAesKey(passphrase, saltBytes, iterations) {
     const enc = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey(
         "raw",
@@ -60,6 +77,16 @@ async function deriveDriveBackupAesKey(passphrase, saltBytes, iterations) {
     );
 }
 
+// ============================================================================
+// Backup Creation & Parsing
+// ============================================================================
+
+/**
+ * 백업 업로드용 텍스트를 생성합니다.
+ * @param {Object} payload - 백업할 데이터
+ * @param {Object} options - 옵션 (passphrase, compress, kdfIterations)
+ * @returns {Promise<{text: string, encrypted: boolean, compressed: boolean}>}
+ */
 export async function createBackupUploadText(payload, options = {}) {
     const {
         passphrase = "",
@@ -87,13 +114,14 @@ export async function createBackupUploadText(payload, options = {}) {
 
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const key = await deriveDriveBackupAesKey(normalizedPassphrase, salt, Math.max(1, Math.trunc(Number(kdfIterations || 1))));
+    const iterations = Math.max(1, Math.trunc(Number(kdfIterations || 1)));
+    const key = await deriveBackupAesKey(normalizedPassphrase, salt, iterations);
     const cipher = await crypto.subtle.encrypt(
         { name: "AES-GCM", iv },
         key,
         bytes,
     );
-    const iterations = Math.max(1, Math.trunc(Number(kdfIterations || 1)));
+
     const envelope = {
         format: "lucid-backup-envelope.v1",
         encrypted: true,
@@ -115,6 +143,12 @@ export async function createBackupUploadText(payload, options = {}) {
     };
 }
 
+/**
+ * 백업 텍스트를 파싱하여 원본 payload 를 복원합니다.
+ * @param {string} rawText - 백업 텍스트
+ * @param {Object} options - 옵션 (passphrase, kdfIterations)
+ * @returns {Promise<Object>}
+ */
 export async function parseBackupPayloadFromText(rawText, options = {}) {
     const {
         passphrase = "",
@@ -136,7 +170,7 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
     const encrypted = base64ToBytes(parsed.data);
     const fallbackIterations = Math.max(1, Math.trunc(Number(kdfIterations || 1)));
     const parsedIterations = Math.max(1, Math.trunc(Number(parsed?.kdf?.iterations || fallbackIterations)));
-    const key = await deriveDriveBackupAesKey(normalizedPassphrase, salt, parsedIterations);
+    const key = await deriveBackupAesKey(normalizedPassphrase, salt, parsedIterations);
     const plainBuffer = await crypto.subtle.decrypt(
         { name: "AES-GCM", iv },
         key,
@@ -148,4 +182,60 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
     }
     const plainText = new TextDecoder().decode(plainBytes);
     return JSON.parse(plainText);
+}
+
+// ============================================================================
+// File Name & Query Utilities
+// ============================================================================
+
+/**
+ * 백업 파일명을 생성합니다.
+ * @param {string} prefix - 파일명 접두사
+ * @param {Date|number|string} now - 날짜 (기본값: 현재 시각)
+ * @returns {string}
+ */
+export function formatBackupFileName(prefix = "backup_", now = new Date()) {
+    const safePrefix = String(prefix ?? "backup_");
+    const timestamp = now instanceof Date ? now : new Date(now);
+    const pad = (num) => String(num).padStart(2, "0");
+    const stamp = `${timestamp.getFullYear()}${pad(timestamp.getMonth() + 1)}${pad(timestamp.getDate())}_${pad(timestamp.getHours())}${pad(timestamp.getMinutes())}${pad(timestamp.getSeconds())}`;
+    return `${safePrefix}${stamp}.json`;
+}
+
+/**
+ * Drive 쿼리용 리터럴 값을 이스케이프합니다.
+ * @param {string} value
+ * @returns {string}
+ */
+export function escapeDriveQueryLiteral(value) {
+    return String(value ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+// ============================================================================
+// Payload Utilities
+// ============================================================================
+
+/**
+ * 백업 서명용 데이터를 생성합니다.
+ * @param {Object} payload
+ * @returns {string}
+ */
+export function buildBackupSignature(payload) {
+    const sessions = Array.isArray(payload?.chatSessions) ? payload.chatSessions : [];
+    const active = String(payload?.activeChatSessionId ?? "");
+    const settings = payload?.settings || {};
+    return JSON.stringify({ sessions, active, settings });
+}
+
+/**
+ * 백업 payload 의 바이트 크기를 추정합니다.
+ * @param {Object} payload
+ * @returns {number}
+ */
+export function estimateBackupPayloadBytes(payload) {
+    try {
+        return new Blob([JSON.stringify(payload)]).size;
+    } catch (_) {
+        return 0;
+    }
 }

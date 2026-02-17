@@ -1,13 +1,41 @@
+/**
+ * Web Worker - Transformers.js Inference
+ * 브라우저 내 AI 추론을 위한 Web Worker 입니다.
+ */
+
+import {
+    extractTokenIdsFromBeamPayload,
+    computeStreamTokenDelta,
+} from "./shared-utils.js";
 
 const TRANSFORMERS_JS_VERSION = "3.8.1";
+
+/**
+ * Transformers.js CDN 미러 목록
+ */
 const TRANSFORMERS_JS_IMPORT_CANDIDATES = [
     `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}/+esm`,
     `https://unpkg.com/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}?module`,
 ];
 
+/**
+ * @type {Object|null}
+ */
 let transformersModule = null;
+
+/**
+ * @type {Map<string, Object>}
+ */
 const pipelines = new Map();
 
+// ============================================================================
+// Module Loading
+// ============================================================================
+
+/**
+ * Transformers.js 모듈을 로드합니다.
+ * @returns {Promise<Object>}
+ */
 async function loadTransformersModule() {
     if (transformersModule) return transformersModule;
 
@@ -20,7 +48,7 @@ async function loadTransformersModule() {
             // Configure environment
             const env = mod.env || mod.default?.env;
             if (env) {
-                env.allowLocalModels = false; // Worker doesn't need local file access usually, but let's check
+                env.allowLocalModels = false;
                 env.allowRemoteModels = true;
                 env.useBrowserCache = true;
             }
@@ -33,9 +61,18 @@ async function loadTransformersModule() {
     throw lastError || new Error("Failed to load transformers.js");
 }
 
+/**
+ * 파이프라인 팩토리 함수를 가져옵니다.
+ * @param {Object} mod
+ * @returns {Function}
+ */
 function getPipelineFactory(mod) {
     return mod.pipeline || mod.default?.pipeline;
 }
+
+// ============================================================================
+// Message Handler
+// ============================================================================
 
 self.onmessage = async (e) => {
     const { type, id, data } = e.data;
@@ -60,6 +97,15 @@ self.onmessage = async (e) => {
     }
 };
 
+// ============================================================================
+// Pipeline Management
+// ============================================================================
+
+/**
+ * 파이프라인을 초기화합니다.
+ * @param {string} id
+ * @param {Object} data
+ */
 async function handleInit(id, data) {
     const { task, modelId, options, key } = data;
 
@@ -78,25 +124,11 @@ async function handleInit(id, data) {
     self.postMessage({ type: 'init_done', id, key });
 }
 
-function extractTokenIdsFromGenerationBeamPayload(payload) {
-    if (!payload) return [];
-    if (Array.isArray(payload)) {
-        const first = payload[0];
-        if (first && typeof first === "object" && Array.isArray(first.output_token_ids)) {
-            return first.output_token_ids;
-        }
-        if (Array.isArray(first)) {
-            return first;
-        }
-    }
-    if (payload && typeof payload === "object") {
-        if (Array.isArray(payload.output_token_ids)) return payload.output_token_ids;
-        if (Array.isArray(payload.token_ids)) return payload.token_ids;
-        if (Array.isArray(payload.ids)) return payload.ids;
-    }
-    return [];
-}
-
+/**
+ * 텍스트 생성을 수행합니다.
+ * @param {string} id
+ * @param {Object} data
+ */
 async function handleGenerate(id, data) {
     const { key, prompt, options } = data;
     const pipe = pipelines.get(key);
@@ -107,33 +139,31 @@ async function handleGenerate(id, data) {
 
     let streamedText = "";
     let lastTokenCount = 0;
+
+    /**
+     * 빔 서치 콜백 함수 — 토큰이 생성될 때마다 호출됩니다.
+     * @param {Object} beamPayload
+     */
     const callback_function = (beamPayload) => {
         try {
-            const tokenIds = extractTokenIdsFromGenerationBeamPayload(beamPayload);
+            const tokenIds = extractTokenIdsFromBeamPayload(beamPayload);
             if (!Array.isArray(tokenIds) || tokenIds.length === 0) return;
 
             const currentTokenCount = tokenIds.length;
             const tokenIncrement = Math.max(0, currentTokenCount - lastTokenCount);
             lastTokenCount = currentTokenCount;
 
-            // Decode in worker
             if (pipe.tokenizer && typeof pipe.tokenizer.decode === "function") {
                 const decoded = pipe.tokenizer.decode(tokenIds, { skip_special_tokens: true });
-
-                let delta = "";
-                if (decoded.startsWith(streamedText)) {
-                    delta = decoded.slice(streamedText.length);
-                } else {
-                    delta = decoded;
-                }
-                streamedText = decoded;
+                const { delta, fullText } = computeStreamTokenDelta(decoded, streamedText);
+                streamedText = fullText;
 
                 if (delta || tokenIncrement > 0) {
                     self.postMessage({
-                        type: 'token',
+                        type: "token",
                         id,
                         token: delta,
-                        tokenIncrement
+                        tokenIncrement,
                     });
                 }
             }
@@ -144,20 +174,23 @@ async function handleGenerate(id, data) {
 
     const generateOptions = {
         ...options,
-        callback_function
+        callback_function,
     };
 
     const output = await pipe(prompt, generateOptions);
 
-    // Serialize output if necessary, or just send back text
-    // We usually want the full output object/array
     self.postMessage({
-        type: 'generate_done',
+        type: "generate_done",
         id,
-        output
+        output,
     });
 }
 
+/**
+ * 파이프라인을 해제합니다.
+ * @param {string} id
+ * @param {Object} data
+ */
 async function handleDispose(id, data) {
     const { key } = data;
     const pipe = pipelines.get(key);
@@ -169,3 +202,8 @@ async function handleDispose(id, data) {
     }
     self.postMessage({ type: 'dispose_done', id });
 }
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
