@@ -12,5 +12,7 @@
 !/favicon.svg
 !/*.md
 !/LICENSE
+!/script
+!/script/*.js
 !/docs/
 !/docs/*.md

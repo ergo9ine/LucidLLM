@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
     <link rel="preload" as="style" href="./style.css">
     <link rel="stylesheet" href="./style.css">
-    <link rel="modulepreload" href="./main.js">
+    <link rel="modulepreload" href="./script/main.js">
     <script defer="defer" src="https://cdn.tailwindcss.com"></script>
     <script defer="defer" src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -400,7 +400,7 @@
                                 data-i18n="llm.line_count"></p>
                         </article>
                         <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-3">
-                            <h2 class="text-sm font-semibold text-cyan-100" data-i18n="llm.generation.title"></h2>
+                            <h2 class="text-sm font-semibold text-cyan-100" data-i18n="llm.tokens.title"></h2>
                             <div class="space-y-2">
                                 <div class="flex items-center justify-between gap-2 text-xs"> <label
                                         for="max-output-tokens-input" class="text-slate-300"
@@ -417,32 +417,6 @@
                                     <option value="32k">32k</option>
                                     <option value="128k">128k</option>
                                 </select> </div>
-                            <div class="space-y-2">
-                                <div class="flex items-center justify-between gap-2 text-xs"> <label
-                                        for="temperature-input" class="text-slate-300"
-                                        data-i18n="llm.generation.temperature"></label> <span id="temperature-value"
-                                        class="text-cyan-100">0.8</span> </div> <input id="temperature-input"
-                                    type="range" min="0" max="2" step="0.01" value="0.8" class="w-full">
-                            </div>
-                            <div class="space-y-2">
-                                <div class="flex items-center justify-between gap-2 text-xs"> <label for="top-p-input"
-                                        class="text-slate-300" data-i18n="llm.generation.top_p"></label> <span id="top-p-value"
-                                        class="text-cyan-100">0.9</span> </div> <input id="top-p-input" type="range"
-                                    min="0" max="1" step="0.01" value="0.9" class="w-full">
-                            </div>
-                            <div class="space-y-2">
-                                <div class="flex items-center justify-between gap-2 text-xs"> <label for="top-k-input"
-                                        class="text-slate-300" data-i18n="llm.top_k"></label> <span id="top-k-value"
-                                        class="text-cyan-100">40</span> </div> <input id="top-k-input" type="range"
-                                    min="1" max="100" step="1" value="40" class="w-full">
-                            </div>
-                            <div class="space-y-2">
-                                <div class="flex items-center justify-between gap-2 text-xs"> <label
-                                        for="repeat-penalty-input" class="text-slate-300"
-                                        data-i18n="llm.repeat_penalty"></label> <span id="repeat-penalty-value"
-                                        class="text-cyan-100">1.1</span> </div> <input id="repeat-penalty-input"
-                                    type="range" min="1" max="2" step="0.01" value="1.1" class="w-full">
-                            </div>
                         </article>
                         <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 p-4 space-y-2">
                             <h2 class="text-sm font-semibold text-cyan-100" data-i18n="llm.token_settings"></h2> <input
@@ -722,7 +696,7 @@
     </div>
     <div id="toast" class="hidden fixed top-5 right-5 z-[90] max-w-md rounded-xl px-4 py-3 text-sm border"></div>
     <script async src="https://accounts.google.com/gsi/client"></script>
-    <script type="module" src="./bootstrap.js"></script>
+    <script type="module" src="./script/bootstrap.js"></script>
 </body>
 
 </html>

@@ -8,7 +8,7 @@ const MAIN_MODULE_PATH = "./main.js";
 const USER_PROFILE_KEY = "lucid_user_profile_v1";
 
 /**
- * 초기 i18n 설정: main.js 로드 전에 기본적인 UI 번역을 적용합니다.
+ * 초기 i18n ?�정: main.js 로드 ?�에 기본?�인 UI 번역???�용?�니??
  */
 function initEarlyI18n() {
     let lang = "en";
@@ -38,8 +38,7 @@ async function loadMainBundle() {
 }
 
 function bootstrapWithCodeSplitting() {
-    // 1. i18n 즉시 초기화
-    initEarlyI18n();
+    // 1. i18n 즉시 초기??    initEarlyI18n();
 
     const start = () => {
         void loadMainBundle();
