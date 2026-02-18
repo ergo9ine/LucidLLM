@@ -402,6 +402,22 @@ export const I18N_KEYS = {
  * @typedef {typeof I18N_KEYS[keyof typeof I18N_KEYS]} I18nKey
  */
 
+/* ─── 버전 관리 ─── */
+// main.js 에서 설정하는 버전 문자열
+let _appVersion = "Version-Pre-AT";
+
+/**
+ * 앱 버전을 설정합니다. main.js 에서 호출합니다.
+ * @param {string} version
+ */
+export function setAppVersion(version) {
+    _appVersion = version;
+    // COMMON 사전을 업데이트하여 기존 캐시된 번역도 갱신
+    COMMON[I18N_KEYS.CHAT_VERSION] = version;
+    // 캐시 클리어로 모든 언어에서 새 버전 적용
+    DICTIONARY_CACHE.clear();
+}
+
 /* ─── 번역 사전 (계층적 구조) ─── */
 
 // 공통 키 (모든 언어에서 동일)
@@ -410,7 +426,7 @@ const COMMON = {
     [I18N_KEYS.HEADER_DEVICE_WASM]: "🧩 CPU (WASM)",
     [I18N_KEYS.CHAT_LABEL_LUCID]: "Lucid Chat",
     [I18N_KEYS.CHAT_MEM_DEFAULT]: "Mem: -",
-    [I18N_KEYS.CHAT_VERSION]: "Version-Pre-AT",
+    [I18N_KEYS.CHAT_VERSION]: _appVersion,
     [I18N_KEYS.CHAT_META_YOU]: "YOU",
     [I18N_KEYS.CHAT_META_ASSISTANT]: "ASSISTANT",
     [I18N_KEYS.PROFILE_CHIP_DEFAULT_NAME]: "YOU",

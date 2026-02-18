@@ -1,6 +1,6 @@
 # LucidLLM Chat
 
-[English](README.md) | [한국어](README.ko.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+[한국어](docs/README.ko.md) | [English](README.md) | [日本語](docs/README.ja.md) | [简体中文](docs/README.zh-CN.md)
 
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
 ![Transformers.js](https://img.shields.io/badge/Transformers.js-v3.8.1-yellow)
@@ -184,24 +184,18 @@ Switch via the dropdown on the right side of the header:
 
 ```
 LucidLLM/
-├── index.html                  # Main HTML entry point (728 lines)
-├── bootstrap.js                # App initialization (62 lines)
-├── main.js                     # Core application logic (~12,600 lines)
-├── i18n.js                     # Internationalization module (~2,050 lines, 4 languages)
-├── shared-utils.js             # Shared utilities & global API (~450 lines)
-├── transformers-bridge.js      # Transformers.js interface layer (13 lines)
-├── worker.js                   # Web Worker for inference (~200 lines)
-├── drive-backup.js             # Google Drive backup with encryption (~250 lines)
-├── style.css                   # Custom styles and theme definitions (~1,140 lines)
+├── index.html                  # Main HTML entry point
+├── script/
+│   ├── bootstrap.js            # App initialization
+│   ├── main.js                 # Core application logic
+│   ├── i18n.js                 # Internationalization module
+│   ├── shared-utils.js         # Shared utilities & global API
+│   ├── worker.js               # Web Worker for inference
+│   └── drive-backup.js         # Google Drive backup with encryption
+├── style.css                   # Custom styles and theme definitions
 ├── favicon.svg                 # App icon
-├── package.json                # NPM package configuration
-├── docs/
-│   ├── roadmap.md              # Feature roadmap
-│   └── compatibility.md        # Model compatibility information
-└── tests/                      # Test suite (Vitest)
+└── package.json                # NPM package configuration
 ```
-
-**Total: ~18,200+ lines of code**
 
 ## 🛠️ Tech Stack
 
@@ -215,270 +209,9 @@ LucidLLM/
 | **Styling** | Tailwind CSS v3 (CDN) + Custom CSS Variables |
 | **Icons** | Lucide Icons (CDN) |
 | **Fonts** | Space Grotesk (Google Fonts) |
-| **Offline** | Planned (Service Worker) |
 | **Backup Auth** | Google Identity Services (OAuth 2.0) |
 | **Encryption** | Web Crypto API (PBKDF2, AES-GCM-256) |
-| **Compression** | CompressionStream API (Gzip) |
 | **CDN** | jsDelivr, unpkg |
-
-## 🔧 Configuration
-
-### Stored Settings (localStorage)
-
-| Category | Settings |
-|----------|----------|
-| **LLM** | System prompt, max tokens, context window, HF token, temperature, top_p, presence_penalty |
-| **Profile** | Nickname, avatar, language, theme |
-| **Inference** | Preferred device (webgpu/wasm) |
-| **Backup** | Client ID, auto backup, backup limit, last sync |
-
-### Key Storage Locations
-
-| Storage | Purpose |
-|---------|---------|
-| `lucid_user_profile_v1` | User profile (nickname, avatar, language, theme) |
-| `lucid_system_prompt` | System prompt configuration |
-| `lucid_max_output_tokens` | Max output tokens setting |
-| `lucid_context_window` | Context window size |
-| `lucid_inference_device` | Inference device preference |
-| `lucid_google_drive_*` | Google Drive backup settings |
-
-## 🧪 Development Guide
-
-### Code Conventions
-
-- **ES Modules** — All application code uses ES Module syntax.
-- **Centralized State Management** — Global state managed in single `state` object.
-- **Native Architecture** — Vanilla JS core with a custom Virtual DOM implementation for high-performance dynamic UI rendering.
-- **Internationalization (i18n)** — 200+ translation keys with hierarchical fallback.
-- **Accessibility** — ARIA attributes, keyboard navigation, focus management.
-- **Responsive Design** — Mobile-first with media queries and Tailwind CSS.
-
-### Key Modules
-
-#### `i18n.js` - Internationalization
-
-```javascript
-import { t, I18N_KEYS, setCurrentLanguage } from './i18n.js';
-
-// Set language
-setCurrentLanguage('ko');
-
-// Translate with variables
-t(I18N_KEYS.STATUS_MODEL_LOADING, { model: 'SmolLM2' });
-// → "SmolLM2 로딩 중..."
-
-// Apply to DOM
-applyI18nToDOM(document);
-```
-
-**Supported Languages:** Korean, English, Japanese, Simplified Chinese
-
-#### `shared-utils.js` - Utilities
-
-```javascript
-import {
-    formatBytes,
-    formatSpeed,
-    formatEta,
-    getErrorMessage,
-    publishLucidApi
-} from './shared-utils.js';
-
-// Format file size
-formatBytes(1024 * 1024 * 500);  // → "500 MB"
-
-// Format speed
-formatSpeed(1024 * 512);  // → "512 KB/s"
-
-// Format time
-formatEta(3665);  // → "1 시간"
-
-// Expose API globally
-publishLucidApi({ myFunction: () => {} });
-```
-
-### Running Tests
-
-```bash
-# Run test suite
-npm test
-
-# Test i18n module in browser
-# Open test-i18n.html in browser
-```
-
-### Building for Production
-
-**No build step required!** The application is zero-build and runs directly from static files.
-
-## 🗺️ Roadmap
-
-### Completed
-
-- [x] Optimized i18n system with lazy loading (200+ keys)
-- [x] Key namespace constants for i18n
-- [x] Hierarchical fallback structure for translations
-- [x] OPFS fetch interceptor for model caching
-- [x] Client-side encryption for backups
-- [x] Multi-session chat with independent histories
-- [x] Real-time token speed statistics
-
-### In Progress
-
-- [x] Streaming responses with token-by-token output
-- [ ] Markdown rendering with code syntax highlighting
-- [ ] Message editing and regeneration
-
-### Planned
-
-- [ ] Multimodal input (image analysis with Vision models)
-- [ ] Model comparison mode
-- [ ] Automatic quantization recommendation
-- [ ] RAG support for local documents
-- [ ] Function calling interface
-- [ ] Conversation branching (fork)
-- [ ] Voice input/output via Web Speech API
-- [ ] Web App Manifest for PWA installation
-- [ ] Push notifications for long inference tasks
-
-See [docs/roadmap.md](docs/roadmap.md) for the complete roadmap.
-
-## 🤝 Contributing
-
-Contributions are always welcome! If you find a bug or want to suggest a new feature, please register an Issue or send a Pull Request.
-
-### How to Contribute
-
-1. **Fork** this repository.
-2. Create a feature branch from the `main` branch:
-   ```bash
-   git checkout -b feature/your-feature
-   ```
-3. Follow **existing code styles**:
-   - ES Modules
-   - No Framework
-   - Direct DOM Manipulation
-4. **Add tests** in the `tests/` directory for new utility functions.
-5. Test functionality in the browser:
-   - Model loading
-   - Chat workflow
-   - Settings management
-6. **Do not commit**:
-   - `node_modules/`
-   - Editor settings
-   - Build artifacts
-7. Commit changes and create a Pull Request.
-
-### Issue Reporting
-
-Please include the following information when registering a GitHub Issue:
-
-- Browser name and version
-- OS and version
-- Steps to reproduce
-- Expected vs Actual behavior
-- Console error logs (if applicable)
-- Screenshots (if applicable)
-
-### Compatibility Reporting
-
-Some models may not be compatible with WASM or WebGPU environments depending on quantization levels. Please register compatible models in GitHub Issues with the following information:
-
-- Model Name
-- Repository (HF, Github URL)
-- Quantization Level
-- Version or Hash
-- Performance notes (tokens/sec, memory usage)
-
-See [docs/compatibility.md](docs/compatibility.md) for known compatible models.
-
-## 📊 Performance Benchmarks
-
-| Model | Device | Tokens/sec | Memory | First Token |
-|-------|--------|------------|--------|-------------|
-| SmolLM2-135M | WebGPU | ~45 tok/s | 800 MB | ~2s |
-| SmolLM2-135M | WASM | ~8 tok/s | 600 MB | ~5s |
-| Qwen2.5-0.5B | WebGPU | ~25 tok/s | 1.2 GB | ~3s |
-| Phi-3-mini | WebGPU | ~12 tok/s | 2.5 GB | ~5s |
-
-*Performance varies by hardware. Tested on M2 MacBook Pro.*
-
-## 🔒 Security
-
-- **Client-Side Encryption** — AES-GCM-256 with PBKDF2 key derivation (250,000 iterations)
-- **No Telemetry** — No analytics or tracking code
-- **Local Data Storage** — All data stays in browser unless explicitly backed up
-- **Secure Context Required** — HTTPS or localhost for OPFS/Service Worker
-
-## 📚 Documentation
-
-- [Roadmap](docs/roadmap.md) - Feature roadmap and planned improvements
-- [Compatibility](docs/compatibility.md) - Model compatibility information
-- [LICENSE](LICENSE) - MIT License
-
-## 🌐 Internationalization (i18n)
-
-This project provides multilingual support through `i18n.js` with 200+ translation keys. The language is automatically detected based on your browser's language settings, and you can manually change it in the Settings menu.
-
-**Supported Languages:**
-- 🇰🇷 한국어 (Korean)
-- 🇺🇸 English
-- 🇯🇵 日本語 (Japanese)
-- 🇨🇳 简体中文 (Simplified Chinese)
-
-### Adding a New Language
-
-1. Open `i18n.js`.
-2. Add language-specific translations in the appropriate section.
-3. Add overrides for `ja` or `zh-CN` if they inherit from English.
-4. Update `SUPPORTED_LANGUAGES` array.
-
-```javascript
-// Example: Adding German
-const DE_SPECIFIC = {
-    [I18N_KEYS.HEADER_SETTINGS]: "Einstellungen",
-    [I18N_KEYS.CHAT_PLACEHOLDER]: "Nachricht eingeben...",
-    // ...
-};
-```
-
-## 🏆 Notable Technical Achievements
-
-### 1. High-Performance Virtual DOM
-The application uses a custom, lightweight Virtual DOM implementation (`vdom.js`) to handle complex UI updates (like model tables and chat lists) with minimal overhead while maintaining zero-dependency simplicity.
-
-### 2. Zero-Build Architecture
-The entire application runs directly from static files without any build process. All dependencies are loaded from CDN.
-
-### 3. OPFS Fetch Interceptor
-Custom fetch interceptor transparently serves cached model files from OPFS, making remote Hugging Face requests appear as local file reads.
-
-### 4. Hierarchical i18n System
-- 200+ translation keys with `I18N_KEYS` constants
-- Hierarchical fallback: Current → English → Korean
-- Lazy-loaded dictionaries with caching
-- Automatic DOM translation via `data-i18n` attributes
-
-### 5. Client-Side Encryption
-Complete backup encryption using Web Crypto API:
-- PBKDF2 key derivation (250,000 iterations)
-- AES-GCM-256 encryption
-- Gzip compression support
-
-### 6. Streaming Token Generation
-Real-time token streaming with:
-- Beam search callback parsing
-- Delta computation for incremental display
-- Token speed statistics (avg/max/min)
-- Throttled rendering (60 FPS max)
-
-### 7. Download Manager
-Robust download system with:
-- Pause/resume support
-- Exponential backoff retry (3 retries, 800ms base)
-- Progress tracking (speed, ETA, bytes)
-- Queue management for multi-file models
 
 ## 📄 License
 

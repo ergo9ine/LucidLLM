@@ -1,3 +1,6 @@
+// App Version - managed centrally in main.js
+const APP_VERSION = "Version-Pre-AT";
+
 import {
     calculateExponentialBackoffDelay,
     computeStreamDrainCount,
@@ -28,7 +31,7 @@ import {
 import {
     getInjectedTransformersModule,
     setInjectedTransformersModule,
-} from "./transformers-bridge.js";
+} from "./shared-utils.js";
 import {
     SUPPORTED_LANGUAGES,
     I18N_MESSAGES,
@@ -40,7 +43,11 @@ import {
     setCurrentLanguage,
     getCurrentLanguage,
     applyI18nToDOM,
+    setAppVersion,
 } from "./i18n.js";
+
+// Set version in i18n module
+setAppVersion(APP_VERSION);
 
 const HF_BASE_URL = "https://huggingface.co";
 const HF_MODEL_API_PREFIX = "/api/models";

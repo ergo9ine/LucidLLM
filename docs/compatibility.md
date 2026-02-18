@@ -1,6 +1,23 @@
-# Model Compatibility / 모델 호환성
+# Model Compatibility
 
-| Model Name / 모델명 | Quantization / 양자화 |
+| Model Name | Quantization | Status | Sanity QA (gravity, capital of France) |
 | :--- | :--- | :--- | :--- |
-| HuggingFaceTB/SmolLM2-135M-Instruct | FP32 | Verified | - |
-| HuggingFaceTB/SmolLM2-135M-Instruct | BNB4 | Verified | - |
+| HuggingFaceTB/SmolLM2-135M-Instruct | FP32,BNB4,Q4 | Verified | Pass |
+| vicgalle/gpt2-alpaca-gpt4 | Unknown | Verified | Pass |
+
+## Sanity QA checks
+
+This repository uses a short "Sanity QA" to ensure models answer basic factual questions correctly. The check consists of two prompts; a model passes only if it returns correct, concise answers for both.
+
+- Question A — "What is gravity?"
+  - Expected: A brief correct definition, e.g. "Gravity is the natural force of attraction between masses; on Earth it causes objects to fall toward the ground and gives objects weight." 
+- Question B — "What is the capital of France?"
+  - Expected: "Paris."
+
+Pass criteria
+- The model must provide correct answers for both Question A and Question B.
+- Mark the `Sanity QA` column with `Pass` or `Fail` after manual or automated verification.
+
+Notes
+- Keep answers concise and factually correct; overly vague or incorrect answers should be marked as `Fail`.
+- If you want, I can run these checks against the models listed and update the table with `Pass/Fail` results — tell me which models to test.

@@ -297,6 +297,32 @@ export function computeTokensPerSecond(totalTokens, startedAtMs, nowMs) {
 }
 
 // ============================================================================
+// Transformers Bridge Utilities
+// ============================================================================
+
+const TRANSFORMERS_GLOBAL_KEY = "__LUCID_TRANSFORMERS_MODULE__";
+
+/**
+ * 주입된 Transformers 런타임 모듈을 가져옵니다.
+ * @param {*} host
+ * @returns {*}
+ */
+export function getInjectedTransformersModule(host = globalThis) {
+    return host?.[TRANSFORMERS_GLOBAL_KEY] ?? null;
+}
+
+/**
+ * Transformers 런타임 모듈을 주입합니다.
+ * @param {*} runtimeModule
+ * @param {*} host
+ * @returns {*}
+ */
+export function setInjectedTransformersModule(runtimeModule, host = globalThis) {
+    host[TRANSFORMERS_GLOBAL_KEY] = runtimeModule;
+    return host[TRANSFORMERS_GLOBAL_KEY];
+}
+
+// ============================================================================
 // Global API Utilities
 // ============================================================================
 
