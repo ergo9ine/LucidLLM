@@ -3,7 +3,7 @@
 [한국어](docs/README.ko.md) | [English](README.md) | [日本語](docs/README.ja.md) | [简体中文](docs/README.zh-CN.md)
 
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
-![Transformers.js](https://img.shields.io/badge/Transformers.js-v3.8.1-yellow)
+![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0-yellow)
 ![WebGPU](https://img.shields.io/badge/WebGPU-Supported-green)
 ![PWA](https://img.shields.io/badge/PWA-Planned-blue)
 
@@ -88,97 +88,69 @@
 | Qwen2.5-0.5B-Instruct | ~500M | Q4_K_M | Balanced performance |
 | Phi-3-mini-4k-instruct | ~3.8B | Q4_K_M | High-quality responses |
 
-## 🚀 Getting Started
+## 🚀 Quickstart
 
-### Hosted Version
+### Hosted demo
 
-Access the GitHub Pages deployment directly to use without installation:
+Try the GitHub Pages demo (no install required):
 
-👉 **[Live Demo](https://ergo9ine.github.io/LucidLLM/)**
+👉 **https://ergo9ine.github.io/LucidLLM/**
 
-### Local Execution
+### Local — static, zero‑build
 
-1. **Clone Repository**
+1. Clone the repo and serve the folder (HTTPS or localhost recommended for OPFS):
 
 ```bash
 git clone https://github.com/ergo9ine/LucidLLM.git
 cd LucidLLM
+npm run serve    # serves site at http://localhost:3000
 ```
 
-2. **Run Local Server**
+(Alternatives: `python -m http.server 8000` or `npx serve .`)
 
-A security context (HTTPS or localhost) is required for OPFS and Service Worker usage.
+Open the app in Chrome/Edge and go to Settings → Model Management to fetch and activate a model.
 
-```bash
-# Python
-python -m http.server 8000
+### Development & tests
 
-# Node.js (npx)
-npx serve .
+- Optional: `npm install` (only required for running tests/development tools)
+- Run unit tests: `npm test` (Vitest)
 
-# Or use the included npm script
-npm run serve
-```
+---
 
-3. **Access via Browser**
+## 📖 Usage (short)
 
-Access `http://localhost:8000` (or the port you used). Chrome or Edge is recommended.
+- Add a model (Settings → Model Management) using a Hugging Face model ID or by placing files in OPFS.
+- Download → Activate the model → Start chatting in a session.
+- Use system prompt, context-window and generation controls in **Settings > LLM Settings**.
 
-### Development Dependencies (Optional)
+---
 
-```bash
-npm install
-```
+## 🛠️ Developer guide
 
-Runtime dependencies (Transformers.js, Tailwind CSS, Lucide Icons, Google Fonts) are loaded from CDN, so no separate build process is required.
+- Runtime: vanilla ES modules (no bundler required to run the app in the browser).
+- Key sources:
+  - `script/bootstrap.js` — startup & hydration
+  - `script/main.js` — UI state, actions and rendering
+  - `script/worker.js` — inference worker & pipeline management
+  - `script/drive-backup.js` — encrypted Drive backup flow
+- Tests: Vitest (`npm test`).
+- Debugging tips: open DevTools, inspect `state` in console, review `opfs` manifest and `transformers` pipeline cache.
 
-## 📖 Usage Guide
+---
 
-### 1. Loading a Model
+## 🤝 Contributing
 
-1. Click the **Settings** button (⚙️) in the header.
-2. Navigate to the **Model Management** tab.
-3. Enter a Hugging Face Model ID (e.g., `onnx-community/SmolLM2-135M-Instruct`).
-4. Click **Fetch** to retrieve model information.
-5. Select a quantization level from the dropdown.
-6. Click **Download** to cache the model in OPFS (supports pause/resume).
-7. After download completes, click **Activate** to load the model.
+- Open an issue to discuss large changes before implementation.
+- PR flow: fork → branch → PR with clear description and screenshots (if UI change).
+- Include tests for new logic and keep changes backwards-compatible where possible.
 
-### 2. Starting a Chat
+---
 
-1. Type a message in the input field at the bottom.
-2. Click **Send** or press `Enter` to submit.
-3. Create new chat sessions using the **+** button in the tab bar.
-4. Switch between sessions by clicking on chat tabs.
+## 🔒 Security & privacy
 
-### 3. Configuring LLM Settings
-
-Navigate to **Settings > LLM Settings**:
-
-| Setting | Default | Range | Description |
-|---------|---------|-------|-------------|
-| **System Prompt** | "You are a helpful assistant." | Max 20 lines | Define assistant behavior |
-| **Max Output Tokens** | 512 | 1 - 32,768 | Control response length |
-| **Context Window** | 8k | 4k/8k/16k/32k/128k | Select context size |
-| **Temperature** | 0.9 | 0.1 - 2.0 | Response randomness |
-| **Top P** | 0.9 | 0.1 - 1.0 | Nucleus sampling |
-| **Presence Penalty** | 0 | -2.0 - 2.0 | Repetition control |
-
-### 4. Inference Device Selection
-
-Switch via the dropdown on the right side of the header:
-
-- **⚡ WebGPU** — GPU-accelerated inference (Recommended for performance).
-- **🧩 CPU (WASM)** — Fallback for browsers without WebGPU support.
-
-### 5. Google Drive Backup
-
-1. Go to **Settings > Backup & Restore**.
-2. Enter Google OAuth Client ID (optional: Client Secret).
-3. Click **Connect Google Drive** and authenticate.
-4. Enable **Auto backup on change** for automatic backups.
-5. Use **Backup Now** for manual backups.
-6. Restore from previous backup snapshots using the **Restore** button.
+- Inference and chat data remain local by default.
+- Backups to Google Drive are optional and encrypted client-side.
+- Avoid uploading sensitive models or data to public locations.
 
 ## 🏗️ Project Structure
 
@@ -203,7 +175,7 @@ LucidLLM/
 |----------|------------|
 | **Language** | JavaScript (ES2020+ Modules) |
 | **Architecture** | Zero-build, Vanilla JS (No Framework) |
-| **ML Framework** | Transformers.js v3.8.1 |
+| **ML Framework** | Transformers.js v4.0.0 |
 | **Inference Backend** | WebGPU / WASM (automatic fallback) |
 | **Storage** | Origin Private File System (OPFS), localStorage |
 | **Styling** | Tailwind CSS v3 (CDN) + Custom CSS Variables |

@@ -3,7 +3,7 @@
 [한국어](../README.md) | [English](README.en.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
 
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
-![Transformers.js](https://img.shields.io/badge/Transformers.js-v3.8.1-yellow)
+![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0-yellow)
 ![WebGPU](https://img.shields.io/badge/WebGPU-Supported-green)
 ![PWA](https://img.shields.io/badge/PWA-Planned-blue)
 
@@ -73,43 +73,59 @@
 | **显卡 (GPU)** | 集成显卡 | 支持 WebGPU 的独立显卡 |
 | **存储空间** | 每个模型 100MB ~ 2GB | 推荐使用 SSD |
 
-## 🚀 开始使用
+## 🚀 快速开始
 
-### Web 版本（无需安装）
+### 在线演示
 
-通过 GitHub Pages 无需安装即可直接使用：
+可通过 GitHub Pages 立即体验（无需安装）：
 
-👉 **[运行在线演示](https://ergo9ine.github.io/LucidLLM/)**
+👉 **https://ergo9ine.github.io/LucidLLM/**
 
-### 本地运行
-
-1. **克隆仓库**
+### 本地（零构建）
 
 ```bash
 git clone https://github.com/ergo9ine/LucidLLM.git
 cd LucidLLM
+npm run serve    # 在 http://localhost:3000 启动
 ```
 
-2. **运行本地服务器**
+（可选：`python -m http.server 8000` 或 `npx serve .`）
 
-要使用 OPFS 和 Service Worker 功能，需要安全上下文（HTTPS 或 localhost）。
+在浏览器中打开后，前往 Settings → Model Management 下载并激活模型。
 
-```bash
-# 使用 Python
-python -m http.server 8000
+---
 
-# 使用 Node.js (npx)
-npx serve .
+## 📖 使用（摘要）
 
-# 或使用包含的 npm 脚本
-npm run serve
-```
+- 在 Settings → Model Management 中添加模型 → 下载 → 激活 → 开始聊天
+- 系统提示词与上下文窗口可在设置中调整
 
-3. **访问浏览器**
+---
 
-在浏览器中访问 `http://localhost:8000`。（推荐使用 Chrome 或 Edge）
+## 🛠️ 开发者指南
 
-## 📖 使用指南
+- 运行时：纯 ES 模块（无需打包器）
+- 主要文件：
+  - `script/bootstrap.js` — 启动流程
+  - `script/main.js` — UI 状态与操作
+  - `script/worker.js` — 推理 Worker
+  - `script/drive-backup.js` — 加密备份逻辑
+- 测试：`npm test`（Vitest）
+
+---
+
+## 🤝 贡献指南
+
+- 大改动请先创建 issue 讨论。
+- PR 流程：fork → branch → PR（附说明与测试）。
+
+---
+
+## 🔒 安全与隐私
+
+- 默认情况下，推理与对话数据保存在本地。
+- 备份到 Google Drive 为可选且在客户端加密。
+- 请勿将敏感模型或数据上传到公共场所。
 
 ### 1. 加载模型
 
@@ -169,7 +185,7 @@ LucidLLM/
 |------|------|
 | **语言** | JavaScript (ES2020+ Modules) |
 | **架构** | Zero-build, Vanilla JS (无框架) |
-| **ML 框架** | Transformers.js v3.8.1 |
+| **ML 框架** | Transformers.js v4.0.0 |
 | **推理后端** | WebGPU / WASM (自动切换) |
 | **存储** | Origin Private File System (OPFS), localStorage |
 | **样式** | Tailwind CSS v3 (CDN) + 自定义 CSS 变量 |

@@ -4,6 +4,7 @@
 | :--- | :--- | :--- | :--- |
 | HuggingFaceTB/SmolLM2-135M-Instruct | FP32,BNB4,Q4 | Verified | Pass |
 | vicgalle/gpt2-alpaca-gpt4 | Unknown | Verified | Pass |
+| willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX/Q4 | Q4 | Verified | Pass |
 
 ## Sanity QA checks
 

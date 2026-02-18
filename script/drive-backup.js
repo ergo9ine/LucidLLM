@@ -3,6 +3,8 @@
  * 백업 파일 생성, 암호화, 복호화 및 유틸리티 기능을 제공합니다.
  */
 
+import { t, I18N_KEYS } from "./i18n.js";
+
 // ============================================================================
 // Compression Utilities
 // ============================================================================
@@ -20,7 +22,7 @@ async function compressBytesGzip(bytes) {
 
 async function decompressBytesGzip(bytes) {
     if (!supportsCompressionStream()) {
-        throw new Error("이 브라우저는 압축 복원을 지원하지 않습니다.");
+        throw new Error(t(I18N_KEYS.ERROR_DECOMPRESSION_UNSUPPORTED));
     }
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
     const blob = await new Response(stream).blob();
@@ -162,7 +164,7 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
 
     const normalizedPassphrase = String(passphrase ?? "").trim();
     if (!normalizedPassphrase) {
-        throw new Error("암호화된 백업입니다. 백업 암호 문구를 입력하세요.");
+        throw new Error(t(I18N_KEYS.ERROR_ENCRYPTED_BACKUP_PASSWORD));
     }
 
     const salt = base64ToBytes(parsed.salt);

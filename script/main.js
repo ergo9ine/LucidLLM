@@ -19,6 +19,26 @@ import {
     publishLucidValue,
     readFileAsDataUrl,
     resolveInferenceBackendChain,
+    // Storage utilities
+    readFromStorage,
+    writeToStorage,
+    readStorageWithValidation,
+    safeJsonParse,
+    safeJsonStringify,
+    // Event utilities
+    bindMultipleEvents,
+    setupEventDelegation,
+    bindConditionalEvent,
+    // Normalization utilities
+    clamp,
+    normalizeString,
+    composeNormalizers,
+    // GPU/VRAM utilities
+    getGPUMemoryInfo,
+    getWebGLInfo,
+    formatGPUInfo,
+    estimateVRAMUsage,
+    getMemoryStats,
 } from "./shared-utils.js";
 import {
     buildBackupSignature,
@@ -73,7 +93,7 @@ const LOCAL_GENERATION_DEFAULT_SETTINGS = Object.freeze({
     maxLength: 512,
 });
 const SYSTEM_PROMPT_MAX_LINES = 20;
-const TRANSFORMERS_JS_VERSION = "3.8.1";
+const TRANSFORMERS_JS_VERSION = "4.0.0-next.1";
 const TRANSFORMERS_JS_IMPORT_CANDIDATES = Object.freeze([
     `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}/+esm`,
     `https://unpkg.com/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}?module`,
@@ -82,7 +102,7 @@ const TRANSFORMERS_DEFAULT_TASK = "text-generation";
 const TRANSFORMERS_PIPELINE_CACHE_LIMIT = 4;
 const MONITORING_NETWORK_LIMIT = 180;
 const MONITORING_CHAT_ERROR_LIMIT = 80;
-const CHAT_ERROR_MESSAGE_DEFAULT = "일시적인 오류가 발생했습니다. 다시 시도해 주세요.";
+const CHAT_ERROR_MESSAGE_DEFAULT = t(I18N_KEYS.CHAT_ERROR_DEFAULT);
 const DOWNLOAD_MAX_RETRIES = 3;
 const DOWNLOAD_RETRY_BASE_DELAY_MS = 800;
 const ASSISTANT_STREAM_MAX_FPS = 60;
@@ -97,6 +117,7 @@ const GOOGLE_CLIENT_ID_DEFAULT = "721355891669-gcj22fgcj3g3v1o4jl2q8k4i66li6tq8.
 const DRIVE_BACKUP_PREFIX = "backup_";
 const DRIVE_BACKUP_FOLDER_NAME = "LucidLLM Backups";
 const DRIVE_BACKUP_DEFAULT_LIMIT_MB = 25;
+const GOOGLE_DRIVE_CLIENT_ID_INTERNAL = "721355891669-gcj22fgcj3g3v1o4jl2q8k4i66li6tq8.apps.googleusercontent.com";
 const DRIVE_BACKUP_MIN_LIMIT_MB = 1;
 const DRIVE_BACKUP_MAX_LIMIT_MB = 1024;
 const DRIVE_BACKUP_KDF_ITERATIONS = 250000;
@@ -141,8 +162,6 @@ const sessionStore = {
 publishLucidValue("sessionStore", sessionStore);
 
 const transformersStore = {
-    module: null,
-    modulePromise: null,
     pipelines: new Map(),
 };
 
@@ -280,7 +299,6 @@ const state = {
         tokenExpiresAt: 0,
         tokenClient: null,
         clientId: GOOGLE_CLIENT_ID_DEFAULT,
-        clientSecret: "",
         connected: false,
         inProgress: false,
         progressPercent: 0,
@@ -399,27 +417,12 @@ function ensureDriveBackupControls() {
     const firstCard = backupPanel.querySelector("article");
     if (!firstCard) return;
 
-    if (!document.getElementById("drive-client-secret-input")) {
-        const row = document.createElement("div");
-        row.className = "space-y-1";
-        row.innerHTML = `
-            <label for="drive-client-secret-input" class="text-xs text-slate-300">Google OAuth Client Secret (선택)</label>
-            <input id="drive-client-secret-input" type="password" class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400" placeholder="브라우저 앱에서는 일반적으로 비워둡니다.">
-        `;
-        const idRow = firstCard.querySelector("#drive-client-id-input")?.closest(".grid");
-        if (idRow?.parentElement) {
-            idRow.parentElement.insertBefore(row, idRow.nextSibling);
-        } else {
-            firstCard.appendChild(row);
-        }
-    }
-
     if (!document.getElementById("drive-encryption-passphrase-input")) {
         const wrap = document.createElement("div");
         wrap.className = "space-y-1";
         wrap.innerHTML = `
-            <label for="drive-encryption-passphrase-input" class="text-xs text-slate-300">백업 암호 문구 (AES-256)</label>
-            <input id="drive-encryption-passphrase-input" type="password" class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400" placeholder="설정/대화 백업 암호화에 사용됩니다.">
+            <label for="drive-encryption-passphrase-input" class="text-xs text-slate-300">${escapeHtml(t(I18N_KEYS.SETTINGS_LABEL_PASSPHRASE))}</label>
+            <input id="drive-encryption-passphrase-input" type="password" class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400" placeholder="${escapeHtml(t(I18N_KEYS.SETTINGS_PLACEHOLDER_PASSPHRASE))}">
         `;
         const toggleRow = firstCard.querySelector("#drive-auto-backup-toggle")?.closest("label");
         if (toggleRow?.parentElement) {
@@ -434,7 +437,7 @@ function ensureDriveBackupControls() {
         wrap.className = "inline-flex items-center gap-2 text-xs text-slate-200";
         wrap.innerHTML = `
             <input id="drive-backup-compress-toggle" type="checkbox" class="accent-cyan-400" checked>
-            백업 데이터 압축 사용 (지원 브라우저)
+            ${escapeHtml(t(I18N_KEYS.SETTINGS_LABEL_COMPRESSION))}
         `;
         const toggleRow = firstCard.querySelector("#drive-auto-backup-toggle")?.closest("label");
         if (toggleRow?.parentElement) {
@@ -448,8 +451,8 @@ function ensureDriveBackupControls() {
         const row = document.createElement("div");
         row.className = "grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-center";
         row.innerHTML = `
-            <input id="drive-backup-limit-mb-input" type="number" min="${DRIVE_BACKUP_MIN_LIMIT_MB}" max="${DRIVE_BACKUP_MAX_LIMIT_MB}" step="1" class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400" placeholder="백업 용량 제한(MB)">
-            <div id="drive-backup-size-text" class="text-[11px] text-slate-300">예상 백업 용량: 0 B / 제한: ${DRIVE_BACKUP_DEFAULT_LIMIT_MB} MB</div>
+            <input id="drive-backup-limit-mb-input" type="number" min="${DRIVE_BACKUP_MIN_LIMIT_MB}" max="${DRIVE_BACKUP_MAX_LIMIT_MB}" step="1" class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400" placeholder="${escapeHtml(t(I18N_KEYS.SETTINGS_PLACEHOLDER_LIMIT))}">
+            <div id="drive-backup-size-text" class="text-[11px] text-slate-300">${escapeHtml(t(I18N_KEYS.BACKUP_SIZE_ESTIMATE, { size: "0 B", limit: DRIVE_BACKUP_DEFAULT_LIMIT_MB }))}</div>
         `;
         const progressWrap = firstCard.querySelector("#drive-progress-status")?.closest(".space-y-2");
         if (progressWrap?.parentElement) {
@@ -518,6 +521,7 @@ async function bootstrapApplication() {
 
 function scheduleBootstrapApplication() {
     const run = () => {
+        initMobileSidebar();
         bootstrapApplication().catch((error) => {
             console.error("[BOOT] Application bootstrap failed", error);
         });
@@ -774,10 +778,14 @@ function createSidebarShellIfNeeded() {
         <section id="sidebar-panel-chat" class="app-sidebar-panel" data-sidebar-panel="chat" role="tabpanel" aria-labelledby="sidebar-tab-chat" aria-hidden="false">
             <div id="sidebar-chat-actions" class="app-sidebar-action-grid"></div>
             <div class="app-sidebar-shortcut-list">
-                <div id="sidebar-shortcut-new" class="app-shortcut-item">Ctrl+Shift+N</div>
+                <div id="sidebar-shortcut-new" class="app-shortcut-item">Ctrl+N</div>
+                <div id="sidebar-shortcut-send" class="app-shortcut-item">Ctrl+Enter</div>
+                <div id="sidebar-shortcut-focus-input" class="app-shortcut-item">Ctrl+L</div>
+                <div id="sidebar-shortcut-settings" class="app-shortcut-item">Ctrl+,</div>
                 <div id="sidebar-shortcut-delete" class="app-shortcut-item">Ctrl+Shift+Backspace</div>
                 <div id="sidebar-shortcut-export" class="app-shortcut-item">Ctrl+Shift+E</div>
                 <div id="sidebar-shortcut-toggle" class="app-shortcut-item">Ctrl+B</div>
+                <div id="sidebar-shortcut-help" class="app-shortcut-item">Ctrl+/</div>
             </div>
             <div id="sidebar-chat-tabs-host" class="app-sidebar-tabs-host"></div>
         </section>
@@ -909,7 +917,7 @@ function renderSidebarStaticText() {
         if (span) span.textContent = t("common.new_chat", {}, "새 대화");
         els.chatTabAddBtn.setAttribute("title", t("common.new_chat", {}, "새 대화"));
         els.chatTabAddBtn.setAttribute("aria-label", t("common.new_chat", {}, "새 대화"));
-        els.chatTabAddBtn.setAttribute("aria-keyshortcuts", "Control+Shift+N Meta+Shift+N");
+        els.chatTabAddBtn.setAttribute("aria-keyshortcuts", "Control+N Meta+N");
     }
 
     const deleteBtn = document.getElementById("sidebar-delete-chat-btn");
@@ -918,10 +926,14 @@ function renderSidebarStaticText() {
     if (exportBtn) exportBtn.setAttribute("aria-keyshortcuts", "Control+Shift+E Meta+Shift+E");
 
     const shortcuts = [
-        ["sidebar-shortcut-new", "sidebar.shortcut.new", "새 대화 단축키: Ctrl+Shift+N"],
-        ["sidebar-shortcut-delete", "sidebar.shortcut.delete", "대화 삭제 단축키: Ctrl+Shift+Backspace"],
-        ["sidebar-shortcut-export", "sidebar.shortcut.export", "대화 내보내기 단축키: Ctrl+Shift+E"],
-        ["sidebar-shortcut-toggle", "sidebar.shortcut.toggle", "사이드바 토글 단축키: Ctrl+B"],
+        ["sidebar-shortcut-new", "sidebar.shortcut.new", "새 대화: Ctrl+N"],
+        ["sidebar-shortcut-send", "sidebar.shortcut.send", "메시지 전송: Ctrl+Enter"],
+        ["sidebar-shortcut-focus-input", "sidebar.shortcut.focus_input", "입력창 포커스: Ctrl+L"],
+        ["sidebar-shortcut-settings", "sidebar.shortcut.settings", "설정 열기/닫기: Ctrl+,"],
+        ["sidebar-shortcut-delete", "sidebar.shortcut.delete", "대화 삭제: Ctrl+Shift+Backspace"],
+        ["sidebar-shortcut-export", "sidebar.shortcut.export", "대화 내보내기: Ctrl+Shift+E"],
+        ["sidebar-shortcut-toggle", "sidebar.shortcut.toggle", "사이드바 토글: Ctrl+B"],
+        ["sidebar-shortcut-help", "sidebar.shortcut.help", "단축키 도움말: Ctrl+/"],
     ];
     for (const [id, key, fallback] of shortcuts) {
         const node = document.getElementById(id);
@@ -1469,9 +1481,7 @@ function cacheElements() {
         llmPresencePenaltyInput: document.getElementById("llm-presence-penalty-input"),
         llmPresencePenaltyValue: document.getElementById("llm-presence-penalty-value"),
         llmSettingsValidation: document.getElementById("llm-settings-validation"),
-        saveSystemPromptBtn: document.getElementById("save-system-prompt-btn"),
         hfTokenInput: document.getElementById("hf-token-input"),
-        saveTokenBtn: document.getElementById("save-token-btn"),
         clearTokenBtn: document.getElementById("clear-token-btn"),
         profileTitle: document.getElementById("profile-title"),
         profileAvatarPreview: document.getElementById("profile-avatar-preview"),
@@ -1496,7 +1506,6 @@ function cacheElements() {
         languageSelect: document.getElementById("language-select"),
         languageStatusText: document.getElementById("language-status-text"),
         driveClientIdInput: document.getElementById("drive-client-id-input"),
-        driveClientSecretInput: document.getElementById("drive-client-secret-input"),
         driveClientIdSaveBtn: document.getElementById("drive-client-id-save-btn"),
         driveConnectBtn: document.getElementById("drive-connect-btn"),
         driveDisconnectBtn: document.getElementById("drive-disconnect-btn"),
@@ -1597,6 +1606,10 @@ function cacheElements() {
         errorDialogOverlay: document.getElementById("error-dialog-overlay"),
         errorDialogMessage: document.getElementById("error-dialog-message"),
         errorDialogCloseBtn: document.getElementById("error-dialog-close-btn"),
+
+        shortcutHelpOverlay: document.getElementById("shortcut-help-overlay"),
+        shortcutHelpBody: document.getElementById("shortcut-help-body"),
+        shortcutHelpCloseBtn: document.getElementById("shortcut-help-close-btn"),
     };
 }
 
@@ -1948,6 +1961,11 @@ function bindEvents() {
             createChatSession();
             return;
         }
+        if (accel && !event.shiftKey && key === "n") {
+            event.preventDefault();
+            createChatSession();
+            return;
+        }
         if (accel && event.shiftKey && key === "e") {
             event.preventDefault();
             exportActiveChatSessionToFile();
@@ -1961,6 +1979,32 @@ function bindEvents() {
         if (accel && !event.shiftKey && key === "b") {
             event.preventDefault();
             toggleSidebar();
+            return;
+        }
+        if (accel && !event.shiftKey && key === ",") {
+            event.preventDefault();
+            if (isSettingsOpen()) {
+                requestCloseSettings("shortcut");
+            } else {
+                openSettings();
+            }
+            return;
+        }
+        if (accel && !event.shiftKey && key === "enter") {
+            event.preventDefault();
+            if (!isSettingsOpen() && els.chatForm) {
+                els.chatForm.requestSubmit();
+            }
+            return;
+        }
+        if (accel && !event.shiftKey && key === "l") {
+            event.preventDefault();
+            focusChatInputForContinuousTyping();
+            return;
+        }
+        if (accel && !event.shiftKey && key === "/") {
+            event.preventDefault();
+            toggleShortcutHelpDialog();
             return;
         }
 
@@ -1998,6 +2042,11 @@ function bindEvents() {
             return;
         }
 
+        if (isShortcutHelpDialogOpen()) {
+            closeShortcutHelpDialog();
+            return;
+        }
+
         if (isModelCardOpen) {
             closeModelCardWindow();
             return;
@@ -2018,10 +2067,6 @@ function bindEvents() {
         });
     }
 
-    if (els.saveSystemPromptBtn && els.systemPromptInput) {
-        els.saveSystemPromptBtn.addEventListener("click", applyLlmSettingsFromDraft);
-    }
-
     if (els.systemPromptInput) {
         els.systemPromptInput.addEventListener("input", () => {
             enforceSystemPromptEditorLimit({
@@ -2029,6 +2074,7 @@ function bindEvents() {
                 notifyWhenReached: true,
             });
             renderLlmDraftStatus();
+            applyLlmSettingsFromDraft();
         });
     }
 
@@ -2088,15 +2134,12 @@ function bindEvents() {
         els.llmPresencePenaltyInput.addEventListener("change", onPresencePenaltyChange);
     }
 
-    if (els.saveTokenBtn && els.hfTokenInput) {
-        els.saveTokenBtn.addEventListener("click", () => {
+    if (els.hfTokenInput) {
+        els.hfTokenInput.addEventListener("input", () => {
             const token = (els.hfTokenInput.value ?? "").trim();
-            if (!token) {
-                showToast("토큰이 비어 있습니다.", "error");
-                return;
+            if (token) {
+                setToken(token);
             }
-            setToken(token);
-            showToast("토큰을 저장했습니다.", "success");
         });
     }
 
@@ -2413,6 +2456,18 @@ function bindEvents() {
         });
     }
 
+    if (els.shortcutHelpCloseBtn) {
+        els.shortcutHelpCloseBtn.addEventListener("click", closeShortcutHelpDialog);
+    }
+
+    if (els.shortcutHelpOverlay) {
+        els.shortcutHelpOverlay.addEventListener("click", (event) => {
+            if (event.target === els.shortcutHelpOverlay) {
+                closeShortcutHelpDialog();
+            }
+        });
+    }
+
     if (els.chatForm && els.chatInput) {
         els.chatForm.addEventListener("submit", onChatSubmit);
         els.chatInput.addEventListener("keydown", handleChatInputSubmitOnEnter);
@@ -2462,36 +2517,27 @@ function buildDefaultProfile() {
 }
 
 function getStoredUserProfile() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEYS.userProfile);
-        if (!raw) return buildDefaultProfile();
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object") {
-            return buildDefaultProfile();
-        }
-
-        return {
-            id: typeof parsed.id === "string" && parsed.id.trim()
-                ? parsed.id.trim()
-                : `profile_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-            nickname: (typeof parsed.nickname === "string" && /^[A-Za-z0-9가-힣_-]{2,24}$/.test(parsed.nickname.trim()))
-                ? parsed.nickname.trim()
-                : "YOU",
-            avatarDataUrl: typeof parsed.avatarDataUrl === "string" ? parsed.avatarDataUrl : "",
-            language: matchSupportedLanguage(parsed.language) || detectNavigatorLanguage(),
-            theme: normalizeTheme(parsed.theme),
-        };
-    } catch (_) {
+    const result = readFromStorage(STORAGE_KEYS.userProfile, null, { deserialize: true });
+    if (!result.success || !result.value || typeof result.value !== "object") {
         return buildDefaultProfile();
     }
+
+    const parsed = result.value;
+    return {
+        id: typeof parsed.id === "string" && parsed.id.trim()
+            ? parsed.id.trim()
+            : `profile_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        nickname: (typeof parsed.nickname === "string" && /^[A-Za-z0-9가-힣_-]{2,24}$/.test(parsed.nickname.trim()))
+            ? parsed.nickname.trim()
+            : "YOU",
+        avatarDataUrl: typeof parsed.avatarDataUrl === "string" ? parsed.avatarDataUrl : "",
+        language: matchSupportedLanguage(parsed.language) || detectNavigatorLanguage(),
+        theme: normalizeTheme(parsed.theme),
+    };
 }
 
 function setStoredUserProfile(profile) {
-    try {
-        localStorage.setItem(STORAGE_KEYS.userProfile, JSON.stringify(profile || buildDefaultProfile()));
-    } catch (_) {
-        // no-op
-    }
+    writeToStorage(STORAGE_KEYS.userProfile, profile || buildDefaultProfile(), { serialize: true });
 }
 
 function hydrateUserProfile() {
@@ -2543,23 +2589,16 @@ function getProfileAvatarDataUrl() {
 }
 
 function getNicknameRegistry() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEYS.nicknameRegistry);
-        if (!raw) return {};
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-        return parsed;
-    } catch (_) {
-        return {};
+    const result = readFromStorage(STORAGE_KEYS.nicknameRegistry, {}, { deserialize: true });
+    const value = result.value;
+    if (typeof value === "object" && !Array.isArray(value)) {
+        return value;
     }
+    return {};
 }
 
 function setNicknameRegistry(registry) {
-    try {
-        localStorage.setItem(STORAGE_KEYS.nicknameRegistry, JSON.stringify(registry || {}));
-    } catch (_) {
-        // no-op
-    }
+    writeToStorage(STORAGE_KEYS.nicknameRegistry, registry || {}, { serialize: true });
 }
 
 function reserveNicknameForProfile(nickname) {
@@ -2786,20 +2825,13 @@ function getRuntimeCapabilities(options = {}) {
 }
 
 function getStoredInferenceDevice() {
-    try {
-        return String(localStorage.getItem(STORAGE_KEYS.inferenceDevice) ?? "").trim().toLowerCase();
-    } catch (_) {
-        return "";
-    }
+    const result = readFromStorage(STORAGE_KEYS.inferenceDevice, "");
+    return normalizeString(result.value, "", (v) => v.toLowerCase());
 }
 
 function setStoredInferenceDevice(device) {
     const normalized = normalizeInferenceDevice(device);
-    try {
-        localStorage.setItem(STORAGE_KEYS.inferenceDevice, normalized);
-    } catch (_) {
-        // no-op
-    }
+    writeToStorage(STORAGE_KEYS.inferenceDevice, normalized);
 }
 
 /* auto-load storage helpers removed */
@@ -2873,7 +2905,7 @@ async function reloadActiveSessionForInferenceDevice(preferredDevice) {
 
         const session = await loadCachedSession(activeFile, { preferredDevice: targetDevice });
         if (!session) {
-            throw new Error("세션 객체 생성에 실패했습니다.");
+            throw new Error(t(I18N_KEYS.ERROR_SESSION_CREATION_FAILED));
         }
 
         state.activeSessionFile = activeFile;
@@ -2950,9 +2982,10 @@ async function onInferenceDeviceSelectChange(event) {
 
 function getStoredDriveClientId() {
     try {
-        return String(localStorage.getItem(STORAGE_KEYS.googleDriveClientId) ?? "").trim();
+        const stored = String(localStorage.getItem(STORAGE_KEYS.googleDriveClientId) ?? "").trim();
+        return stored || GOOGLE_DRIVE_CLIENT_ID_INTERNAL;
     } catch (_) {
-        return "";
+        return GOOGLE_DRIVE_CLIENT_ID_INTERNAL;
     }
 }
 
@@ -2964,27 +2997,6 @@ function setStoredDriveClientId(value) {
             return;
         }
         localStorage.setItem(STORAGE_KEYS.googleDriveClientId, next);
-    } catch (_) {
-        // no-op
-    }
-}
-
-function getStoredDriveClientSecret() {
-    try {
-        return String(localStorage.getItem(STORAGE_KEYS.googleDriveClientSecret) ?? "").trim();
-    } catch (_) {
-        return "";
-    }
-}
-
-function setStoredDriveClientSecret(value) {
-    try {
-        const next = String(value ?? "").trim();
-        if (!next) {
-            localStorage.removeItem(STORAGE_KEYS.googleDriveClientSecret);
-            return;
-        }
-        localStorage.setItem(STORAGE_KEYS.googleDriveClientSecret, next);
     } catch (_) {
         // no-op
     }
@@ -3051,16 +3063,12 @@ function setStoredDriveLastSyncAt(value) {
 
 function hydrateDriveBackupSettings() {
     state.driveBackup.clientId = getStoredDriveClientId() || GOOGLE_CLIENT_ID_DEFAULT;
-    state.driveBackup.clientSecret = getStoredDriveClientSecret();
     state.driveBackup.backupLimitMb = getStoredDriveBackupLimitMb();
     state.driveBackup.autoEnabled = getStoredDriveAutoBackupEnabled();
     state.driveBackup.lastSyncAt = getStoredDriveLastSyncAt();
 
     if (els.driveClientIdInput) {
-        els.driveClientIdInput.value = state.driveBackup.clientId;
-    }
-    if (els.driveClientSecretInput) {
-        els.driveClientSecretInput.value = state.driveBackup.clientSecret;
+        els.driveClientIdInput.value = state.driveBackup.clientId || GOOGLE_DRIVE_CLIENT_ID_INTERNAL;
     }
     if (els.driveBackupLimitMbInput) {
         els.driveBackupLimitMbInput.value = String(state.driveBackup.backupLimitMb);
@@ -3090,7 +3098,7 @@ function renderDriveBackupUi() {
         const timestamp = state.driveBackup.lastSyncAt
             ? formatModelDate(state.driveBackup.lastSyncAt)
             : "-";
-        els.driveLastSyncText.textContent = `마지막 동기화: ${timestamp}`;
+        els.driveLastSyncText.textContent = t(I18N_KEYS.BACKUP_GDRIVE_LAST_SYNC, { timestamp });
     }
 
     if (els.driveAutoBackupToggle) {
@@ -3133,7 +3141,7 @@ function renderDriveBackupUi() {
         const limitBytes = limitMb * 1024 * 1024;
         const estimatedBytes = Math.max(0, Number(state.driveBackup.estimatedBackupBytes ?? 0));
         const exceeded = estimatedBytes > limitBytes;
-        els.driveBackupSizeText.textContent = `예상 백업 용량: ${formatBytes(estimatedBytes)} / 제한: ${limitMb} MB`;
+        els.driveBackupSizeText.textContent = t(I18N_KEYS.BACKUP_SIZE_ESTIMATE, { size: formatBytes(estimatedBytes), limit: limitMb });
         els.driveBackupSizeText.className = exceeded
             ? "text-[11px] text-rose-200"
             : "text-[11px] text-slate-300";
@@ -3147,9 +3155,9 @@ function renderDriveBackupFileOptions() {
 
     const files = Array.isArray(state.driveBackup.files) ? state.driveBackup.files : [];
     if (files.length === 0) {
-        els.driveBackupFileSelect.innerHTML = '<option value="">복원 가능한 백업이 없습니다.</option>';
+        els.driveBackupFileSelect.innerHTML = `<option value="">${escapeHtml(t(I18N_KEYS.BACKUP_NO_RESTORE_OPTIONS))}</option>`;
         if (els.driveFileListMeta) {
-            els.driveFileListMeta.textContent = "백업 파일 0개";
+            els.driveFileListMeta.textContent = t(I18N_KEYS.BACKUP_RESTORE_FILE_COUNT, { count: 0 });
         }
         return;
     }
@@ -3172,7 +3180,7 @@ function renderDriveBackupFileOptions() {
             if (!Number.isFinite(size) || size <= 0) return acc;
             return acc + size;
         }, 0);
-        els.driveFileListMeta.textContent = `백업 파일 ${files.length}개 (최신: ${latestTime}, 총 ${formatBytes(totalBytes)})`;
+        els.driveFileListMeta.textContent = t(I18N_KEYS.BACKUP_FILE_LIST_META, { count: files.length, time: latestTime, size: formatBytes(totalBytes) });
     }
 }
 
@@ -3194,12 +3202,9 @@ function saveDriveClientIdFromInput() {
         showToast("Google OAuth Client ID를 입력하세요.", "error", 2400);
         return;
     }
-    const clientSecret = String(els.driveClientSecretInput?.value ?? "").trim();
 
     setStoredDriveClientId(clientId);
-    setStoredDriveClientSecret(clientSecret);
     state.driveBackup.clientId = clientId;
-    state.driveBackup.clientSecret = clientSecret;
     state.driveBackup.tokenClient = null;
     state.driveBackup.accessToken = "";
     state.driveBackup.tokenExpiresAt = 0;
@@ -3238,20 +3243,16 @@ function isGoogleIdentityReady() {
 }
 
 function ensureDriveTokenClient() {
-    const clientId = String(state.driveBackup.clientId ?? getStoredDriveClientId() ?? "").trim();
+    const clientId = String(state.driveBackup.clientId || getStoredDriveClientId() || GOOGLE_DRIVE_CLIENT_ID_INTERNAL).trim();
     if (!clientId) {
-        throw new Error("Google OAuth Client ID가 설정되지 않았습니다.");
+        throw new Error(t(I18N_KEYS.ERROR_GOOGLE_CLIENT_ID_MISSING));
     }
     if (!isGoogleIdentityReady()) {
-        throw new Error("Google Identity SDK가 아직 로드되지 않았습니다. 잠시 후 다시 시도하세요.");
+        throw new Error(t(I18N_KEYS.ERROR_GOOGLE_SDK_NOT_LOADED));
     }
 
     if (state.driveBackup.tokenClient) {
         return state.driveBackup.tokenClient;
-    }
-
-    if (String(state.driveBackup.clientSecret ?? "").trim()) {
-        console.warn("[WARN] Google OAuth Client Secret is set but not used in browser OAuth token flow.");
     }
 
     state.driveBackup.tokenClient = window.google.accounts.oauth2.initTokenClient({
@@ -3279,7 +3280,7 @@ async function ensureDriveAccessToken({ interactive = false } = {}) {
             }
             const token = String(response?.access_token ?? "").trim();
             if (!token) {
-                reject(new Error("Google OAuth 액세스 토큰을 받지 못했습니다."));
+                reject(new Error(t(I18N_KEYS.ERROR_GOOGLE_TOKEN_FAILED)));
                 return;
             }
             const expiresIn = Number(response?.expires_in || 3600);
@@ -3305,7 +3306,7 @@ async function onDriveConnectClick() {
         if (!navigator.onLine) {
             throw new Error("오프라인 상태에서는 Google 로그인/연결을 진행할 수 없습니다.");
         }
-        setDriveProgress(10, "Google 인증 준비 중...");
+        setDriveProgress(10, t(I18N_KEYS.DRIVE_STATUS_CONNECTING_GOOGLE));
         renderDriveBackupUi();
 
         // Check if user has entered a Client ID in the settings input, even if not saved yet
@@ -3317,13 +3318,13 @@ async function onDriveConnectClick() {
 
         const clientId = String(state.driveBackup.clientId ?? getStoredDriveClientId() ?? "").trim();
         if (!clientId) {
-            throw new Error("설정 > 백업 및 복원 탭에서 Client ID를 먼저 입력해야 합니다.");
+            throw new Error(t(I18N_KEYS.ERROR_CLIENT_ID_REQUIRED));
         }
 
         await ensureDriveAccessToken({ interactive: true });
-        setDriveProgress(35, "Drive 백업 폴더 확인 중...");
+        setDriveProgress(35, t(I18N_KEYS.DRIVE_STATUS_CHECKING_FOLDER));
         await ensureDriveBackupFolder();
-        setDriveProgress(48, "Drive 연결 확인 중...");
+        setDriveProgress(48, t(I18N_KEYS.DRIVE_STATUS_CHECKING_CONNECTION));
         await refreshDriveBackupFileList({ silent: true, interactiveAuth: false });
         startDriveFileListPolling();
         setDriveProgress(100, "Google Drive 연결 완료");
@@ -3416,7 +3417,7 @@ async function driveRequest(url, options = {}, context = {}) {
             });
 
             if (!response.ok) {
-                const error = new Error(`Drive API 요청 실패 (HTTP ${response.status})`);
+                const error = new Error(t(I18N_KEYS.ERROR_DRIVE_API_FAILED, { status: response.status }));
                 error.status = response.status;
                 error.response = response;
                 throw error;
@@ -3572,13 +3573,13 @@ async function uploadResumableBlobWithProgress(uploadUrl, blob, progressRange = 
             setDriveProgress(progress, "Google Drive 업로드 중...");
         };
         xhr.onerror = () => {
-            const error = new Error("Google Drive 업로드 네트워크 오류");
+            const error = new Error(t(I18N_KEYS.ERROR_DRIVE_UPLOAD_NETWORK));
             error.status = 0;
             reject(error);
         };
         xhr.onload = () => {
             if (xhr.status < 200 || xhr.status >= 300) {
-                const error = new Error(`Google Drive 업로드 실패 (HTTP ${xhr.status})`);
+                const error = new Error(t(I18N_KEYS.ERROR_DRIVE_UPLOAD_FAILED, { status: xhr.status }));
                 error.status = xhr.status;
                 reject(error);
                 return;
@@ -3596,7 +3597,7 @@ async function uploadResumableBlobWithProgress(uploadUrl, blob, progressRange = 
 async function uploadBackupPayloadToDrive(uploadText, options = {}) {
     const folderId = await ensureDriveBackupFolder();
     if (!folderId) {
-        throw new Error("백업 폴더를 생성하거나 찾지 못했습니다.");
+        throw new Error(t(I18N_KEYS.ERROR_BACKUP_FOLDER_MISSING));
     }
 
     const baseName = formatBackupFileName(DRIVE_BACKUP_PREFIX).replace(/\.json$/i, "");
@@ -3664,7 +3665,7 @@ async function backupChatsToGoogleDrive({ manual = false } = {}) {
         return;
     }
     if (!navigator.onLine) {
-        showToast("오프라인 상태에서는 백업할 수 없습니다.", "error", 2600);
+        showToast(t(I18N_KEYS.DRIVE_TOAST_OFFLINE), "error", 2600);
         return;
     }
 
@@ -3684,7 +3685,7 @@ async function backupChatsToGoogleDrive({ manual = false } = {}) {
     if (state.driveBackup.estimatedBackupBytes > limitBytes) {
         renderDriveBackupUi();
         showToast(
-            `백업 용량이 제한을 초과했습니다. (${formatBytes(state.driveBackup.estimatedBackupBytes)} > ${limitMb} MB)`,
+            t(I18N_KEYS.DRIVE_TOAST_LIMIT_EXCEEDED, { size: formatBytes(state.driveBackup.estimatedBackupBytes), limit: limitMb }),
             "error",
             3600,
         );
@@ -3701,7 +3702,7 @@ async function backupChatsToGoogleDrive({ manual = false } = {}) {
             compress: !!els.driveBackupCompressToggle?.checked,
             kdfIterations: DRIVE_BACKUP_KDF_ITERATIONS,
         });
-        setDriveProgress(36, uploadPayload.encrypted ? "암호화 완료, 업로드 준비 중..." : "업로드 준비 중...");
+        setDriveProgress(36, uploadPayload.encrypted ? t(I18N_KEYS.DRIVE_STATUS_ENCRYPTING) : t(I18N_KEYS.DRIVE_STATUS_PREPARING_BACKUP));
         const uploaded = await uploadBackupPayloadToDrive(uploadPayload.text, {
             encrypted: uploadPayload.encrypted,
         });
@@ -3711,8 +3712,8 @@ async function backupChatsToGoogleDrive({ manual = false } = {}) {
         await refreshDriveBackupFileList({ silent: true, interactiveAuth: false });
         showToast("설정/대화 백업이 완료되었습니다.", "success", 2400);
     } catch (error) {
-        setDriveProgress(0, `백업 실패: ${getErrorMessage(error)}`);
-        showToast(`백업 실패: ${getErrorMessage(error)}`, "error", 3200);
+        setDriveProgress(0, t(I18N_KEYS.DRIVE_TOAST_BACKUP_FAILED, { message: getErrorMessage(error) }));
+        showToast(t(I18N_KEYS.DRIVE_TOAST_BACKUP_FAILED, { message: getErrorMessage(error) }), "error", 3200);
     } finally {
         state.driveBackup.inProgress = false;
         renderDriveBackupUi();
@@ -3747,7 +3748,7 @@ async function refreshDriveBackupFileList({ silent = true, interactiveAuth = fal
         renderDriveBackupUi();
 
         if (previousLatest && nextLatest && nextLatest !== previousLatest && silent) {
-            showToast("다른 기기에서 생성된 최신 백업을 감지했습니다.", "info", 2600);
+            showToast(t(I18N_KEYS.DRIVE_TOAST_REMOTE_BACKUP_DETECTED), "info", 2600);
         }
     } catch (error) {
         if (!silent) {
@@ -3768,9 +3769,9 @@ async function downloadDriveFileAsText(fileId) {
 
     const totalBytes = Number(response.headers.get("content-length") ?? 0);
     if (!response.body) {
-        setDriveProgress(80, "복원 파일 다운로드 중...");
+        setDriveProgress(80, t(I18N_KEYS.DRIVE_STATUS_DOWNLOADING));
         const text = await response.text();
-        setDriveProgress(95, "복원 데이터 검증 중...");
+        setDriveProgress(95, t(I18N_KEYS.DRIVE_STATUS_VERIFYING));
         return text;
     }
 
@@ -3784,7 +3785,7 @@ async function downloadDriveFileAsText(fileId) {
         chunks.push(value);
         received += value.byteLength;
         const percent = totalBytes > 0 ? Math.min(92, (received / totalBytes) * 100) : 72;
-        setDriveProgress(percent, "복원 파일 다운로드 중...");
+        setDriveProgress(percent, t(I18N_KEYS.DRIVE_STATUS_DOWNLOADING));
     }
 
     const merged = new Uint8Array(received);
@@ -3793,14 +3794,14 @@ async function downloadDriveFileAsText(fileId) {
         merged.set(chunk, offset);
         offset += chunk.byteLength;
     }
-    setDriveProgress(95, "복원 데이터 검증 중...");
+    setDriveProgress(95, t(I18N_KEYS.DRIVE_STATUS_VERIFYING));
     return new TextDecoder().decode(merged);
 }
 
 function applyBackupPayload(payload, { overwrite = true } = {}) {
     const sessions = Array.isArray(payload?.chatSessions) ? payload.chatSessions : null;
     if (!sessions) {
-        throw new Error("백업 데이터 형식이 올바르지 않습니다.");
+        throw new Error(t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID));
     }
 
     const compact = sessions
@@ -3823,7 +3824,7 @@ function applyBackupPayload(payload, { overwrite = true } = {}) {
         }));
 
     if (compact.length === 0) {
-        throw new Error("복원 가능한 대화 데이터가 없습니다.");
+        throw new Error(t(I18N_KEYS.ERROR_NO_RESTORE_DATA));
     }
 
     const restoreActive = String(payload?.activeChatSessionId ?? "").trim();
@@ -3900,7 +3901,7 @@ async function onDriveRestoreClick() {
         return;
     }
     if (!navigator.onLine) {
-        showToast("오프라인 상태에서는 복원할 수 없습니다.", "error", 2600);
+        showToast(t(I18N_KEYS.DRIVE_TOAST_RESTORE_OFFLINE), "error", 2600);
         return;
     }
 
@@ -3912,7 +3913,7 @@ async function onDriveRestoreClick() {
 
     const overwrite = !!els.driveRestoreOverwriteToggle?.checked;
     state.driveBackup.inProgress = true;
-    setDriveProgress(10, "복원 준비 중...");
+    setDriveProgress(10, t(I18N_KEYS.DRIVE_STATUS_PREPARING_RESTORE));
     renderDriveBackupUi();
 
     try {
@@ -3923,11 +3924,11 @@ async function onDriveRestoreClick() {
         });
         applyBackupPayload(payload, { overwrite });
         setDriveLastSyncNow();
-        setDriveProgress(100, "복원 완료");
-        showToast("백업 복원이 완료되었습니다.", "success", 2400);
+        setDriveProgress(100, t(I18N_KEYS.DRIVE_STATUS_RESTORE_COMPLETED));
+        showToast(t(I18N_KEYS.DRIVE_TOAST_RESTORE_SUCCESS), "success", 2400);
     } catch (error) {
-        setDriveProgress(0, `복원 실패: ${getErrorMessage(error)}`);
-        showToast(`복원 실패: ${getErrorMessage(error)}`, "error", 3200);
+        setDriveProgress(0, t(I18N_KEYS.DRIVE_TOAST_RESTORE_FAILED, { message: getErrorMessage(error) }));
+        showToast(t(I18N_KEYS.DRIVE_TOAST_RESTORE_FAILED, { message: getErrorMessage(error) }), "error", 3200);
     } finally {
         state.driveBackup.inProgress = false;
         renderDriveBackupUi();
@@ -4195,7 +4196,7 @@ function renderLlmDraftStatus() {
             counterClass = "text-[11px] text-amber-200";
             suffix = " (최대)";
         }
-        els.systemPromptLineCount.textContent = `라인 수: ${lineCount} / ${maxLines}${suffix}`;
+        els.systemPromptLineCount.textContent = t(I18N_KEYS.LLM_LINE_COUNT, { count: lineCount, max: maxLines, suffix });
         els.systemPromptLineCount.className = counterClass;
     }
 
@@ -4204,15 +4205,11 @@ function renderLlmDraftStatus() {
             ? ` 시스템 프롬프트는 최대 ${SYSTEM_PROMPT_MAX_LINES}줄 제한에 도달했습니다.`
             : "";
         els.llmSettingsValidation.textContent = validated.valid
-            ? `유효성 검사 통과. 최대 생성 토큰은 즉시 적용/저장되며, 나머지 항목은 저장 버튼으로 반영됩니다.${limitHint}`
+            ? `유효성 검사 통과. 모든 항목은 입력 즉시 자동으로 저장됩니다.${limitHint}`
             : validated.errors.join(" ");
         els.llmSettingsValidation.className = validated.valid
             ? "text-[12px] text-emerald-200"
             : "text-[12px] text-rose-200";
-    }
-
-    if (els.saveSystemPromptBtn) {
-        els.saveSystemPromptBtn.disabled = !validated.valid;
     }
 }
 
@@ -4396,8 +4393,7 @@ function captureSettingsTabSnapshot(tabId) {
     }
     if (tab === "backup") {
         return {
-            clientId: String(state.driveBackup.clientId ?? getStoredDriveClientId() ?? ""),
-            clientSecret: String(state.driveBackup.clientSecret ?? getStoredDriveClientSecret() ?? ""),
+            clientId: String(state.driveBackup.clientId || getStoredDriveClientId() || GOOGLE_DRIVE_CLIENT_ID_INTERNAL),
             backupLimitMb: Math.max(
                 DRIVE_BACKUP_MIN_LIMIT_MB,
                 Math.min(DRIVE_BACKUP_MAX_LIMIT_MB, Number(state.driveBackup.backupLimitMb || DRIVE_BACKUP_DEFAULT_LIMIT_MB)),
@@ -4581,20 +4577,15 @@ function resetBackupTabDefaults() {
     state.driveBackup.latestRemoteModifiedTime = "";
     state.driveBackup.folderId = "";
     state.driveBackup.lastBackupSignature = "";
-    setStoredDriveClientId("");
-    setStoredDriveClientSecret("");
+    setStoredDriveClientId(GOOGLE_DRIVE_CLIENT_ID_INTERNAL);
     setStoredDriveBackupLimitMb(DRIVE_BACKUP_DEFAULT_LIMIT_MB);
-    state.driveBackup.clientId = "";
-    state.driveBackup.clientSecret = "";
+    state.driveBackup.clientId = GOOGLE_DRIVE_CLIENT_ID_INTERNAL;
     state.driveBackup.backupLimitMb = DRIVE_BACKUP_DEFAULT_LIMIT_MB;
     setDriveAutoBackupEnabled(false);
     setStoredDriveLastSyncAt("");
     state.driveBackup.lastSyncAt = "";
     if (els.driveClientIdInput) {
-        els.driveClientIdInput.value = "";
-    }
-    if (els.driveClientSecretInput) {
-        els.driveClientSecretInput.value = "";
+        els.driveClientIdInput.value = GOOGLE_DRIVE_CLIENT_ID_INTERNAL;
     }
     if (els.driveBackupLimitMbInput) {
         els.driveBackupLimitMbInput.value = String(DRIVE_BACKUP_DEFAULT_LIMIT_MB);
@@ -4610,20 +4601,15 @@ function restoreBackupTabFromSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== "object") return;
     stopDriveFileListPolling();
     state.driveBackup.inProgress = false;
-    setStoredDriveClientId(String(snapshot.clientId ?? ""));
-    setStoredDriveClientSecret(String(snapshot.clientSecret ?? ""));
+    setStoredDriveClientId(String(snapshot.clientId || GOOGLE_DRIVE_CLIENT_ID_INTERNAL));
     setStoredDriveBackupLimitMb(snapshot.backupLimitMb);
-    state.driveBackup.clientId = String(snapshot.clientId ?? "");
-    state.driveBackup.clientSecret = String(snapshot.clientSecret ?? "");
+    state.driveBackup.clientId = String(snapshot.clientId || GOOGLE_DRIVE_CLIENT_ID_INTERNAL);
     state.driveBackup.backupLimitMb = Math.max(
         DRIVE_BACKUP_MIN_LIMIT_MB,
         Math.min(DRIVE_BACKUP_MAX_LIMIT_MB, Number(snapshot.backupLimitMb || DRIVE_BACKUP_DEFAULT_LIMIT_MB)),
     );
     if (els.driveClientIdInput) {
-        els.driveClientIdInput.value = state.driveBackup.clientId;
-    }
-    if (els.driveClientSecretInput) {
-        els.driveClientSecretInput.value = state.driveBackup.clientSecret;
+        els.driveClientIdInput.value = state.driveBackup.clientId || GOOGLE_DRIVE_CLIENT_ID_INTERNAL;
     }
     if (els.driveBackupLimitMbInput) {
         els.driveBackupLimitMbInput.value = String(state.driveBackup.backupLimitMb);
@@ -4942,50 +4928,96 @@ function renderChatTabs() {
     if (!els.chatTabsList) return;
 
     if (!Array.isArray(state.chatSessions) || state.chatSessions.length === 0) {
-        els.chatTabsList.innerHTML = "";
+        els.chatTabsList.innerHTML = `<div class="text-xs text-slate-500 text-center py-4 italic">No chats yet</div>`;
         return;
     }
 
-    const sidebarMode = document.body.classList.contains("sidebar-layout");
     els.chatTabsList.innerHTML = state.chatSessions.map((session) => {
         const active = session.id === state.activeChatSessionId;
         const openLabel = getProfileLanguage() === "ko" ? "대화 열기" : "Open chat";
-        const deleteLabel = getProfileLanguage() === "ko" ? "대화 삭제" : "Delete chat";
-        const wrapperClass = sidebarMode
-            ? "chat-tab-item group"
-            : "chat-tab-item chat-tab-item-inline group";
-        const tabClass = sidebarMode
-            ? `chat-tab chat-tab-sidebar ${active ? "active" : ""}`
-            : `chat-tab ${active ? "active" : ""} pr-7`;
-        const deleteClass = sidebarMode
-            ? "chat-tab-delete chat-tab-delete-sidebar"
-            : "chat-tab-delete chat-tab-delete-inline";
+        const deleteLabel = t(I18N_KEYS.SIDEBAR_ACTION_DELETE_CHAT);
+        
+        // Base classes for the list item
+        const baseClass = "group relative flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all duration-200 text-left";
+        const activeClass = "bg-slate-800 text-cyan-50 border border-slate-700/50 light:bg-white light:border-slate-200 light:text-slate-900 light:shadow-sm oled:bg-[#1a1a1a] oled:border-[#333]";
+        const inactiveClass = "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 light:text-slate-600 light:hover:bg-slate-100 light:hover:text-slate-900 oled:text-[#888] oled:hover:bg-[#111] oled:hover:text-[#ccc]";
+        
+        const itemClass = `${baseClass} ${active ? activeClass : inactiveClass}`;
+
         return `
-        <div class="${wrapperClass}">
+        <div class="relative group/item">
             <button
                 type="button"
                 data-action="chat-tab-select"
                 data-session-id="${escapeHtml(session.id)}"
-                class="${tabClass}"
+                class="${itemClass}"
                 title="${escapeHtml(session.title)}"
                 aria-label="${escapeHtml(`${session.title} ${openLabel}`)}"
             >
-                <span class="chat-tab-title">${escapeHtml(session.title || getDefaultChatTitle())}</span>
+                <i data-lucide="message-square" class="w-4 h-4 shrink-0 opacity-70 ${active ? "text-cyan-400 light:text-sky-500" : ""}"></i>
+                <span class="flex-1 truncate text-sm font-medium">${escapeHtml(session.title || getDefaultChatTitle())}</span>
             </button>
             <button
                 type="button"
                 data-action="chat-tab-delete"
                 data-session-id="${escapeHtml(session.id)}"
-                class="${deleteClass}"
+                class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-500 opacity-0 group-hover/item:opacity-100 hover:bg-rose-500/10 hover:text-rose-400 transition-all light:text-slate-400 light:hover:bg-rose-50 light:hover:text-rose-600"
                 title="${escapeHtml(deleteLabel)}"
                 aria-label="${escapeHtml(`${session.title} ${deleteLabel}`)}"
-            >&times;</button>
+            >
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
         </div>`;
     }).join("");
 
-    const activeTab = els.chatTabsList.querySelector("button[data-action='chat-tab-select'].active");
+    const activeTab = els.chatTabsList.querySelector("button[data-action='chat-tab-select'].bg-slate-800"); // Approximate selector for active
     if (activeTab && typeof activeTab.scrollIntoView === "function") {
         activeTab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }
+    
+    // Re-initialize icons for new elements
+    if (window.lucide) {
+        window.lucide.createIcons();
+    }
+}
+
+function initMobileSidebar() {
+    const sidebar = document.getElementById("app-sidebar");
+    const overlay = document.getElementById("mobile-sidebar-overlay");
+    const toggleBtn = document.getElementById("sidebar-toggle-btn");
+    const closeBtn = document.getElementById("sidebar-close-btn");
+
+    if (!sidebar || !overlay || !toggleBtn) return;
+
+    const openSidebar = () => {
+        sidebar.classList.remove("-translate-x-full");
+        overlay.classList.remove("hidden");
+        // Trigger reflow
+        void overlay.offsetWidth;
+        overlay.classList.remove("opacity-0");
+    };
+
+    const closeSidebar = () => {
+        sidebar.classList.add("-translate-x-full");
+        overlay.classList.add("opacity-0");
+        setTimeout(() => {
+            overlay.classList.add("hidden");
+        }, 300);
+    };
+
+    toggleBtn.addEventListener("click", openSidebar);
+    if (closeBtn) closeBtn.addEventListener("click", closeSidebar);
+    overlay.addEventListener("click", closeSidebar);
+
+    // Close sidebar when clicking a chat item on mobile
+    if (els.chatTabsList) {
+        els.chatTabsList.addEventListener("click", (e) => {
+            if (e.target.closest("[data-action='chat-tab-select']")) {
+                if (window.innerWidth < 768) { // md breakpoint
+                    closeSidebar();
+                }
+            }
+        });
     }
 }
 
@@ -5133,12 +5165,27 @@ function closeSettings() {
 
     const previous = state.settings.previousFocus;
     const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
     if (activeElement && els.settingsOverlay.contains(activeElement)) {
-        if (previous && typeof previous.focus === "function" && previous !== activeElement) {
+        let focusRestored = false;
+        // 1. Try to restore previous focus
+        if (previous && typeof previous.focus === "function" && previous !== activeElement && document.body.contains(previous)) {
             previous.focus();
-        } else if (els.openSettingsBtn && els.openSettingsBtn !== activeElement) {
+            if (!els.settingsOverlay.contains(document.activeElement)) {
+                focusRestored = true;
+            }
+        }
+
+        // 2. Try to focus the open settings button
+        if (!focusRestored && els.openSettingsBtn && els.openSettingsBtn !== activeElement) {
             els.openSettingsBtn.focus();
-        } else {
+            if (!els.settingsOverlay.contains(document.activeElement)) {
+                focusRestored = true;
+            }
+        }
+
+        // 3. Force blur if focus is still trapped
+        if (!focusRestored || els.settingsOverlay.contains(document.activeElement)) {
             activeElement.blur();
         }
     }
@@ -5154,11 +5201,6 @@ function closeSettings() {
     state.settings.closeTimer = setTimeout(() => {
         if (!els.settingsOverlay) return;
         els.settingsOverlay.classList.add("hidden");
-        if (previous && typeof previous.focus === "function") {
-            previous.focus();
-        } else if (els.openSettingsBtn) {
-            els.openSettingsBtn.focus();
-        }
         state.settings.previousFocus = null;
         state.settings.closeTimer = null;
     }, 300);
@@ -5239,7 +5281,7 @@ function closeModelCardWindow() {
 
 async function handleModelLookup(rawInput, options = {}) {
     if (state.isFetchingModel) {
-        return { ok: false, error: new Error("모델 조회가 이미 진행 중입니다.") };
+        return { ok: false, error: new Error(t(I18N_KEYS.ERROR_MODEL_FETCH_IN_PROGRESS)) };
     }
 
     setModelLoading(true);
@@ -5434,8 +5476,24 @@ async function resolveLookupInput(rawInput) {
 
     if (looksLikeUrlInput(input)) {
         const urlObj = parseWebUrl(input);
-        const pageValidation = await verifyWebPageUrl(urlObj);
         const isHfUrl = isHuggingFaceHost(urlObj.hostname);
+
+        // Optimization: If it looks like a valid Hugging Face model URL,
+        // extract the model ID directly and skip the HEAD request validation.
+        // This avoids CORS errors on /tree/main/... or /blob/main/... URLs.
+        if (isHfUrl) {
+            const modelId = normalizeModelId(extractModelIdFromHfUrl(urlObj));
+            if (isValidModelId(modelId)) {
+                return {
+                    inputType: "url",
+                    sourceUrl: urlObj.toString(),
+                    modelId,
+                    pageValidation: { ok: true, status: 200 },
+                };
+            }
+        }
+
+        const pageValidation = await verifyWebPageUrl(urlObj);
 
         if (!isHfUrl) {
             if (!pageValidation.ok) {
@@ -5597,7 +5655,7 @@ async function fetchSiblingSizeMapFromHfTreeApi(modelId, fileNames = [], options
     }
 
     if (!response.ok) {
-        const error = new Error(`HF tree API 요청 실패 (HTTP ${response.status})`);
+        const error = new Error(t(I18N_KEYS.ERROR_HF_TREE_API_FAILED, { status: response.status }));
         error.status = response.status;
         throw error;
     }
@@ -5730,7 +5788,7 @@ async function fetchModelReadme(modelId, options = {}) {
         }
 
         if (!response.ok) {
-            const error = new Error(`README.md 요청 실패 (HTTP ${response.status})`);
+            const error = new Error(t(I18N_KEYS.ERROR_README_FAILED, { status: response.status }));
             error.status = response.status;
             throw error;
         }
@@ -6211,11 +6269,11 @@ function resolveEffectiveTransformersDtype({ sourceFileName = "", modelFileNameH
     const hintedDtype = resolveTransformersDtypeFromFileName(modelFileNameHint);
 
     // If the selected ONNX filename already pins quantization (e.g. model_q4f16.onnx),
-    // prefer `auto` so transformers.js does not over-constrain dtype/device compatibility.
+    // force `fp32` so transformers.js does not append default quantization suffixes (like _q8, _q4).
     // This avoids load failures when fallback backends do not advertise the explicit dtype token.
     const normalizedSource = String(sourceFileName ?? "").trim().toLowerCase();
     if (/model_(?:fp16|fp32|quantized|q4|q4f16|q8|int4|int8|uint8|bnb4)\.onnx$/i.test(normalizedSource)) {
-        return "auto";
+        return "fp32";
     }
 
     // Prefer explicit quantization from the selected ONNX source file when it is not already
@@ -6229,7 +6287,7 @@ function resolveEffectiveTransformersDtype({ sourceFileName = "", modelFileNameH
         hintedDtype !== "auto"
         && /\b(?:fp16|fp32|int8|uint8|quantized|q4f16|q4|q8|bnb4)\b/.test(normalizedHint)
     ) {
-        return "auto";
+        return "fp32";
     }
     return hintedDtype ?? "auto";
 }
@@ -6535,7 +6593,7 @@ function renderDownloadPanel() {
         }
     }
     if (els.downloadQuantizationLabel) {
-        els.downloadQuantizationLabel.textContent = "양자화 레벨";
+        els.downloadQuantizationLabel.textContent = t(I18N_KEYS.MODEL_DOWNLOAD_QUANT_LABEL);
     }
     if (els.downloadQuantizationSelect) {
         const options = Array.isArray(state.download.quantizationOptions)
@@ -6692,6 +6750,85 @@ async function onClickDownloadStart() {
         return;
     }
 
+    // Pre-download quota check — auto-cleanup if needed
+    try {
+        if (navigator.storage?.estimate) {
+            const estimate = await navigator.storage.estimate();
+            const available = (Number(estimate?.quota) || 0) - (Number(estimate?.usage) || 0);
+            const requiredBytes = queue.reduce((sum, item) => {
+                const size = Number(item?.expectedSizeBytes ?? item?.size ?? 0);
+                return sum + (Number.isFinite(size) ? Math.max(0, size) : 0);
+            }, 0);
+            if (requiredBytes > 0 && available > 0 && requiredBytes > available) {
+                // Identify other model bundle directories that can be freed
+                const currentModelPrefix = normalizeStoragePrefixFromModelId(state.download.modelId);
+                const modelsDir = await getOpfsModelsDirectoryHandle();
+
+                // Enumerate top-level entries in /models/
+                const otherDirs = [];
+                let otherTotalBytes = 0;
+                for await (const [name, handle] of modelsDir.entries()) {
+                    if (name === currentModelPrefix) continue; // keep current model
+                    if (handle.kind === "directory") {
+                        const files = await listOpfsFilesRecursive(handle, { baseSegments: [] });
+                        const dirSize = files.reduce((s, f) => s + (Number(f.size) || 0), 0);
+                        otherDirs.push({ name, size: dirSize });
+                        otherTotalBytes += dirSize;
+                    } else {
+                        // top-level file
+                        try {
+                            const file = await handle.getFile();
+                            otherDirs.push({ name, size: file.size, isFile: true });
+                            otherTotalBytes += file.size;
+                        } catch (_) {}
+                    }
+                }
+
+                if (otherTotalBytes > 0) {
+                    const needed = formatBytes(requiredBytes);
+                    const free = formatBytes(available);
+                    const reclaimable = formatBytes(otherTotalBytes);
+                    const dirList = otherDirs.map((d) => `  • ${d.name} (${formatBytes(d.size)})`).join("\n");
+                    const ok = confirm(
+                        `저장소 용량이 부족합니다.\n필요: ${needed} / 여유: ${free}\n\n` +
+                        `다음 모델 파일을 삭제하면 ${reclaimable}을 확보할 수 있습니다:\n${dirList}\n\n삭제하고 계속할까요?`,
+                    );
+                    if (ok) {
+                        for (const d of otherDirs) {
+                            try {
+                                await modelsDir.removeEntry(d.name, { recursive: true });
+                            } catch (_) { /* ignore individual delete failures */ }
+                        }
+                        // Clean manifest entries for deleted models
+                        const manifest = getOpfsManifest();
+                        for (const key of Object.keys(manifest)) {
+                            if (!key.startsWith(currentModelPrefix)) {
+                                removeOpfsManifestEntry(key);
+                            }
+                        }
+                        await refreshModelSessionList({ silent: true });
+                        await refreshStorageEstimate();
+                        showToast(`이전 모델 파일을 삭제하여 ${reclaimable}을 확보했습니다.`, "success", 3000);
+                    } else {
+                        showToast("다운로드가 취소되었습니다. OPFS 탐색기에서 불필요한 모델을 삭제해 주세요.", "warning", 4000);
+                        return;
+                    }
+                } else {
+                    const needed = formatBytes(requiredBytes);
+                    const free = formatBytes(available);
+                    showToast(
+                        `저장소 용량이 부족합니다. 필요: ${needed}, 여유: ${free}. 디스크 공간을 확보해 주세요.`,
+                        "error",
+                        5000,
+                    );
+                    return;
+                }
+            }
+        }
+    } catch (quotaCheckErr) {
+        console.warn("[WARN] Pre-download quota check failed:", quotaCheckErr);
+    }
+
     try {
         await runDownloadFlow({ resume: false });
     } catch (error) {
@@ -6733,7 +6870,7 @@ async function runDownloadFlow({ resume = false } = {}) {
     for (const item of queue) {
         const fileUrl = String(item?.fileUrl ?? "").trim();
         if (!isHttpsUrl(fileUrl, { allowLocalhostHttp: true })) {
-            throw new Error(`보안 정책으로 HTTPS가 아닌 모델 파일 URL은 차단됩니다: ${fileUrl ?? "-"}`);
+            throw new Error(t(I18N_KEYS.ERROR_HTTPS_REQUIRED, { url: fileUrl ?? "-" }));
         }
     }
     console.info("[INFO] start model bundle download", {
@@ -6809,10 +6946,14 @@ async function runDownloadFlow({ resume = false } = {}) {
                 if (existingSize > 0) {
                     // Try to verify file size if metadata is available
                     let isValid = true;
-                    if (Number.isFinite(item.size) && item.size > 0) {
-                        if (existingSize !== item.size) {
+                    const expectedSize = Number.isFinite(Number(item.expectedSizeBytes))
+                        ? Number(item.expectedSizeBytes)
+                        : (Number.isFinite(Number(item.size)) ? Number(item.size) : null);
+
+                    if (expectedSize !== null && expectedSize > 0) {
+                        if (existingSize !== expectedSize) {
                             isValid = false;
-                            console.warn(`[WARN] File size mismatch for ${displaySourceName}: expected ${item.size}, got ${existingSize}. Re-downloading.`);
+                            console.warn(`[WARN] File size mismatch for ${displaySourceName}: expected ${expectedSize}, got ${existingSize}. Re-downloading.`);
                         }
                     }
 
@@ -6961,7 +7102,12 @@ async function runDownloadFlow({ resume = false } = {}) {
         state.download.pauseRequested = false;
         state.download.speedBps = 0;
         state.download.etaSeconds = null;
-        state.download.statusText = `다운로드 실패: ${getErrorMessage(error)} (${activeIndex + 1}/${queue.length})`;
+        const isQuotaError = error?.name === "QuotaExceededError"
+            || (error instanceof DOMException && /quota/i.test(error.message));
+        const userMessage = isQuotaError
+            ? t(I18N_KEYS.ERROR_STORAGE_QUOTA_EXCEEDED)
+            : `다운로드 실패: ${getErrorMessage(error)}`;
+        state.download.statusText = `${userMessage} (${activeIndex + 1}/${queue.length})`;
         ensureManifestEntryForModelFile(primaryItem.fileName, {
             modelId: state.download.modelId,
             fileUrl: primaryItem.fileUrl,
@@ -6974,7 +7120,7 @@ async function runDownloadFlow({ resume = false } = {}) {
         });
         await refreshModelSessionList({ silent: true });
         renderDownloadPanel();
-        showToast(`다운로드 실패: ${getErrorMessage(error)}`, "error", 3200);
+        showToast(userMessage, "error", isQuotaError ? 6000 : 3200);
     }
 }
 
@@ -7027,7 +7173,7 @@ async function downloadModelFileToOpfsWithRetry({
                 await flushPendingWrites(context, true);
 
                 if (Number.isFinite(Number(context.totalBytes)) && context.bytesReceived < context.totalBytes) {
-                    const incomplete = new Error("다운로드가 완료되기 전에 연결이 종료되었습니다.");
+                    const incomplete = new Error(t(I18N_KEYS.ERROR_DOWNLOAD_INTERRUPTED));
                     incomplete.code = "download_incomplete";
                     throw incomplete;
                 }
@@ -7055,7 +7201,7 @@ async function downloadModelFileToOpfsWithRetry({
             }
         }
 
-        throw new Error("다운로드 재시도 횟수를 초과했습니다.");
+        throw new Error(t(I18N_KEYS.ERROR_DOWNLOAD_MAX_RETRIES));
     } catch (error) {
         try {
             await writable.abort();
@@ -7101,7 +7247,7 @@ async function streamDownloadAttemptToOpfs(context, onProgress) {
         });
     } catch (error) {
         if (state.download.pauseRequested || error?.name === "AbortError") {
-            const pausedError = new Error("다운로드가 일시 중단되었습니다.");
+            const pausedError = new Error(t(I18N_KEYS.ERROR_DOWNLOAD_PAUSED));
             pausedError.code = "download_paused";
             throw pausedError;
         }
@@ -7110,7 +7256,7 @@ async function streamDownloadAttemptToOpfs(context, onProgress) {
 
     const status = Number(response.status ?? 0);
     if (!response.ok && status !== 206) {
-        const error = new Error(`다운로드 요청 실패 (HTTP ${status})`);
+        const error = new Error(t(I18N_KEYS.ERROR_DOWNLOAD_REQUEST_FAILED, { status }));
         error.status = status;
         throw error;
     }
@@ -7133,7 +7279,7 @@ async function streamDownloadAttemptToOpfs(context, onProgress) {
     }
 
     if (!response.body) {
-        const error = new Error("브라우저가 스트리밍 다운로드를 지원하지 않습니다.");
+        const error = new Error(t(I18N_KEYS.ERROR_NO_STREAMING_SUPPORT));
         error.code = "stream_not_supported";
         throw error;
     }
@@ -7239,6 +7385,9 @@ function shouldRetryDownloadError(error) {
     if (error?.code === "download_paused") {
         return false;
     }
+    if (error?.name === "QuotaExceededError" || (error instanceof DOMException && /quota/i.test(error.message))) {
+        return false;
+    }
     if (status === 401 || status === 403 || status === 404) {
         return false;
     }
@@ -7258,10 +7407,10 @@ async function initOpfs() {
     state.opfs.supported = isOpfsSupported();
     if (!state.opfs.supported) {
         if (els.opfsUsageText) {
-            els.opfsUsageText.textContent = "현재 브라우저는 OPFS를 지원하지 않습니다.";
+            els.opfsUsageText.textContent = t(I18N_KEYS.OPFS_BROWSER_NOT_SUPPORTED_LONG);
         }
         if (els.sessionSummary) {
-            els.sessionSummary.textContent = "현재 브라우저는 OPFS를 지원하지 않습니다.";
+            els.sessionSummary.textContent = t(I18N_KEYS.OPFS_BROWSER_NOT_SUPPORTED_LONG);
         }
         renderOpfsExplorerList();
         return;
@@ -7269,6 +7418,17 @@ async function initOpfs() {
 
     await getOpfsRootHandle();
     await getOpfsModelsDirectoryHandle();
+
+    // Request persistent storage to increase OPFS quota
+    try {
+        if (navigator.storage?.persist) {
+            const persisted = await navigator.storage.persist();
+            if (persisted) {
+                console.info("[INFO] Persistent storage granted — OPFS quota increased.");
+            }
+        }
+    } catch (_) { /* best-effort */ }
+
     await refreshStorageEstimate();
     if (els.sessionSummary) {
         els.sessionSummary.textContent = "OPFS 모델 디렉터리 연결 완료";
@@ -7281,7 +7441,7 @@ function isOpfsSupported() {
 
 async function getOpfsRootHandle() {
     if (!state.opfs.supported && !isOpfsSupported()) {
-        throw new Error("이 브라우저에서는 OPFS를 사용할 수 없습니다.");
+        throw new Error(t(I18N_KEYS.ERROR_OPFS_UNSUPPORTED));
     }
 
     if (state.opfs.rootHandle) {
@@ -7341,7 +7501,7 @@ async function removeOpfsModelsEntryByRelativePath(path, options = {}) {
     const asDirectory = !!options.asDirectory;
     const segments = splitOpfsModelRelativePathSegments(path);
     if (segments.length === 0) {
-        throw new Error("유효한 OPFS 모델 경로가 필요합니다.");
+        throw new Error(t(I18N_KEYS.ERROR_INVALID_OPFS_PATH));
     }
     const entryName = segments.pop();
     const parentHandle = await resolveOpfsModelsDirectoryBySegments(segments, { create: false });
@@ -7450,13 +7610,17 @@ function setExplorerBusy(isBusy) {
 
 function renderExplorerDropzoneState() {
     if (!els.opfsDropzone) return;
-    els.opfsDropzone.classList.toggle("dropzone-active", !!state.opfs.explorer.dragActive);
+    if (state.opfs.explorer.dragActive) {
+        els.opfsDropzone.classList.add("border-cyan-400/80", "bg-cyan-400/12");
+    } else {
+        els.opfsDropzone.classList.remove("border-cyan-400/80", "bg-cyan-400/12");
+    }
 }
 
 function renderStorageUsage() {
     if (!els.opfsUsageText) return;
     if (!state.opfs.supported) {
-        els.opfsUsageText.textContent = "현재 브라우저는 OPFS를 지원하지 않습니다.";
+        els.opfsUsageText.textContent = t(I18N_KEYS.OPFS_BROWSER_NOT_SUPPORTED_LONG);
         return;
     }
 
@@ -7468,7 +7632,7 @@ function renderStorageUsage() {
         : null;
 
     if (usageBytes === null || quotaBytes === null || quotaBytes <= 0) {
-        els.opfsUsageText.textContent = "용량 정보를 가져오는 중...";
+        els.opfsUsageText.textContent = t(I18N_KEYS.OPFS_USAGE_LOADING);
         return;
     }
 
@@ -7537,13 +7701,13 @@ function renderExplorerStatusBar() {
         .reduce((sum, entry) => sum + Math.max(0, Number(entry.sizeBytes ?? 0)), 0);
 
     if (els.opfsStatusSelection) {
-        els.opfsStatusSelection.textContent = `선택: ${selectedCount}개`;
+        els.opfsStatusSelection.textContent = t(I18N_KEYS.OPFS_STATUS_SELECTION, { count: selectedCount });
     }
     if (els.opfsStatusSize) {
-        els.opfsStatusSize.textContent = `선택 크기: ${formatBytes(selectedSize)}`;
+        els.opfsStatusSize.textContent = t(I18N_KEYS.OPFS_STATUS_SIZE, { size: formatBytes(selectedSize) });
     }
     if (els.opfsStatusTotal) {
-        els.opfsStatusTotal.textContent = `현재 폴더: ${entries.length}개 / ${formatBytes(totalSize)}`;
+        els.opfsStatusTotal.textContent = t(I18N_KEYS.OPFS_STATUS_TOTAL, { count: entries.length, size: formatBytes(totalSize) });
     }
 }
 
@@ -7552,7 +7716,7 @@ function renderExplorerSelectionState() {
 
     const path = String(state.opfs.explorer.selectedEntryPath ?? "");
     if (!path) {
-        els.opfsSelectedEntryText.textContent = "선택된 항목 없음";
+        els.opfsSelectedEntryText.textContent = t(I18N_KEYS.OPFS_SELECTED_NONE);
         if (els.opfsRenameInput) {
             els.opfsRenameInput.value = "";
         }
@@ -7693,6 +7857,12 @@ async function scanExplorerEntriesForSegments(segments) {
     entries.sort((a, b) => {
         if (a.kind !== b.kind) {
             return a.kind === "directory" ? -1 : 1;
+        }
+        // onnx_data 파일을 onnx 파일보다 뒤에 정렬하여 시각적 혼동 방지
+        const aIsData = /\.onnx_data$/i.test(a.name);
+        const bIsData = /\.onnx_data$/i.test(b.name);
+        if (aIsData !== bIsData) {
+            return aIsData ? 1 : -1;
         }
         return a.name.localeCompare(b.name, "ko");
     });
@@ -7862,7 +8032,7 @@ async function handleExplorerContextMenuAction(action) {
         if (input === null) return;
         const nextName = sanitizeExplorerEntryName(input);
         if (!nextName) {
-            throw new Error("유효한 새 이름을 입력하세요.");
+            throw new Error(t(I18N_KEYS.TOAST_ENTER_VALID_NEW_NAME));
         }
         setExplorerSelectedEntry(targetPath, targetKind, targetName || nextName);
         if (els.opfsRenameInput) {
@@ -7877,7 +8047,7 @@ async function handleExplorerContextMenuAction(action) {
         if (input === null) return;
         const target = sanitizeExplorerTargetPath(input);
         if (!target) {
-            throw new Error("유효한 대상 경로를 입력하세요.");
+            throw new Error(t(I18N_KEYS.TOAST_ENTER_VALID_TARGET_PATH));
         }
         setExplorerSelectedEntry(targetPath, targetKind, targetName || splitParentAndName(targetPath).name);
         if (els.opfsMoveInput) {
@@ -7924,19 +8094,19 @@ function renderOpfsExplorerList() {
     els.opfsExplorerBody.innerHTML = rows.map((entry) => {
         const isDirectory = entry.kind === "directory";
         const typeIcon = isDirectory ? "folder" : "file";
-        const selectedClass = state.opfs.explorer.selectedEntryPath === entry.path ? "opfs-row-selected" : "";
+        const selectedClass = state.opfs.explorer.selectedEntryPath === entry.path ? "bg-sky-400/12 light:bg-sky-200 oled:bg-sky-900/40" : "";
 
         return `
         <tr class="border-b border-slate-800/75 ${selectedClass}" data-entry-path="${escapeHtml(entry.path)}" data-entry-kind="${escapeHtml(entry.kind)}" data-entry-name="${escapeHtml(entry.name)}">
             <td class="py-2 px-2 align-top text-slate-100">
-                <span class="inline-flex items-center gap-2">
-                    <i data-lucide="${typeIcon}" class="w-3.5 h-3.5"></i>
-                    <span class="truncate">${escapeHtml(entry.name)}</span>
+                <span class="inline-flex items-center gap-2 max-w-[180px] md:max-w-none">
+                    <i data-lucide="${typeIcon}" class="w-3.5 h-3.5 shrink-0"></i>
+                    <span class="truncate" title="${escapeHtml(entry.name)}">${escapeHtml(entry.name)}</span>
                 </span>
             </td>
-            <td class="py-2 px-2 align-top text-slate-300">${isDirectory ? "-" : formatBytes(entry.sizeBytes)}</td>
-            <td class="py-2 px-2 align-top text-slate-300">${entry.lastModified ? formatModelDate(entry.lastModified) : "-"}</td>
-            <td class="py-2 px-2 align-top text-slate-400 truncate max-w-[360px]" title="${escapeHtml(entry.path)}">${escapeHtml(entry.path)}</td>
+            <td class="py-2 px-2 align-top text-slate-300 hidden sm:table-cell">${isDirectory ? "-" : formatBytes(entry.sizeBytes)}</td>
+            <td class="py-2 px-2 align-top text-slate-300 hidden md:table-cell">${entry.lastModified ? formatModelDate(entry.lastModified) : "-"}</td>
+            <td class="py-2 px-2 align-top text-slate-400 truncate max-w-[200px] hidden lg:table-cell" title="${escapeHtml(entry.path)}">${escapeHtml(entry.path)}</td>
         </tr>`;
     }).join("");
 
@@ -8238,10 +8408,10 @@ async function moveExplorerEntry(fromPath, toPath, kindHint = "") {
     const normalizedFrom = sanitizeExplorerTargetPath(fromPath);
     const normalizedTo = sanitizeExplorerTargetPath(toPath);
     if (!normalizedFrom || !normalizedTo) {
-        throw new Error("유효한 원본/대상 경로가 필요합니다.");
+        throw new Error(t(I18N_KEYS.ERROR_INVALID_SOURCE_TARGET_PATH));
     }
     if (normalizedFrom === "/" || normalizedTo === "/") {
-        throw new Error("루트 경로는 이동할 수 없습니다.");
+        throw new Error(t(I18N_KEYS.ERROR_CANNOT_MOVE_ROOT));
     }
     if (normalizedFrom === normalizedTo) {
         return;
@@ -8254,7 +8424,7 @@ async function moveExplorerEntry(fromPath, toPath, kindHint = "") {
     const fromParts = splitParentAndName(normalizedFrom);
     const toParts = splitParentAndName(normalizedTo);
     if (!fromParts.name || !toParts.name) {
-        throw new Error("이동 경로가 올바르지 않습니다.");
+        throw new Error(t(I18N_KEYS.ERROR_INVALID_MOVE_PATH));
     }
 
     const sourceParentHandle = await resolveDirectoryHandleBySegments(fromParts.parentSegments, { create: false });
@@ -8548,19 +8718,81 @@ async function refreshModelSessionList({ silent = false } = {}) {
 
 async function scanOpfsModelFiles() {
     const modelsDir = await getOpfsModelsDirectoryHandle();
-    const files = [];
     const discovered = await listOpfsFilesRecursive(modelsDir, { baseSegments: [] });
+
+    // 1. Group files by folder and type to calculate specific entry sizes
+    const folderGroups = {}; // folderPath -> { onnx: [], data: [], common: [] }
+    const fileCache = new Map(); // path -> File object
+
+    for (const item of discovered) {
+        try {
+            const file = await item.fileHandle.getFile();
+            fileCache.set(item.relativePath, file);
+
+            const segments = item.relativePath.split("/");
+            const fileName = segments.pop(); // last segment is filename
+            const folderPath = segments.join("/");
+
+            if (!folderGroups[folderPath]) {
+                folderGroups[folderPath] = { onnx: [], data: [], common: [] };
+            }
+
+            const fileInfo = { name: fileName, size: file.size ?? 0 };
+            const lowerName = fileName.toLowerCase();
+
+            if (lowerName.endsWith(".onnx")) {
+                folderGroups[folderPath].onnx.push(fileInfo);
+            } else if (lowerName.endsWith(".onnx.data") || lowerName.endsWith(".onnx_data")) {
+                folderGroups[folderPath].data.push(fileInfo);
+            } else {
+                folderGroups[folderPath].common.push(fileInfo);
+            }
+        } catch (e) {
+            console.warn("Failed to get file info:", item.relativePath, e);
+        }
+    }
+
+    // 2. Calculate size for each ONNX entry
+    const entrySizes = new Map(); // folderPath/fileName -> sizeBytes
+    
+    for (const [folderPath, group] of Object.entries(folderGroups)) {
+        const commonSize = group.common.reduce((sum, f) => sum + f.size, 0);
+
+        for (const onnx of group.onnx) {
+            let size = onnx.size + commonSize;
+
+            // Add specific data files (e.g. model.onnx.data belongs to model.onnx)
+            for (const data of group.data) {
+                if (data.name.startsWith(onnx.name)) {
+                    size += data.size;
+                }
+            }
+            
+            const fullPath = folderPath ? `${folderPath}/${onnx.name}` : onnx.name;
+            entrySizes.set(fullPath, size);
+        }
+    }
+
+    const files = [];
     for (const item of discovered) {
         const normalizedFileName = normalizeOnnxFileName(item.relativePath);
         if (!normalizedFileName) continue;
-        const file = await item.fileHandle.getFile();
+
+        const file = fileCache.get(item.relativePath);
+        if (!file) continue;
+
         const segments = splitOpfsModelRelativePathSegments(normalizedFileName);
+        const folderPath = segments.length > 1 ? segments.slice(0, -1).join("/") : "";
+        
+        // Use calculated entry size if available, otherwise fallback to file size
+        const totalSizeBytes = entrySizes.get(item.relativePath) ?? file.size;
+
         files.push({
             fileName: normalizedFileName,
-            sizeBytes: Number(file.size ?? 0),
+            sizeBytes: Number(totalSizeBytes ?? 0),
             lastModified: Number(file.lastModified ?? 0),
             cache: true,
-            bundlePath: segments.slice(0, -1).join("/"),
+            bundlePath: folderPath,
         });
     }
 
@@ -8720,9 +8952,15 @@ function renderModelSessionList() {
 
     if (state.opfs.files.length === 0) {
         els.sessionTableBody.innerHTML = `
-        <tr>
-            <td colspan="9" class="py-4 text-slate-400">OPFS /models 에 저장된 ONNX 파일이 없습니다.</td>
-        </tr>`;
+            <tr>
+                <td colspan="9" class="py-12 text-center text-slate-400">
+                    <div class="flex flex-col items-center justify-center gap-3">
+                        <i data-lucide="folder-open" class="w-8 h-8 opacity-50"></i>
+                        <p>${t(I18N_KEYS.OPFS_DIRECTORY_EMPTY)}</p>
+                    </div>
+                </td>
+            </tr>`;
+        lucide.createIcons();
         return;
     }
 
@@ -8734,85 +8972,144 @@ function renderModelSessionList() {
         const action = getSessionRowActionMeta(rowState);
         const lampMeta = getSessionStateLampMeta(rowState);
         const manifestEntry = manifest[fileName] ?? null;
-        const modelId = manifestEntry?.modelId ?? "-";
+        
+        // Model ID Resolution
+        let modelId = manifestEntry?.modelId;
+        if (!isValidModelId(modelId)) {
+            // Try to resolve from folder structure if not in manifest
+            const segments = item.bundlePath ? item.bundlePath.split("/") : [];
+            // e.g. models/organization/model-name/quant/file.onnx
+            if (segments.length >= 2) {
+                // Try organization/model-name pattern
+                const possibleId = `${segments[0]}/${segments[1]}`;
+                if (isValidModelId(possibleId)) {
+                    modelId = possibleId;
+                }
+            }
+        }
+        if (!isValidModelId(modelId)) {
+            modelId = "-";
+        }
+
         const normalizedModelId = isValidModelId(modelId) ? normalizeModelId(modelId) : "";
         const modelPageUrl = normalizedModelId
-            ? `${HF_BASE_URL}/${normalizedModelId.split("/").map((part) => encodeURIComponent(part)).join("/")}`
+            ? `${HF_BASE_URL}/${normalizedModelId}`
             : "";
+        
+        // Quantization Label
+        let quantLabel = "-";
         const quantInfo = resolveQuantizationInfoFromFileName(fileName);
-        const quantLabel = quantInfo?.label ?? "-";
-        const revision = manifestEntry?.revision ?? "main";
-        const downloadStatus = manifestEntry?.downloadStatus ?? "downloaded";
+        if (quantInfo && quantInfo.label) {
+            quantLabel = quantInfo.label;
+        } else if (item.bundlePath) {
+             // Try to guess from folder name if filename doesn't have it
+             const folderName = item.bundlePath.split("/").pop();
+             if (folderName && (folderName.includes("q4") || folderName.includes("Q4"))) quantLabel = "Q4_K_M";
+             else if (folderName && (folderName.includes("q8") || folderName.includes("Q8"))) quantLabel = "Q8_0";
+        }
+
+        const revision = manifestEntry?.revision ?? (item.bundlePath ? "main" : "-");
+        
+        // Download Status Logic
+        // If we have local files and they pass basic checks, consider it "downloaded"
+        // Manifest status is secondary source of truth
+        let downloadStatus = manifestEntry?.downloadStatus ?? "downloaded";
+        if (!manifestEntry && item.sizeBytes > 0) {
+             downloadStatus = "downloaded";
+        }
+
         const canUpdate = !!(manifestEntry?.fileUrl || isValidModelId(modelId));
+
         const statusTextClass = downloadStatus === "downloaded"
-            ? "text-emerald-200"
-            : (downloadStatus === "uploaded" ? "text-cyan-200" : "text-slate-300");
+            ? "text-emerald-400"
+            : (downloadStatus === "uploaded" ? "text-cyan-400" : "text-slate-400");
+            
+        // Formatting
+        const formattedSize = formatBytes(item.sizeBytes);
+        const formattedDate = formatModelDate(item.lastModified);
+        const displayName = item.bundlePath 
+            ? `${item.bundlePath}/${fileName.split("/").pop()}`
+            : fileName;
 
         return `
-        <tr class="border-b border-slate-800/75">
-            <td class="py-2 pr-2 align-top">
-                <div class="font-medium text-slate-100 truncate max-w-[260px]" title="${escapeHtml(fileName)}">${escapeHtml(fileName)}</div>
+        <tr class="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group h-[48px]">
+            <td class="px-2 align-middle text-left">
+                <div class="font-medium text-slate-200 truncate max-w-[140px] md:max-w-[280px]" title="${escapeHtml(displayName)}">
+                    ${escapeHtml(displayName)}
+                </div>
             </td>
-            <td class="py-2 px-2 text-slate-300 align-top">
-                <div class="inline-flex items-center gap-1 max-w-[240px]">
-                    <span class="truncate" title="${escapeHtml(modelId)}">${escapeHtml(modelId)}</span>
+            <td class="px-2 text-slate-400 align-middle text-left hidden md:table-cell">
+                <div class="flex items-center gap-1.5 max-w-[200px]">
+                    <span class="truncate text-xs font-mono" title="${escapeHtml(modelId)}">${escapeHtml(modelId)}</span>
                     ${modelPageUrl
-                ? `<a href="${escapeHtml(modelPageUrl)}" target="_blank" rel="noopener noreferrer" class="text-cyan-200 hover:text-cyan-100" aria-label="${escapeHtml(`${modelId} Hugging Face 열기`)}" title="Hugging Face에서 열기">🔗</a>`
+                ? `<a href="${escapeHtml(modelPageUrl)}" target="_blank" rel="noopener noreferrer" 
+                      class="text-slate-500 hover:text-cyan-400 transition-colors opacity-0 group-hover:opacity-100" 
+                      aria-label="${escapeHtml(t(I18N_KEYS.MODEL_CARD_OPEN_HUGGINGFACE, { modelId }))}" 
+                      title="${escapeHtml(t(I18N_KEYS.HUGGINGFACE_OPEN_TITLE))}">
+                        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+                   </a>`
                 : ""}
                 </div>
             </td>
-            <td class="py-2 px-2 text-slate-300 align-top">${escapeHtml(quantLabel)}</td>
-            <td class="py-2 px-2 text-slate-300 align-top">${escapeHtml(revision)}</td>
-            <td class="py-2 px-2 text-slate-300 align-top">${formatBytes(item.sizeBytes)}</td>
-            <td class="py-2 px-2 text-slate-300 align-top">${formatModelDate(item.lastModified)}</td>
-            <td class="py-2 px-2 align-top ${statusTextClass}">${escapeHtml(downloadStatus)}</td>
-            <td class="py-2 px-2 align-top">
-                <span class="${escapeHtml(lampMeta.className)}" title="${escapeHtml(lampMeta.label)}" aria-label="${escapeHtml(lampMeta.label)}"></span>
+            <td class="px-2 text-slate-400 text-xs align-middle text-left hidden sm:table-cell">
+                <span class="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300">
+                    ${escapeHtml(quantLabel)}
+                </span>
             </td>
-            <td class="py-2 pl-2 align-top">
-                <div class="flex items-center gap-2">
+            <td class="px-2 text-slate-500 text-xs font-mono align-middle truncate max-w-[80px] text-left hidden lg:table-cell" title="${escapeHtml(revision)}">
+                ${escapeHtml(revision.slice(0, 7))}
+            </td>
+            <td class="px-2 text-slate-400 text-xs font-mono align-middle whitespace-nowrap text-left hidden sm:table-cell">${formattedSize}</td>
+            <td class="px-2 text-slate-500 text-xs align-middle whitespace-nowrap text-left hidden xl:table-cell">${formattedDate}</td>
+            <td class="px-2 align-middle text-left hidden lg:table-cell">
+                <span class="text-xs font-medium ${statusTextClass}">${escapeHtml(downloadStatus)}</span>
+            </td>
+            <td class="px-2 align-middle text-center">
+                <div class="${escapeHtml(lampMeta.className)}" title="${escapeHtml(lampMeta.label)}"></div>
+            </td>
+            <td class="pl-2 pr-2 align-middle text-right">
+                <div class="flex items-center justify-end gap-1 h-9">
                     <button
                         data-action="session-model-card"
                         data-file-name="${escapeHtml(fileName)}"
-                        class="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] border border-slate-500/55 text-slate-100 hover:bg-slate-700/45"
-                        aria-label="${escapeHtml(`${fileName} 모델 카드 보기`)}"
-                        title="${escapeHtml(`${fileName} 모델 카드 보기`)}"
+                        class="inline-flex items-center justify-center w-9 h-9 rounded-md text-slate-400 hover:text-cyan-400 hover:bg-slate-800 transition-colors"
+                        aria-label="${escapeHtml(t(I18N_KEYS.MODEL_CARD_VIEW_ACTION, { fileName }))}"
+                        title="${escapeHtml(t(I18N_KEYS.MODEL_CARD_VIEW_ACTION, { fileName }))}"
                     >
-                        <i data-lucide="badge-info" class="w-3 h-3"></i>
-                        <span>카드</span>
+                        <i data-lucide="info" class="w-4 h-4"></i>
                     </button>
                     <button
                         data-action="session-load-toggle"
                         data-file-name="${escapeHtml(fileName)}"
                         data-row-state="${escapeHtml(rowState)}"
-                        class="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] ${action.buttonClass}"
+                        class="inline-flex items-center justify-center w-9 h-9 gap-1 rounded ${action.buttonClass}"
                         ${action.disabled ? "disabled" : ""}
                         aria-label="${escapeHtml(`${fileName} ${action.label}`)}"
                         title="${escapeHtml(`${fileName} ${action.label}`)}"
                     >
                         <i data-lucide="${escapeHtml(action.icon)}" class="${escapeHtml(action.iconClass)}"></i>
-                        <span>${escapeHtml(action.label)}</span>
+                        <span class="hidden md:inline text-[11px]">${escapeHtml(action.label)}</span>
                     </button>
                     <button
                         data-action="session-update"
                         data-file-name="${escapeHtml(fileName)}"
-                        class="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] border border-slate-500/55 text-slate-100 hover:bg-slate-700/45 ${canUpdate ? "" : "opacity-50"}"
+                        class="inline-flex items-center justify-center w-9 h-9 gap-1 rounded border border-slate-500/55 text-slate-100 hover:bg-slate-700/45 ${canUpdate ? "" : "opacity-50"}"
                         ${canUpdate ? "" : "disabled"}
                         aria-label="${escapeHtml(`${fileName} 업데이트`)}"
                         title="${escapeHtml(`${fileName} 업데이트`)}"
                     >
-                        <i data-lucide="download" class="w-3 h-3"></i>
-                        <span>업데이트</span>
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span class="hidden md:inline text-[11px]">업데이트</span>
                     </button>
                     <button
                         data-action="session-delete"
                         data-file-name="${escapeHtml(fileName)}"
-                        class="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] border border-rose-300/40 text-rose-100 hover:bg-rose-500/15"
+                        class="inline-flex items-center justify-center w-9 h-9 gap-1 rounded border border-rose-300/40 text-rose-100 hover:bg-rose-500/15"
                         aria-label="${escapeHtml(`${fileName} 삭제`)}"
                         title="${escapeHtml(`${fileName} 삭제`)}"
                     >
-                        <i data-lucide="trash-2" class="w-3 h-3"></i>
-                        <span>삭제</span>
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        <span class="hidden md:inline text-[11px]">${escapeHtml(t(I18N_KEYS.COMMON_DELETE))}</span>
                     </button>
                 </div>
             </td>
@@ -8984,7 +9281,7 @@ async function onClickSessionLoad(fileName, options = {}) {
 
         const session = await loadCachedSession(normalizedFileName);
         if (!session) {
-            throw new Error("세션 객체 생성에 실패했습니다.");
+            throw new Error(t(I18N_KEYS.ERROR_SESSION_CREATION_FAILED));
         }
 
         state.activeSessionFile = normalizedFileName;
@@ -9036,6 +9333,8 @@ async function onClickSessionLoad(fileName, options = {}) {
                 showToast(classified.message, "error", 4200);
             } else if (classified.code === "OutOfMemory") {
                 showToast("메모리가 부족합니다. 다른 탭을 닫고 다시 시도하세요.", "error", 3200);
+            } else if (classified.code === "RepoMissingDataShards") {
+                showToast(classified.message, "error", 6000);
             } else {
                 showToast(`모델 로드 실패: ${classified.message}`, "error", 3200);
             }
@@ -9107,7 +9406,7 @@ function evaluateModelUpdateNecessity(currentEntry, metadata) {
 function isLikelyExternalOnnxDataSourcePath(sourcePath) {
     const normalized = normalizeOpfsModelRelativePath(sourcePath);
     if (!normalized) return false;
-    return /\.onnx_data(?:_\d+)?$/i.test(normalized);
+    return /\.onnx_data(?:_\d+)?$/i.test(normalized) || /\.onnx\.data$/i.test(normalized);
 }
 
 function resolveUpdateIntegrityCheckCategory(item, primarySourceFileName = "") {
@@ -9248,7 +9547,7 @@ async function onClickSessionUpdate(fileName) {
                         downloadStatus: "ready",
                     });
                 } else if (!targetFileUrl || !targetFileName) {
-                    throw new Error("업데이트 가능한 ONNX 파일을 찾지 못했습니다.");
+                    throw new Error(t(I18N_KEYS.ERROR_NO_UPDATEABLE_ONNX));
                 }
 
                 const updateCheck = evaluateModelUpdateNecessity(entry, metadata);
@@ -9273,7 +9572,7 @@ async function onClickSessionUpdate(fileName) {
                     });
 
                     if (!integrityCheck.needsRepair) {
-                        showToast("현재 최신 버전을 사용 중입니다", "info", 3000, {
+                        showToast(t(I18N_KEYS.TOAST_ALREADY_LATEST_VERSION), "info", 3000, {
                             position: "top-right",
                         });
                         return;
@@ -9301,7 +9600,7 @@ async function onClickSessionUpdate(fileName) {
                         ? failureParts.join(", ")
                         : `누락 ${integrityCheck.missingCount}개, 용량 불일치 ${integrityCheck.mismatchCount}개`;
                     showToast(
-                        `로컬 파일 검증 실패(${failureSummary}). 업데이트를 진행합니다.`,
+                        t(I18N_KEYS.TOAST_INTEGRITY_CHECK_FAILED, { summary: failureSummary }),
                         "info",
                         3600,
                         { position: "top-right" },
@@ -9465,7 +9764,7 @@ async function releaseSessionEntry(fileName) {
 async function loadCachedSession(fileName, options = {}) {
     const normalizedFileName = normalizeOnnxFileName(fileName);
     if (!normalizedFileName) {
-        const error = new Error("유효한 .onnx 파일명을 입력해주세요.");
+        const error = new Error(t(I18N_KEYS.ERROR_INVALID_ONNX_FILENAME));
         error.code = "NoSuchFile";
         throw error;
     }
@@ -9493,7 +9792,7 @@ async function loadCachedSession(fileName, options = {}) {
         const fileRef = await fileHandle.getFile();
         const fileSize = Number(fileRef?.size ?? 0);
         if (fileSize <= 0) {
-            const error = new Error(`모델 파일 크기가 0입니다: ${resolvedPath}`);
+            const error = new Error(t(I18N_KEYS.ERROR_ZERO_SIZE_MODEL, { path: resolvedPath }));
             error.code = "CorruptedModel";
             throw error;
         }
@@ -9505,7 +9804,7 @@ async function loadCachedSession(fileName, options = {}) {
 
         const modelId = resolveModelIdForCachedSession(normalizedFileName);
         if (!modelId) {
-            const error = new Error("캐시 모델의 modelId를 찾을 수 없습니다. 모델 메타데이터를 확인하세요.");
+            const error = new Error(t(I18N_KEYS.ERROR_CACHE_MODEL_ID_MISSING));
             error.code = "CorruptedModel";
             throw error;
         }
@@ -9513,9 +9812,21 @@ async function loadCachedSession(fileName, options = {}) {
         const manifestEntry = getOpfsManifest()[normalizedFileName] ?? null;
         const modelFileNameHintRaw = extractModelFileHintFromResolveUrl(manifestEntry?.fileUrl ?? "");
         const modelFileNameHint = normalizeTransformersModelFileNameHint(modelFileNameHintRaw);
-        const modelDtypeHint = resolveTransformersDtypeFromFileName(modelFileNameHintRaw || normalizedFileName);
+        // Explicitly clear dtype hint for pre-quantized files so transformers.js loads them as-is
+        let modelDtypeHint = resolveTransformersDtypeFromFileName(modelFileNameHintRaw || normalizedFileName);
+        if (/model_(?:fp16|fp32|quantized|q4|q4f16|q8|int4|int8|uint8|bnb4)\.onnx$/i.test(normalizedFileName)) {
+            modelDtypeHint = null;
+        }
+
+        // Count external data chunks (.onnx_data) and pass to session
         relatedFileCount = await countRelatedOpfsModelFiles(modelId, normalizedFileName);
         externalDataChunkCount = await countExternalDataChunksForOnnxFile(normalizedFileName);
+        if (externalDataChunkCount > 0) {
+            console.info("[INFO] external data chunks detected", {
+                file: normalizedFileName,
+                count: externalDataChunkCount
+            });
+        }
         if (relatedFileCount <= 1) {
             console.warn("[WARN] OPFS model bundle looks incomplete for transformers.js", {
                 model_id: modelId,
@@ -9557,10 +9868,11 @@ async function loadCachedSession(fileName, options = {}) {
                         modelSourceFileName: modelFileNameHintRaw,
                         externalDataChunkCount,
                         preferredDevice: candidateDevice,
+                        dtype: modelDtypeHint, // Explicitly pass the resolved (potentially null) dtype
                     });
                     createSessionError = null;
                     if (candidateDevice !== preferredDevice) {
-                        console.warn("[WARN] fallback device selected for cached session load", {
+                        console.info("[INFO] fallback device selected for cached session load", {
                             file_name: normalizedFileName,
                             preferred_device: preferredDevice,
                             fallback_device: candidateDevice,
@@ -9569,7 +9881,7 @@ async function loadCachedSession(fileName, options = {}) {
                     break;
                 } catch (attemptError) {
                     createSessionError = attemptError;
-                    console.warn("[WARN] cached session load attempt failed on device", {
+                    console.info("[INFO] cached session load attempt failed on device (will try fallback)", {
                         file_name: normalizedFileName,
                         model_id: modelId,
                         device: candidateDevice,
@@ -9610,7 +9922,7 @@ async function loadCachedSession(fileName, options = {}) {
         let nextError = error;
         const runtimeCode = extractNumericRuntimeErrorCode(error);
         if (runtimeCode !== null && Number.isFinite(Number(relatedFileCount)) && Number(relatedFileCount) <= 1) {
-            const bundleError = new Error("모델 번들이 불완전합니다. ONNX 외 tokenizer/config 파일이 누락되었습니다. 업데이트를 실행해 모델 번들을 다시 다운로드하세요.");
+            const bundleError = new Error(t(I18N_KEYS.ERROR_INCOMPLETE_MODEL_BUNDLE));
             bundleError.code = "CorruptedModel";
             bundleError.cause = error;
             nextError = bundleError;
@@ -9839,6 +10151,31 @@ function normalizeTransformersModelFileNameHint(rawHint) {
     return normalizeOpfsModelRelativePath(last);
 }
 
+/**
+ * TJS4 treats `model_file_name` as a base stem and appends `_{dtype}` when
+ * constructing the ONNX filename. If the hint already carries a quantization
+ * suffix (e.g. "model_q4f16"), split it so the pipeline factory does not
+ * produce a doubled suffix like "model_q4f16_q4f16.onnx".
+ * @param {string} modelFileName
+ * @returns {{ baseName: string, dtype: string|null }}
+ */
+function splitModelFileNameAndDtype(modelFileName) {
+    const DTYPE_SUFFIXES = [
+        "q4f16", "q4f32", "q8f16", "q8f32",
+        "q4", "q8", "fp16", "fp32",
+        "int4", "int8", "uint8", "bnb4",
+        "quantized",
+    ];
+    const lower = String(modelFileName ?? "").toLowerCase();
+    for (const suffix of DTYPE_SUFFIXES) {
+        if (lower.endsWith(`_${suffix}`)) {
+            const baseName = modelFileName.slice(0, -(suffix.length + 1));
+            if (baseName) return { baseName, dtype: suffix };
+        }
+    }
+    return { baseName: modelFileName, dtype: null };
+}
+
 function resolvePipelineTaskForModel(fileName, modelId) {
     const normalizedFileName = normalizeOnnxFileName(fileName);
     const manifest = getOpfsManifest()[normalizedFileName] ?? null;
@@ -9855,101 +10192,12 @@ function resolvePipelineTaskForModel(fileName, modelId) {
     return task;
 }
 
-async function ensureTransformersModule() {
-    const injectedModule = getInjectedTransformersModule();
-    if (injectedModule && typeof injectedModule === "object") {
-        return injectedModule;
-    }
-    if (transformersStore.module) {
-        return transformersStore.module;
-    }
-    if (!transformersStore.modulePromise) {
-        transformersStore.modulePromise = (async () => {
-            try {
-                const { runtime } = await loadTransformersModuleFromCandidates();
-                configureTransformersRuntimeEnv(runtime);
-                transformersStore.module = runtime;
-                return runtime;
-            } catch (error) {
-                transformersStore.modulePromise = null;
-                throw error;
-            }
-        })();
-    }
-    return transformersStore.modulePromise;
-}
-
-function configureTransformersRuntimeEnv(runtime) {
-    const envRef = runtime?.env ?? runtime?.default?.env ?? null;
-    if (!envRef || typeof envRef !== "object") return;
-
-    if (Object.prototype.hasOwnProperty.call(envRef, "allowRemoteModels")) {
-        envRef.allowRemoteModels = true;
-    }
-    if (Object.prototype.hasOwnProperty.call(envRef, "allowLocalModels")) {
-        envRef.allowLocalModels = true;
-    }
-    if (Object.prototype.hasOwnProperty.call(envRef, "useBrowserCache")) {
-        envRef.useBrowserCache = true;
-    }
-}
-
-async function loadTransformersModuleFromCandidates() {
-    const candidates = Array.isArray(TRANSFORMERS_JS_IMPORT_CANDIDATES)
-        ? TRANSFORMERS_JS_IMPORT_CANDIDATES
-        : [];
-    let lastError = null;
-
-    for (const candidate of candidates) {
-        const url = String(candidate ?? "").trim();
-        if (!url) continue;
-        try {
-            const runtime = await import(url);
-            console.info("[INFO] transformers.js module loaded", {
-                version: TRANSFORMERS_JS_VERSION,
-                source: url,
-            });
-            return { runtime, sourceUrl: url };
-        } catch (error) {
-            lastError = error;
-            console.warn("[WARN] transformers.js module load failed", {
-                version: TRANSFORMERS_JS_VERSION,
-                source: url,
-                message: getErrorMessage(error),
-            });
-        }
-    }
-
-    const failure = new Error(`Transformers.js ${TRANSFORMERS_JS_VERSION} 로드에 실패했습니다.`);
-    failure.code = "transformers_module_load_failed";
-    failure.cause = lastError;
-    throw failure;
-}
-
-function getPipelineFactory(mod) {
-    const factory = mod?.pipeline || mod?.default?.pipeline;
-    if (typeof factory !== "function") {
-        const error = new Error("Transformers.js Pipeline API를 찾을 수 없습니다.");
-        error.code = "CorruptedModel";
-        throw error;
-    }
-    return factory;
-}
-
 function getTransformersPipelineKey(task, modelId, modelFileName = "", externalDataChunkCount = 0, device = "", dtype = "") {
     const fileHint = String(modelFileName ?? "").trim().toLowerCase();
     const chunkCount = Math.max(0, Math.trunc(Number(externalDataChunkCount ?? 0)));
     const normalizedDevice = String(device ?? "").trim().toLowerCase() ?? "auto";
     const normalizedDtype = String(dtype ?? "").trim().toLowerCase() ?? "auto";
     return `${normalizePipelineTask(task)}::${normalizeModelId(modelId)}::${fileHint}::ext${chunkCount}::dev${normalizedDevice}::dt${normalizedDtype}`;
-}
-
-async function disposeTransformersPipeline(pipeline) {
-    if (!pipeline || typeof pipeline.dispose !== "function") return;
-    const maybePromise = pipeline.dispose();
-    if (maybePromise && typeof maybePromise.then === "function") {
-        await maybePromise;
-    }
 }
 
 class TransformersWorkerManager {
@@ -9962,7 +10210,7 @@ class TransformersWorkerManager {
 
     getWorker() {
         if (!this.worker) {
-            this.worker = new Worker("./worker.js", { type: "module" });
+            this.worker = new Worker("./script/worker.js", { type: "module" });
             this.worker.onmessage = (e) => {
                 const { type, id, key, error, output, token, tokenIncrement } = e.data;
                 if (type === 'error') {
@@ -9992,7 +10240,17 @@ class TransformersWorkerManager {
                 }
             };
             this.worker.onerror = (e) => {
-                console.error("[Worker] Error:", e);
+                const errorDetail = e?.message || e?.error?.message || e?.filename
+                    ? `${e?.message ?? ""} at ${e?.filename ?? ""}:${e?.lineno ?? ""}:${e?.colno ?? ""}`
+                    : "unknown error (Worker crashed without detail)";
+                console.error("[Worker] Unhandled error:", errorDetail, e);
+                const errorMsg = `Worker crashed: ${errorDetail}`;
+                for (const [, { reject }] of this.pending) {
+                    reject(new Error(errorMsg));
+                }
+                this.pending.clear();
+                this.listeners.clear();
+                this.worker = null;
             };
         }
         return this.worker;
@@ -10082,22 +10340,49 @@ async function getOrCreateTransformersPipeline(task, modelId, options = {}) {
     const resolvedDevice = ["webgpu", "wasm"].includes(requestedDevice)
         ? requestedDevice
         : (fallbackDeviceChain[0] ?? "wasm");
-    const requestedDtype = String(options.dtype ?? "").trim().toLowerCase();
-    const resolvedDtype = requestedDtype ?? "auto";
+    
+    let resolvedDtype = "auto";
+    if (options.dtype === null) {
+        resolvedDtype = null;
+    } else {
+        const raw = String(options.dtype ?? "").trim().toLowerCase();
+        if (raw) resolvedDtype = raw;
+    }
+
+    // --- TJS4 compatibility: split quantization suffix from model_file_name ---
+    // TJS4 treats model_file_name as a base stem and appends _{dtype} when
+    // constructing the ONNX filename.  If the hint already carries the suffix
+    // (e.g. "model_q4f16") we must strip it and relay the dtype explicitly so
+    // the pipeline factory does not produce doubled names like
+    // "model_q4f16_q4f16.onnx".
+    let effectiveModelFileName = modelFileName;
+    let effectiveDtype = resolvedDtype;
+    if (effectiveModelFileName) {
+        const { baseName, dtype: extractedDtype } = splitModelFileNameAndDtype(effectiveModelFileName);
+        if (extractedDtype) {
+            effectiveModelFileName = baseName;
+            if (!effectiveDtype || effectiveDtype === "auto" || effectiveDtype === null) {
+                effectiveDtype = extractedDtype;
+            }
+        }
+    }
+
     if (rawModelFileName && rawModelFileName !== modelFileName) {
         console.info("[INFO] normalized transformers model_file_name hint", {
             raw: rawModelFileName,
             normalized: modelFileName,
+            effective: effectiveModelFileName,
+            effective_dtype: effectiveDtype,
             model_id: normalizedModel,
         });
     }
     const key = getTransformersPipelineKey(
         normalizedTask,
         normalizedModel,
-        modelFileName,
+        effectiveModelFileName,
         externalDataChunkCount,
         resolvedDevice,
-        resolvedDtype,
+        effectiveDtype,
     );
     const existing = transformersStore.pipelines.get(key);
     if (existing) {
@@ -10108,24 +10393,22 @@ async function getOrCreateTransformersPipeline(task, modelId, options = {}) {
             existing.refCount += 1;
         }
         existing.lastUsed = Date.now();
-        return { key, pipeline: null, device: resolvedDevice, dtype: resolvedDtype };
+        return { key, pipeline: null, device: resolvedDevice, dtype: effectiveDtype };
     }
 
     const pipelineOptions = {
         device: resolvedDevice,
     };
-    if (resolvedDtype) {
-        pipelineOptions.dtype = resolvedDtype;
+    if (effectiveDtype && effectiveDtype !== "auto") {
+        pipelineOptions.dtype = effectiveDtype;
     }
-    if (modelFileName) {
-        // Hint exact ONNX filename/path within the model repo when available.
-        pipelineOptions.model_file_name = modelFileName;
+    if (effectiveModelFileName) {
+        // Hint the base ONNX filename stem (without quantization suffix).
+        pipelineOptions.model_file_name = effectiveModelFileName;
     }
-    if (externalDataChunkCount > 0) {
-        pipelineOptions.use_external_data_format = modelFileName
-            ? { [`${modelFileName}.onnx`]: externalDataChunkCount }
-            : externalDataChunkCount;
-    }
+    // Let TJS4 read use_external_data_format from the model's config.json
+    // (transformers.js_config section) rather than overriding it here.
+    // The config may specify a different chunk count than our OPFS detection.
 
     await transformersWorker.init(normalizedTask, normalizedModel, pipelineOptions, key);
 
@@ -10134,10 +10417,10 @@ async function getOrCreateTransformersPipeline(task, modelId, options = {}) {
         lastUsed: Date.now(),
         refCount: shouldRetain ? 1 : 0,
         device: resolvedDevice,
-        dtype: resolvedDtype,
+        dtype: effectiveDtype,
     });
     await pruneTransformersPipelineCache();
-    return { key, pipeline: null, device: resolvedDevice, dtype: resolvedDtype };
+    return { key, pipeline: null, device: resolvedDevice, dtype: effectiveDtype };
 }
 
 function extractTextFromTransformersOutput(output, task) {
@@ -10265,6 +10548,7 @@ async function createTransformersSession({
     modelSourceFileName = "",
     externalDataChunkCount = 0,
     preferredDevice = "",
+    dtype: callerDtype,
 }) {
     const resolvedTask = normalizePipelineTask(task);
     const normalizedModelId = normalizeModelId(modelId);
@@ -10279,10 +10563,15 @@ async function createTransformersSession({
         resolvedModelFileNameHint = normalizeTransformersModelFileNameHint(fileName);
     }
     const resolvedSourceFileName = normalizeOpfsModelRelativePath(modelSourceFileName ?? "");
-    const resolvedDtype = resolveEffectiveTransformersDtype({
-        sourceFileName: resolvedSourceFileName || fileName || resolvedModelFileNameHint,
-        modelFileNameHint: resolvedModelFileNameHint,
-    });
+    // Honour explicit dtype from caller (e.g. null for pre-quantized ONNX files).
+    // When callerDtype is explicitly null, pass null so getOrCreateTransformersPipeline
+    // skips the dtype option and lets Transformers.js load the file as-is.
+    const resolvedDtype = callerDtype !== undefined
+        ? callerDtype
+        : resolveEffectiveTransformersDtype({
+            sourceFileName: resolvedSourceFileName || fileName || resolvedModelFileNameHint,
+            modelFileNameHint: resolvedModelFileNameHint,
+        });
     const normalizedExternalDataChunkCount = Math.max(0, Math.trunc(Number(externalDataChunkCount ?? 0)));
     const { key, pipeline, device, dtype } = await getOrCreateTransformersPipeline(resolvedTask, normalizedModelId, {
         modelFileName: resolvedModelFileNameHint,
@@ -10464,6 +10753,28 @@ function classifySessionLoadError(error) {
         };
     }
 
+    // Detect missing external data shard files — indicates a defective model repository
+    if (
+        (message.includes("could not locate file") || message.includes("not found"))
+        && (message.includes("onnx_data") || message.includes(".onnx_data_"))
+    ) {
+        return {
+            code: "RepoMissingDataShards",
+            message: t(I18N_KEYS.ERROR_REPO_MISSING_DATA_SHARDS),
+        };
+    }
+
+    // Detect ONNX graph validation errors caused by incomplete external data
+    if (
+        message.includes("error_code: 6")
+        && (message.includes("empty string in the graph") || message.includes("marked single"))
+    ) {
+        return {
+            code: "RepoMissingDataShards",
+            message: t(I18N_KEYS.ERROR_REPO_MISSING_DATA_SHARDS),
+        };
+    }
+
     const runtimeCode = extractNumericRuntimeErrorCode(error);
     if (runtimeCode !== null) {
         return {
@@ -10519,7 +10830,7 @@ function openSessionSwitchDialog(currentFile, nextFile) {
     state.sessionSwitchDialog.open = true;
     state.sessionSwitchDialog.currentFile = current;
     state.sessionSwitchDialog.nextFile = next;
-    els.sessionSwitchDialogMessage.textContent = `현재 모델을 언로드하고 새 모델을 로드하시겠습니까?\n현재: ${current}\n새 모델: ${next}`;
+    els.sessionSwitchDialogMessage.textContent = t(I18N_KEYS.SESSION_SWITCH_DIALOG_MESSAGE) + "\n" + t(I18N_KEYS.SESSION_SWITCH_DIALOG_DETAILS, { current, next });
     els.sessionSwitchDialogOverlay.classList.remove("hidden");
 
     if (els.sessionSwitchDialogConfirmBtn) {
@@ -10554,7 +10865,7 @@ function openDeleteDialog(targetLabel, options = {}) {
     state.deleteDialog.open = true;
     state.deleteDialog.isDeleting = false;
 
-    els.deleteDialogMessage.textContent = `정말로 '${resolvedLabel}' 항목을 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`;
+    els.deleteDialogMessage.textContent = t(I18N_KEYS.DELETE_DIALOG_MESSAGE, { name: resolvedLabel });
     els.deleteDialogOverlay.classList.remove("hidden");
     els.deleteDialogOverlay.focus();
 }
@@ -10590,6 +10901,80 @@ function isErrorDialogOpen() {
     return !!els.errorDialogOverlay && !els.errorDialogOverlay.classList.contains("hidden");
 }
 
+/* ─── Keyboard Shortcut Help Dialog ─── */
+
+function isShortcutHelpDialogOpen() {
+    return !!els.shortcutHelpOverlay && !els.shortcutHelpOverlay.classList.contains("hidden");
+}
+
+function openShortcutHelpDialog() {
+    if (!els.shortcutHelpOverlay || !els.shortcutHelpBody) return;
+    renderShortcutHelpContent();
+    els.shortcutHelpOverlay.classList.remove("hidden");
+    els.shortcutHelpOverlay.focus();
+}
+
+function closeShortcutHelpDialog() {
+    if (!els.shortcutHelpOverlay) return;
+    els.shortcutHelpOverlay.classList.add("hidden");
+}
+
+function toggleShortcutHelpDialog() {
+    if (isShortcutHelpDialogOpen()) {
+        closeShortcutHelpDialog();
+    } else {
+        openShortcutHelpDialog();
+    }
+}
+
+function renderShortcutHelpContent() {
+    if (!els.shortcutHelpBody) return;
+
+    const isMac = /mac|iphone|ipad|ipod/i.test(navigator.userAgent);
+    const mod = isMac ? "⌘" : "Ctrl";
+
+    const categories = [
+        {
+            label: t("shortcut_help.category.chat", {}, "채팅"),
+            items: [
+                { keys: `${mod}+N`, desc: t("shortcut_help.desc.new_chat", {}, "새 대화") },
+                { keys: `${mod}+Enter`, desc: t("shortcut_help.desc.send", {}, "메시지 전송") },
+                { keys: `${mod}+L`, desc: t("shortcut_help.desc.focus_input", {}, "입력창 포커스") },
+                { keys: `${mod}+Shift+E`, desc: t("shortcut_help.desc.export", {}, "대화 내보내기") },
+                { keys: `${mod}+Shift+Backspace`, desc: t("shortcut_help.desc.delete_chat", {}, "대화 삭제") },
+            ],
+        },
+        {
+            label: t("shortcut_help.category.navigation", {}, "탐색"),
+            items: [
+                { keys: `${mod}+,`, desc: t("shortcut_help.desc.settings", {}, "설정 열기/닫기") },
+                { keys: `${mod}+B`, desc: t("shortcut_help.desc.sidebar", {}, "사이드바 토글") },
+                { keys: "Escape", desc: t("shortcut_help.desc.close", {}, "다이얼로그/패널 닫기") },
+                { keys: `${mod}+/`, desc: t("shortcut_help.desc.help", {}, "단축키 도움말") },
+            ],
+        },
+    ];
+
+    const titleEl = document.getElementById("shortcut-help-title");
+    if (titleEl) titleEl.textContent = t("shortcut_help.title", {}, "키보드 단축키");
+
+    let html = "";
+    for (const cat of categories) {
+        html += `<div class="mb-1"><div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2 light:text-slate-500 oled:text-[#888]">${escapeHtml(cat.label)}</div>`;
+        html += `<div class="space-y-1.5">`;
+        for (const item of cat.items) {
+            html += `<div class="flex items-center justify-between py-1 px-1">`;
+            html += `<span class="text-slate-300 light:text-slate-700 oled:text-[#bbb]">${escapeHtml(item.desc)}</span>`;
+            html += `<span class="shrink-0 ml-4">`;
+            const keys = item.keys.split("+");
+            html += keys.map(k => `<kbd class="inline-block min-w-[22px] text-center px-1.5 py-0.5 text-[11px] rounded border border-slate-600 bg-slate-800/60 text-slate-300 font-mono light:border-slate-300 light:bg-slate-100 light:text-slate-700 oled:border-[#444] oled:bg-[#1a1a1a] oled:text-[#bbb]">${escapeHtml(k)}</kbd>`).join(`<span class="text-slate-500 text-[10px] mx-0.5">+</span>`);
+            html += `</span></div>`;
+        }
+        html += `</div></div>`;
+    }
+    els.shortcutHelpBody.innerHTML = html;
+}
+
 async function onConfirmDeleteModel() {
     if (state.deleteDialog.isDeleting) return;
 
@@ -10623,7 +11008,7 @@ async function onConfirmDeleteModel() {
                     state.deleteDialog.isDeleting = false;
                     if (els.deleteDialogConfirmBtn) {
                         els.deleteDialogConfirmBtn.disabled = false;
-                        els.deleteDialogConfirmBtn.innerHTML = '<i data-lucide="trash-2" class="w-3 h-3"></i> 삭제';
+                        els.deleteDialogConfirmBtn.innerHTML = `<i data-lucide="trash-2" class="w-3 h-3"></i> ${escapeHtml(t(I18N_KEYS.COMMON_DELETE))}`;
                         lucide.createIcons();
                     }
                     closeDeleteDialog();
@@ -10717,7 +11102,7 @@ async function onConfirmDeleteModel() {
                 name: error.name ?? "",
                 message: error.message ?? "",
             });
-            openErrorDialog("삭제할 수 없습니다. 페이지 새로고침 후 다시 시도하세요.");
+            openErrorDialog(t(I18N_KEYS.DIALOG_ERROR_MESSAGE));
         } else {
             showToast(t("delete.failed", { message: getErrorMessage(error) }), "error", 3200);
         }
@@ -10725,7 +11110,7 @@ async function onConfirmDeleteModel() {
         state.deleteDialog.isDeleting = false;
         if (els.deleteDialogConfirmBtn) {
             els.deleteDialogConfirmBtn.disabled = false;
-            els.deleteDialogConfirmBtn.innerHTML = '<i data-lucide="trash-2" class="w-3 h-3"></i> 삭제';
+            els.deleteDialogConfirmBtn.innerHTML = `<i data-lucide="trash-2" class="w-3 h-3"></i> ${escapeHtml(t(I18N_KEYS.COMMON_DELETE))}`;
             lucide.createIcons();
         }
     }
@@ -10794,15 +11179,27 @@ function pickModelDescription(metadata) {
         return readme.slice(0, 40000);
     }
 
-    if (metadata?.__readmeMissing === true) {
+    // Check if README resolution was attempted
+    const isResolved = metadata?.__readmeResolved === true;
+    const isMissing = metadata?.__readmeMissing === true;
+    const hasError = String(metadata?.__readmeError ?? "").trim().length > 0;
+
+    if (!isResolved) {
+        // README resolution not yet completed
+        return "README.md를 불러오는 중입니다.";
+    }
+
+    // README resolution is complete
+    if (isMissing) {
         return "README.md가 없습니다.";
     }
 
-    if (metadata?.__readmeResolved === true) {
+    if (hasError) {
         return "README.md를 불러오지 못했습니다.";
     }
 
-    return "README.md를 불러오는 중입니다.";
+    // Resolved but no content and no error - treat as failure
+    return "README.md를 불러오지 못했습니다.";
 }
 
 function pickModelLicense(metadata, tags) {
@@ -10858,24 +11255,44 @@ function renderTokenSpeedStats() {
     if (els.tokenSpeedStats) {
         els.tokenSpeedStats.textContent = text;
 
-        // 메모리 사용량 표시 업데이트
+        // 메모리 사용량 표시 업데이트 (CPU + GPU)
         if (els.memoryUsageText) {
-            let memoryText = "Mem: -";
-            if (performance && performance.memory) {
-                const usedMB = performance.memory.usedJSHeapSize / (1024 * 1024);
-                memoryText = `Mem: ${usedMB.toFixed(1)} MB`;
-            }
-            els.memoryUsageText.textContent = memoryText;
+            updateMemoryDisplay();
+        }
+    }
+}
+
+/**
+ * 메모리 및 VRAM 사용량을 표시합니다.
+ */
+async function updateMemoryDisplay() {
+    if (!els.memoryUsageText) return;
+
+    try {
+        const stats = await getMemoryStats();
+
+        // CPU 메모리 + VRAM 합쳐서 표시
+        let displayText = stats.cpu;
+
+        // VRAM 정보 추가
+        if (stats.gpu && stats.gpu !== "VRAM: - MB") {
+            displayText += ` | ${stats.gpu}`;
+        }
+
+        els.memoryUsageText.textContent = displayText;
+    } catch (error) {
+        // 에러가 발생해도 최소한 CPU 메모리는 표시
+        if (performance && performance.memory) {
+            const usedMB = performance.memory.usedJSHeapSize / (1024 * 1024);
+            const totalMB = performance.memory.totalJSHeapSize / (1024 * 1024);
+            els.memoryUsageText.textContent = `JS Heap: ${usedMB.toFixed(1)} / ${totalMB.toFixed(1)} MB`;
         }
     }
 }
 
 // 메모리 사용량 주기적 업데이트 (1초마다)
 setInterval(() => {
-    if (els.memoryUsageText && performance && performance.memory) {
-        const usedMB = performance.memory.usedJSHeapSize / (1024 * 1024);
-        els.memoryUsageText.textContent = `Mem: ${usedMB.toFixed(1)} MB`;
-    }
+    updateMemoryDisplay();
 }, 1000);
 
 function updateTokenSpeedStats(tokens, elapsed) {
@@ -11649,7 +12066,7 @@ function buildLocalRunFailure(error, session, context = {}) {
 }
 
 function createLocalEmptyOutputError(session, userText, context = {}) {
-    const error = new Error("모델이 비어있거나 무의미한 응답을 반환했습니다.");
+    const error = new Error(t(I18N_KEYS.ERROR_EMPTY_MODEL_RESPONSE));
     error.code = "local_inference_empty_output";
     error.details = {
         task: String(session?.task ?? ""),
@@ -11818,7 +12235,7 @@ function shouldPreferMessagesPromptOnly(session, normalizedTask) {
 
 async function runInference(session, userText, options = {}) {
     if (!session || typeof session.generateText !== "function") {
-        const error = new Error("로컬 Transformers.js 세션에서 generateText() 함수를 찾을 수 없습니다.");
+        const error = new Error(t(I18N_KEYS.ERROR_GENERATE_TEXT_MISSING));
         error.code = "local_session_run_unavailable";
         throw error;
     }
@@ -12056,13 +12473,13 @@ function appendMessageBubble(entry, options = {}) {
     roleLabel.className = role === "user"
         ? "message-role-label message-role-label--user"
         : "message-role-label message-role-label--assistant";
-    roleLabel.textContent = role === "user" ? "user" : t("chat.meta.assistant");
+    roleLabel.textContent = role === "user" ? getProfileNickname() : t("chat.meta.assistant");
     row.appendChild(roleLabel);
 
     const bubble = document.createElement("article");
     bubble.className = role === "user"
-        ? "message-bubble max-w-[88%] rounded-2xl border border-cyan-400/30 bg-cyan-500/12 px-4 py-3 text-sm text-cyan-50"
-        : "message-bubble max-w-[88%] rounded-2xl border border-slate-600/60 bg-slate-900/50 px-4 py-3 text-sm text-slate-100";
+        ? "relative outline-none max-w-[88%] px-4 py-3 text-sm leading-relaxed bg-[linear-gradient(135deg,rgba(6,182,212,0.15),rgba(59,130,246,0.15))] border border-cyan-400/30 rounded-[18px_18px_4px_18px] text-cyan-50 shadow-[0_4px_12px_rgba(8,145,178,0.1)] hover:border-cyan-400/50 hover:shadow-[0_6px_16px_rgba(8,145,178,0.15)] light:bg-[linear-gradient(135deg,#0ea5e9,#2563eb)] light:text-white light:border-none light:shadow-md animate-[message-slide-up_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]"
+        : "relative outline-none max-w-[88%] px-4 py-3 text-sm leading-relaxed bg-slate-800/40 border border-slate-400/20 rounded-[18px_18px_18px_4px] text-slate-100 hover:bg-slate-800/60 hover:border-slate-400/35 light:bg-white light:border-slate-200 light:text-slate-800 light:shadow-sm oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] animate-[message-slide-up_0.3s_cubic-bezier(0.16,1,0.3,1)_forwards]";
     bubble.dataset.messageId = String(messageId);
     bubble.tabIndex = 0;
     bubble.setAttribute("role", "group");
@@ -12204,8 +12621,13 @@ function setSystemPrompt(value) {
 
 function getMaxOutputTokens() {
     try {
-        const raw = Number(localStorage.getItem(STORAGE_KEYS.maxOutputTokens));
-        if (!Number.isInteger(raw)) {
+        const stored = localStorage.getItem(STORAGE_KEYS.maxOutputTokens);
+        if (stored === null || stored === "") {
+            localStorage.setItem(STORAGE_KEYS.maxOutputTokens, String(LLM_DEFAULT_SETTINGS.maxOutputTokens));
+            return LLM_DEFAULT_SETTINGS.maxOutputTokens;
+        }
+        const raw = Number(stored);
+        if (!Number.isInteger(raw) || raw <= 0) {
             localStorage.setItem(STORAGE_KEYS.maxOutputTokens, String(LLM_DEFAULT_SETTINGS.maxOutputTokens));
             return LLM_DEFAULT_SETTINGS.maxOutputTokens;
         }

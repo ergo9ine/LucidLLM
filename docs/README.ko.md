@@ -3,7 +3,7 @@
 [한국어](../README.md) | [English](README.en.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
 
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
-![Transformers.js](https://img.shields.io/badge/Transformers.js-v3.8.1-yellow)
+![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0-yellow)
 ![WebGPU](https://img.shields.io/badge/WebGPU-Supported-green)
 ![PWA](https://img.shields.io/badge/PWA-Planned-blue)
 
@@ -75,41 +75,57 @@
 
 ## 🚀 시작하기
 
-### 웹 버전 (설치 불필요)
+### 라이브 데모
 
-GitHub Pages를 통해 별도의 설치 없이 바로 사용할 수 있습니다:
+GitHub Pages에서 제공하는 데모를 즉시 사용해보세요 (설치 불필요):
 
-👉 **[라이브 데모 실행하기](https://ergo9ine.github.io/LucidLLM/)**
+👉 **https://ergo9ine.github.io/LucidLLM/**
 
-### 로컬 실행
-
-1. **저장소 복제**
+### 로컬 (제로-빌드)
 
 ```bash
 git clone https://github.com/ergo9ine/LucidLLM.git
 cd LucidLLM
+npm run serve    # http://localhost:3000 에서 실행
 ```
 
-2. **로컬 서버 실행**
+(대안: `python -m http.server 8000` 또는 `npx serve .`)
 
-OPFS 및 Service Worker 기능을 사용하려면 보안 컨텍스트(HTTPS 또는 localhost)가 필요합니다.
+브라우저에서 열고 Settings → Model Management에서 모델을 다운로드·활성화합니다.
 
-```bash
-# 사용 Python
-python -m http.server 8000
+---
 
-# 사용 Node.js (npx)
-npx serve .
+## 📖 사용 가이드 (요약)
 
-# 또는 포함된 npm 스크립트 사용
-npm run serve
-```
+- 설정 → 모델 관리에서 모델 추가 → 다운로드 → 활성화 → 채팅 시작
+- 시스템 프롬프트와 컨텍스트 윈도우는 설정에서 제어합니다.
 
-3. **브라우저 접속**
+---
 
-브라우저에서 `http://localhost:8000`으로 접속합니다. (Chrome 또는 Edge 권장)
+## 🛠️ 개발자 가이드
 
-## 📖 사용 가이드
+- 런타임: 바닐라 ES 모듈(별도 번들 불필요)
+- 주요 파일:
+  - `script/bootstrap.js` — 초기화
+  - `script/main.js` — UI 상태/핸들러
+  - `script/worker.js` — 추론 워커
+  - `script/drive-backup.js` — 암호화 백업
+- 테스트: `npm test` (Vitest)
+
+---
+
+## 🤝 기여 안내
+
+- 큰 변경 사항은 이슈로 미리 논의해주세요.
+- PR: 포크 → 브랜치 → PR(설명/테스트 포함)
+
+---
+
+## 🔒 보안 및 프라이버시
+
+- 기본적으로 모든 데이터와 추론은 로컬에만 저장됩니다.
+- Google Drive 백업은 선택적이며 클라이언트 측 암호화됩니다.
+- 민감한 모델/데이터는 공개 업로드를 피하세요.
 
 ### 1. 모델 불러오기
 
@@ -134,7 +150,7 @@ npm run serve
 | 설정 | 기본값 | 설명 |
 |------|--------|------|
 | **시스템 프롬프트** | "You are a helpful assistant." | AI의 역할과 성격을 정의합니다. |
-| **최대 출력 토큰** | 512 | 限制一次回复生成的最大长度。 |
+| **최대 출력 토큰** | 512 | 한 번의 응답으로 생성할 수 있는 최대 길이를 제한합니다. |
 | **컨텍스트 윈도우** | 8k | 모델이 기억할 수 있는 대화의 길이를 설정합니다. |
 | **온도 (Temperature)** | 0.9 | 응답의 창의성과 무작위성을 조절합니다. |
 
@@ -169,7 +185,7 @@ LucidLLM/
 |------|------|
 | **언어** | JavaScript (ES2020+ Modules) |
 | **아키텍처** | Zero-build, Vanilla JS (No Framework) |
-| **ML 프레임워크** | Transformers.js v3.8.1 |
+| **ML 프레임워크** | Transformers.js v4.0.0 |
 | **추론 백엔드** | WebGPU / WASM (자동 전환) |
 | **스토리지** | Origin Private File System (OPFS), localStorage |
 | **스타일링** | Tailwind CSS v3 (CDN) + Custom CSS Variables |

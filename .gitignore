@@ -7,8 +7,6 @@
 
 # Core static entry + runtime scripts/styles
 !/index.html
-!/style.css
-!/*.js
 !/favicon.svg
 !/*.md
 !/LICENSE

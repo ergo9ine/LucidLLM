@@ -3,7 +3,7 @@
 [한국어](../README.md) | [English](README.en.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
 
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
-![Transformers.js](https://img.shields.io/badge/Transformers.js-v3.8.1-yellow)
+![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0-yellow)
 ![WebGPU](https://img.shields.io/badge/WebGPU-Supported-green)
 ![PWA](https://img.shields.io/badge/PWA-Planned-blue)
 
@@ -73,43 +73,59 @@
 | **GPU** | 内蔵グラフィックス | WebGPU対応の外付けグラフィックス |
 | **ストレージ** | モデルあたり100MB〜2GB | SSD推奨 |
 
-## 🚀 始め方
+## 🚀 クイックスタート
 
-### Web版（インストール不要）
+### ライブデモ
 
-GitHub Pagesを通じて、インストールなしですぐに使用できます：
+GitHub Pagesのホスト版をすぐに試せます（インストール不要）：
 
-👉 **[ライブデモを実行する](https://ergo9ine.github.io/LucidLLM/)**
+👉 **https://ergo9ine.github.io/LucidLLM/**
 
-### ローカル実行
-
-1. **リポジトリのクローン**
+### ローカル（ゼロビルド）
 
 ```bash
 git clone https://github.com/ergo9ine/LucidLLM.git
 cd LucidLLM
+npm run serve    # http://localhost:3000 で起動
 ```
 
-2. **ローカルサーバーの実行**
+(代替: `python -m http.server 8000` または `npx serve .`)
 
-OPFSおよびService Worker機能を使用するには、セキュリティコンテキスト（HTTPSまたはlocalhost）が必要です。
+ブラウザで開き、Settings → Model Management から 모델 を 다운로드して有効化してください。
 
-```bash
-# Pythonを使用する場合
-python -m http.server 8000
+---
 
-# Node.js (npx)を使用する場合
-npx serve .
+## 📖 使用（要約）
 
-# または含まれているnpmスクリプトを使用
-npm run serve
-```
+- Settings → Model Management でモデルを追加 → ダウンロード → 有効化 → チャット開始
+- システムプロンプトやコンテキストウィンドウは設定画面で調整可能です。
 
-3. **ブラウザでアクセス**
+---
 
-ブラウザで `http://localhost:8000` にアクセスします。（ChromeまたはEdge推奨）
+## 🛠️ 開発ガイド
 
-## 📖 使用ガイド
+- ランタイム: バニラ ES モジュール（バンドラ不要）
+- 主要ファイル:
+  - `script/bootstrap.js` — 起動処理
+  - `script/main.js` — UI 状態・ハンドラ
+  - `script/worker.js` — 推論ワーカー
+  - `script/drive-backup.js` — 暗号化バックアップ
+- テスト: `npm test` (Vitest)
+
+---
+
+## 🤝 貢献について
+
+- 大きな変更は事前に Issue で相談してください。
+- PR フロー: fork → branch → PR（説明・テストを添えて）
+
+---
+
+## 🔒 セキュリティとプライバシー
+
+- 推論とチャットデータはデフォルトでローカルに留まります。
+- Google Drive へのバックアップは任意で、クライアント側で暗号化されます。
+- 機微なモデルやデータを公開場所へアップロードしないでください。
 
 ### 1. モデルの読み込み
 
@@ -169,7 +185,7 @@ LucidLLM/
 |----------|------|
 | **言語** | JavaScript (ES2020+ Modules) |
 | **アーキテクチャ** | Zero-build, Vanilla JS (No Framework) |
-| **MLフレームワーク** | Transformers.js v3.8.1 |
+| **MLフレームワーク** | Transformers.js v4.0.0 |
 | **推論バックエンド** | WebGPU / WASM (自動切り替え) |
 | **ストレージ** | Origin Private File System (OPFS), localStorage |
 | **スタイリング** | Tailwind CSS v3 (CDN) + Custom CSS Variables |
