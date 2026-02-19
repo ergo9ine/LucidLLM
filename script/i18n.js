@@ -2320,7 +2320,7 @@ function interpolate(template, vars) {
     if (!vars || Object.keys(vars).length === 0) return template;
 
     return template.replace(/\{(\w+)\}/g, (_, key) => {
-        return Object.prototype.hasOwnProperty.call(vars, key)
+        return Object.hasOwn(vars, key)
             ? String(vars[key])
             : `{${key}}`;  // 변수 없으면 원본 표시 (디버깅 용이)
     });
@@ -2332,7 +2332,7 @@ export function matchSupportedLanguage(value) {
     const raw = String(value ?? "").trim();
     if (!raw) return "";
 
-    const normalized = raw.replace(/_/g, "-");
+    const normalized = raw.replaceAll("_", "-");
     const lower = normalized.toLowerCase();
 
     if (lower === "ko" || lower.startsWith("ko-")) return "ko";

@@ -14,7 +14,7 @@ if (typeof navigator !== 'undefined' && navigator.gpu && typeof navigator.gpu.re
     const originalRequestAdapter = navigator.gpu.requestAdapter;
     navigator.gpu.requestAdapter = function(options) {
         const newOptions = { ...options };
-        if (newOptions && typeof newOptions === 'object' && 'powerPreference' in newOptions) {
+        if (newOptions && Object.hasOwn(newOptions, 'powerPreference')) {
             delete newOptions.powerPreference;
         }
         return originalRequestAdapter.call(this, newOptions);
@@ -52,7 +52,7 @@ function parseHfResolveUrl(rawUrl) {
         const filePath = segments.slice(resolveIndex + 2).join("/");
         if (!modelId || !filePath) return null;
         return { modelId, filePath };
-    } catch (_) {
+    } catch {
         return null;
     }
 }
@@ -64,7 +64,7 @@ function parseHfResolveUrl(rawUrl) {
  * @returns {string[]}
  */
 function buildOpfsWorkerCandidatePaths(modelId, filePath) {
-    const bundleDir = modelId.replace(/\//g, "--");
+    const bundleDir = modelId.replaceAll("/", "--");
     const candidates = [];
     candidates.push(`${bundleDir}/${filePath}`);
     // onnx/ 하위 파일에 대해 onnx/ prefix 없는 경로도 시도
@@ -91,10 +91,10 @@ async function readOpfsFileInWorker(relativePath) {
         for (let i = 0; i < segments.length - 1; i++) {
             current = await current.getDirectoryHandle(segments[i], { create: false });
         }
-        const fileName = segments[segments.length - 1];
+        const fileName = segments.at(-1);
         const fileHandle = await current.getFileHandle(fileName, { create: false });
         return await fileHandle.getFile();
-    } catch (_) {
+    } catch {
         return null;
     }
 }
@@ -135,7 +135,7 @@ function extractRangeHeader(input, init) {
             const value = input.headers.get("range");
             if (value) return value;
         }
-    } catch (_) {
+    } catch {
         // ignore
     }
     return "";
@@ -342,8 +342,7 @@ async function handleInit(id, data) {
         return;
     }
 
-    let resolveInit;
-    const initPromise = new Promise(r => { resolveInit = r; });
+    const { promise: initPromise, resolve: resolveInit } = Promise.withResolvers();
     initializingKeys.set(key, initPromise);
 
     try {

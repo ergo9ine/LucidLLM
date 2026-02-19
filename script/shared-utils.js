@@ -28,11 +28,11 @@ export function getErrorMessage(error) {
  */
 export function escapeHtml(value) {
     return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/\"/g, "&quot;")
-        .replace(/'/g, "&#39;");
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
 }
 
 /**
@@ -96,12 +96,12 @@ export function formatEta(seconds) {
  * @returns {Promise<string>}
  */
 export function readFileAsDataUrl(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () => reject(new Error(t(I18N_KEYS.ERROR_FILE_READ_FAILED)));
-        reader.onload = () => resolve(String(reader.result ?? ""));
-        reader.readAsDataURL(file);
-    });
+    const { promise, resolve, reject } = Promise.withResolvers();
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(t(I18N_KEYS.ERROR_FILE_READ_FAILED)));
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.readAsDataURL(file);
+    return promise;
 }
 
 /**
@@ -186,7 +186,7 @@ export function isHttpsUrl(value, options = {}) {
 
         const host = String(parsed.hostname ?? "").toLowerCase();
         return host === "localhost" || host === "127.0.0.1" || host === "::1";
-    } catch (_) {
+    } catch {
         return false;
     }
 }
@@ -528,7 +528,7 @@ export function readStorageWithValidation(key, validator, defaultValue = null) {
             return defaultValue;
         }
         return result.value;
-    } catch (_) {
+    } catch {
         return defaultValue;
     }
 }
@@ -662,7 +662,7 @@ export function normalizeString(value, defaultValue = "", transformer = null) {
     if (typeof transformer === "function") {
         try {
             return transformer(str) || defaultValue;
-        } catch (_) {
+        } catch {
             return defaultValue;
         }
     }

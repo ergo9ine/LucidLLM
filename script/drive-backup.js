@@ -210,7 +210,7 @@ export function formatBackupFileName(prefix = "backup_", now = new Date()) {
  * @returns {string}
  */
 export function escapeDriveQueryLiteral(value) {
-    return String(value ?? "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    return String(value ?? "").replaceAll("\\", "\\\\").replaceAll("'", "\\'");
 }
 
 // ============================================================================
@@ -237,7 +237,7 @@ export function buildBackupSignature(payload) {
 export function estimateBackupPayloadBytes(payload) {
     try {
         return new Blob([JSON.stringify(payload)]).size;
-    } catch (_) {
+    } catch {
         return 0;
     }
 }
