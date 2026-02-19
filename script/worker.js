@@ -6,6 +6,7 @@
 import {
     extractTokenIdsFromBeamPayload,
     computeStreamTokenDelta,
+    OPFS_MODELS_DIR,
 } from "./shared-utils.js";
 
 // Monkey-patch navigator.gpu.requestAdapter to suppress 'powerPreference' warning on Windows
@@ -25,7 +26,6 @@ if (typeof navigator !== 'undefined' && navigator.gpu && typeof navigator.gpu.re
 // OPFS Fetch Interceptor (Worker)
 // ============================================================================
 
-const OPFS_MODELS_DIR = "models";
 const originalWorkerFetch = self.fetch.bind(self);
 
 /**
@@ -284,13 +284,31 @@ function getPipelineFactory(mod) {
 // Message Handler
 // ============================================================================
 
-// Global uncaught error handler for debugging Worker crashes
+// Global uncaught error handlers for debugging Worker crashes
 self.addEventListener("error", (e) => {
     console.error("[Worker] uncaught error:", e?.message ?? "", e?.filename ?? "", e?.lineno ?? "", e?.colno ?? "");
+    // Notify main thread
+    self.postMessage({
+        type: "worker_error",
+        message: e?.message ?? "Unknown error",
+        filename: e?.filename ?? "",
+        lineno: e?.lineno ?? 0,
+        colno: e?.colno ?? 0
+    });
 });
+
 self.addEventListener("unhandledrejection", (e) => {
     console.error("[Worker] unhandled rejection:", e?.reason ?? "");
+    // Notify main thread
+    self.postMessage({
+        type: "worker_error",
+        message: e?.reason?.message ?? String(e?.reason ?? "Unhandled rejection"),
+        source: "unhandledrejection"
+    });
 });
+
+// Generation abort controller
+let currentGenerationAbortController = null;
 
 self.onmessage = async (e) => {
     const { type, id, data } = e.data;
@@ -300,6 +318,8 @@ self.onmessage = async (e) => {
             await handleInit(id, data);
         } else if (type === 'generate') {
             await handleGenerate(id, data);
+        } else if (type === 'abort') {
+            await handleAbort(id, data);
         } else if (type === 'dispose') {
             await handleDispose(id, data);
         }
@@ -382,12 +402,23 @@ async function handleGenerate(id, data) {
 
     let streamedText = "";
     let lastTokenCount = 0;
+    let totalTokenCount = 0;
+    let aborted = false;
+
+    // Set up abort controller
+    currentGenerationAbortController = { aborted: false };
 
     /**
      * 빔 서치 콜백 함수 — 토큰이 생성될 때마다 호출됩니다.
      * @param {Object} beamPayload
      */
     const callback_function = (beamPayload) => {
+        // Check for abort
+        if (currentGenerationAbortController?.aborted) {
+            aborted = true;
+            throw new Error('Generation aborted by user');
+        }
+
         try {
             const tokenIds = extractTokenIdsFromBeamPayload(beamPayload);
             if (!Array.isArray(tokenIds) || tokenIds.length === 0) return;
@@ -395,6 +426,7 @@ async function handleGenerate(id, data) {
             const currentTokenCount = tokenIds.length;
             const tokenIncrement = Math.max(0, currentTokenCount - lastTokenCount);
             lastTokenCount = currentTokenCount;
+            totalTokenCount += tokenIncrement;
 
             if (pipe.tokenizer && typeof pipe.tokenizer.decode === "function") {
                 const decoded = pipe.tokenizer.decode(tokenIds, { skip_special_tokens: true });
@@ -407,11 +439,32 @@ async function handleGenerate(id, data) {
                         id,
                         token: delta,
                         tokenIncrement,
+                        totalTokens: totalTokenCount,
                     });
                 }
             }
         } catch (e) {
+            // Check if this is an abort error
+            if (aborted || e.message === 'Generation aborted by user') {
+                // Notify main thread of abort
+                self.postMessage({
+                    type: "generation_aborted",
+                    id,
+                    reason: "user_cancelled"
+                });
+                throw e; // Re-throw to stop generation
+            }
+            
             console.error("[Worker] Token decode error", e);
+            // Notify main thread of decode error
+            self.postMessage({
+                type: "token_error",
+                id,
+                error: {
+                    message: e.message,
+                    tokenCount: tokenIds?.length ?? 0
+                }
+            });
         }
     };
 
@@ -420,13 +473,43 @@ async function handleGenerate(id, data) {
         callback_function,
     };
 
-    const output = await pipe(prompt, generateOptions);
+    try {
+        const output = await pipe(prompt, generateOptions);
 
-    self.postMessage({
-        type: "generate_done",
-        id,
-        output,
-    });
+        if (!aborted) {
+            self.postMessage({
+                type: "generate_done",
+                id,
+                output,
+            });
+        }
+    } finally {
+        currentGenerationAbortController = null;
+    }
+}
+
+/**
+ * 생성 중단을 처리합니다.
+ * @param {string} id
+ * @param {Object} data
+ */
+async function handleAbort(id, data) {
+    console.log("[Worker] Abort requested for generation", id);
+    
+    if (currentGenerationAbortController) {
+        currentGenerationAbortController.aborted = true;
+        self.postMessage({
+            type: "abort_ack",
+            id,
+            message: "Generation abort signal sent"
+        });
+    } else {
+        self.postMessage({
+            type: "abort_ack",
+            id,
+            message: "No active generation to abort"
+        });
+    }
 }
 
 /**

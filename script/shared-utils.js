@@ -6,6 +6,12 @@
 import { t, I18N_KEYS } from "./i18n.js";
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+export const OPFS_MODELS_DIR = "models";
+
+// ============================================================================
 // Error & HTML Utilities
 // ============================================================================
 
@@ -542,6 +548,21 @@ export function readStorageWithValidation(key, validator, defaultValue = null) {
  * @param {{element: HTMLElement, event: string, handler: Function}[]} bindings
  * @returns {Function} - 등록된 모든 리스너를 제거하는 함수
  */
+/**
+ * 브라우저 저장소 할당량 정보를 조회합니다.
+ * @returns {Promise<{quota: number, usage: number}>}
+ */
+export async function getStorageEstimate() {
+    try {
+        const est = await (navigator.storage?.estimate
+            ? navigator.storage.estimate()
+            : Promise.resolve({ quota: 0, usage: 0 }));
+        return { quota: est.quota ?? 0, usage: est.usage ?? 0 };
+    } catch {
+        return { quota: 0, usage: 0 };
+    }
+}
+
 export function bindMultipleEvents(bindings) {
     const handlers = [];
     

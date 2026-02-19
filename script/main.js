@@ -25,6 +25,7 @@ import {
     readStorageWithValidation,
     safeJsonParse,
     safeJsonStringify,
+    getStorageEstimate,
     // Event utilities
     bindMultipleEvents,
     setupEventDelegation,
@@ -39,6 +40,8 @@ import {
     formatGPUInfo,
     estimateVRAMUsage,
     getMemoryStats,
+    // Constants
+    OPFS_MODELS_DIR,
 } from "./shared-utils.js";
 import {
     buildBackupSignature,
@@ -71,7 +74,6 @@ setAppVersion(APP_VERSION);
 
 const HF_BASE_URL = "https://huggingface.co";
 const HF_MODEL_API_PREFIX = "/api/models";
-const OPFS_MODELS_DIR = "models";
 const OPFS_WRITE_CHUNK_BYTES = 1024 * 1024;
 const LOCAL_INFERENCE_RUNTIME = Object.freeze({
     runtime: "transformers.js",
@@ -3443,7 +3445,7 @@ async function driveRequest(url, options = {}, context = {}) {
                 Math.min(95, 20 + (attempt * 15)),
                 `네트워크 재시도 중... (${attempt}/${maxRetries})`,
             );
-            await delay(baseDelay * (2 ** (attempt - 1)));
+            await delay(calculateExponentialBackoffDelay(baseDelay, attempt));
         }
     }
 
@@ -3654,7 +3656,7 @@ async function uploadBackupPayloadToDrive(uploadText, options = {}) {
                 throw error;
             }
             setDriveProgress(Math.min(95, 30 + (attempt * 12)), `업로드 재시도 중... (${attempt}/${DRIVE_MAX_RETRIES})`);
-            await delay(DRIVE_RETRY_BASE_DELAY_MS * (2 ** (attempt - 1)));
+            await delay(calculateExponentialBackoffDelay(DRIVE_RETRY_BASE_DELAY_MS, attempt));
         }
     }
     throw lastError || new Error("업로드 실패");
@@ -6756,9 +6758,9 @@ async function onClickDownloadStart() {
 
     // Pre-download quota check — auto-cleanup if needed
     try {
-        if (navigator.storage?.estimate) {
-            const estimate = await navigator.storage.estimate();
-            const available = (Number(estimate?.quota) || 0) - (Number(estimate?.usage) || 0);
+        const estimate = await getStorageEstimate();
+        if (estimate.quota > 0) {
+            const available = estimate.quota - estimate.usage;
             const requiredBytes = queue.reduce((sum, item) => {
                 const size = Number(item?.expectedSizeBytes ?? item?.size ?? 0);
                 return sum + (Number.isFinite(size) ? Math.max(0, size) : 0);
@@ -6879,9 +6881,9 @@ async function onClickDownloadResume() {
 // - `keepPrefix`: model prefix to exclude from deletion.
 async function attemptAutoFreeOpfsSpace(requiredBytes = 0, { keepPrefix = null } = {}) {
     try {
-        if (!navigator.storage?.estimate) return false;
-        const estimate = await navigator.storage.estimate();
-        const available = (Number(estimate?.quota) || 0) - (Number(estimate?.usage) || 0);
+        const estimate = await getStorageEstimate();
+        if (estimate.quota === 0) return false;
+        const available = estimate.quota - estimate.usage;
         if (available >= (requiredBytes || 0)) return true;
 
         const modelsDir = await getOpfsModelsDirectoryHandle();
@@ -6909,8 +6911,8 @@ async function attemptAutoFreeOpfsSpace(requiredBytes = 0, { keepPrefix = null }
             } catch (e) {
                 console.warn('[WARN] failed to remove OPFS entry', c.name, e);
             }
-            const est = await navigator.storage.estimate();
-            const availNow = (Number(est?.quota) || 0) - (Number(est?.usage) || 0);
+            const est = await getStorageEstimate();
+            const availNow = est.quota - est.usage;
             if (availNow >= (requiredBytes || 0)) {
                 await refreshModelSessionList({ silent: true });
                 await refreshOpfsExplorer({ silent: true });
@@ -7196,8 +7198,8 @@ async function runDownloadFlow({ resume = false } = {}) {
         if (isQuotaError && !state.download.autoReclaimAttempted) {
             state.download.autoReclaimAttempted = true;
             try {
-                const estimate = await (navigator.storage?.estimate ? navigator.storage.estimate() : Promise.resolve({ quota: 0, usage: 0 }));
-                const available = (Number(estimate?.quota) || 0) - (Number(estimate?.usage) || 0);
+                const estimate = await getStorageEstimate();
+                const available = estimate.quota - estimate.usage;
 
                 // Use remainingRequiredBytes (calculated earlier) to decide how much to free.
                 let needed = Math.max(0, (remainingRequiredBytes || 0) - available);
@@ -7238,8 +7240,8 @@ async function runDownloadFlow({ resume = false } = {}) {
                                     await modelsDir.removeEntry(c.name, { recursive: true });
                                     removeOpfsManifestEntry(c.name);
                                 } catch (e) { /* ignore */ }
-                                const est = await navigator.storage.estimate();
-                                const availNow = (Number(est?.quota) || 0) - (Number(est?.usage) || 0);
+                                const est = await getStorageEstimate();
+                                const availNow = est.quota - est.usage;
                                 if (availNow >= (needed || 0)) {
                                     reclaimed = true;
                                     break;
@@ -7820,9 +7822,9 @@ async function refreshStorageEstimate() {
         return;
     }
 
-    const estimate = await navigator.storage.estimate();
-    state.opfs.explorer.usageBytes = Number.isFinite(Number(estimate?.usage)) ? Number(estimate.usage) : null;
-    state.opfs.explorer.quotaBytes = Number.isFinite(Number(estimate?.quota)) ? Number(estimate.quota) : null;
+    const estimate = await getStorageEstimate();
+    state.opfs.explorer.usageBytes = Number.isFinite(Number(estimate.usage)) ? Number(estimate.usage) : null;
+    state.opfs.explorer.quotaBytes = Number.isFinite(Number(estimate.quota)) ? Number(estimate.quota) : null;
     renderStorageUsage();
 }
 
@@ -10406,7 +10408,12 @@ class TransformersWorkerManager {
                     this.listeners.delete(id);
                 } else if (type === 'token') {
                     const listener = this.listeners.get(id);
-                    if (listener) listener(token, { tokenIncrement: Number(tokenIncrement ?? 1) });
+                    if (listener) {
+                        listener(token, {
+                            tokenIncrement: Number(tokenIncrement ?? 1),
+                            totalTokens: Number(totalTokens ?? 0)
+                        });
+                    }
                 } else if (type === 'dispose_done') {
                     const resolve = this.pending.get(id)?.resolve;
                     if (resolve) resolve();
@@ -11819,6 +11826,13 @@ async function sendMessage(userText) {
         streamRenderer.finalize(reply ?? "응답이 비어 있습니다.");
         state.monitoring.chatSuccessCount += 1;
     } catch (error) {
+        // Check if this is an abort error
+        if (error?.message?.includes("aborted") || error?.code === "generation_aborted") {
+            streamRenderer.finalize("[사용자에 의해 중단됨]", { skipMetrics: true });
+            showToast("생성이 중단되었습니다.", "info", 2000);
+            return;
+        }
+
         const errorId = createChatErrorId();
         const diagnostics = await collectChatFailureDiagnostics(error, {
             userText: normalizedUserText,
@@ -11838,6 +11852,27 @@ async function sendMessage(userText) {
         state.isSendingChat = false;
         setChatSendingState(false);
     }
+}
+
+/**
+ * 현재 진행 중인 생성을 중단합니다.
+ */
+function abortGeneration() {
+    if (!state.isSendingChat) return;
+    
+    console.info("[CHAT] Abort requested");
+    
+    // Send abort message to worker
+    const session = sessionStore.activeSession;
+    if (session?.worker) {
+        session.worker.postMessage({ type: 'abort', id: Date.now() });
+    }
+    
+    // Update UI immediately
+    state.isSendingChat = false;
+    setChatSendingState(false);
+    
+    showToast("생성을 중단합니다.", "info", 2000);
 }
 
 function getRecentNetworkEvents(limit = 8) {
@@ -11917,11 +11952,31 @@ function formatChatFailureMessage(error, diagnostics = {}, errorId = "") {
 function setChatSendingState(isSending) {
     if (!els.chatSendBtn || !els.chatInput) return;
 
-    els.chatSendBtn.disabled = isSending;
+    els.chatSendBtn.disabled = false; // Always enabled (to allow stop)
     els.chatInput.disabled = isSending;
-    els.chatSendBtn.innerHTML = isSending
-        ? `<i data-lucide="loader-circle" class="w-4 h-4 animate-spin"></i> ${escapeHtml(t("chat.sending"))}`
-        : `<i data-lucide="send" class="w-4 h-4"></i> ${escapeHtml(t("chat.send"))}`;
+    
+    // Change button text and icon based on state
+    if (isSending) {
+        // Show "Stop" button
+        els.chatSendBtn.innerHTML = `
+            <i data-lucide="square" class="w-4 h-4"></i> 
+            ${escapeHtml(t("chat.stop") ?? "중지")}
+        `;
+        els.chatSendBtn.onclick = abortGeneration;
+        els.chatSendBtn.classList.add("chat-send-btn--sending");
+    } else {
+        // Show "Send" button
+        els.chatSendBtn.innerHTML = `
+            <i data-lucide="send" class="w-4 h-4"></i> 
+            ${escapeHtml(t("chat.send") ?? "전송")}
+        `;
+        els.chatSendBtn.onclick = () => {
+            const text = els.chatInput.value.trim();
+            if (text) sendMessage(text);
+        };
+        els.chatSendBtn.classList.remove("chat-send-btn--sending");
+    }
+    
     lucide.createIcons();
     renderChatInferenceToggle();
 }
@@ -12905,11 +12960,21 @@ function hydrateLocalGenerationSettings() {
     state.settings.generationPresencePenalty = fromStorage.presencePenalty;
     state.settings.generationMaxLength = fromStorage.maxLength;
 
+    persistGenerationSettings(
+        fromStorage.temperature,
+        fromStorage.topP,
+        fromStorage.presencePenalty,
+        fromStorage.maxLength,
+    );
+}
+
+// Helper to persist all 4 generation settings to localStorage
+function persistGenerationSettings(temperature, topP, presencePenalty, maxLength) {
     try {
-        localStorage.setItem(STORAGE_KEYS.generationTemperature, String(fromStorage.temperature));
-        localStorage.setItem(STORAGE_KEYS.generationTopP, String(fromStorage.topP));
-        localStorage.setItem(STORAGE_KEYS.generationPresencePenalty, String(fromStorage.presencePenalty));
-        localStorage.setItem(STORAGE_KEYS.generationMaxLength, String(fromStorage.maxLength));
+        localStorage.setItem(STORAGE_KEYS.generationTemperature, String(temperature));
+        localStorage.setItem(STORAGE_KEYS.generationTopP, String(topP));
+        localStorage.setItem(STORAGE_KEYS.generationPresencePenalty, String(presencePenalty));
+        localStorage.setItem(STORAGE_KEYS.generationMaxLength, String(maxLength));
     } catch {
         // no-op
     }
@@ -12939,14 +13004,12 @@ function setLocalGenerationSettings(next = {}) {
         candidate.maxLength ?? candidate.max_length ?? state.settings.generationMaxLength,
     );
 
-    try {
-        localStorage.setItem(STORAGE_KEYS.generationTemperature, String(state.settings.generationTemperature));
-        localStorage.setItem(STORAGE_KEYS.generationTopP, String(state.settings.generationTopP));
-        localStorage.setItem(STORAGE_KEYS.generationPresencePenalty, String(state.settings.generationPresencePenalty));
-        localStorage.setItem(STORAGE_KEYS.generationMaxLength, String(state.settings.generationMaxLength));
-    } catch {
-        // no-op
-    }
+    persistGenerationSettings(
+        state.settings.generationTemperature,
+        state.settings.generationTopP,
+        state.settings.generationPresencePenalty,
+        state.settings.generationMaxLength,
+    );
     const normalized = getLocalGenerationSettings();
     if (els.llmTemperatureInput) {
         els.llmTemperatureInput.value = String(normalized.temperature);
