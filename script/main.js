@@ -150,7 +150,7 @@ const STORAGE_KEYS = {
     googleDriveBackupLimitMb: "lucid_google_drive_backup_limit_mb",
 };
 
-const SUPPORTED_THEMES = ["dark", "light", "oled"];
+const SUPPORTED_THEMES = ["dark", "light", "oled", "high-contrast"];
 
 // 요구사항: 성공 시 전역 변수 selectedModel 저장
 let selectedModel = "";
@@ -703,7 +703,7 @@ function openSettingsToTab(tabId) {
 
 function deleteActiveChatSessionFromSidebar() {
     if (state.isSendingChat) {
-        showToast("응답 생성 중에는 세션을 삭제할 수 없습니다.", "error", 2200);
+        showToast(t("toast.cannot_delete_during_response"), "error", 2200);
         return;
     }
     const activeId = String(state.activeChatSessionId ?? "").trim();
@@ -854,7 +854,7 @@ function moveLegacyToolbarIntoSidebar() {
 
     if (els.chatTabAddBtn) {
         els.chatTabAddBtn.className = "app-sidebar-action-btn";
-        els.chatTabAddBtn.innerHTML = `<i data-lucide="square-pen" class="w-4 h-4"></i><span>${escapeHtml(t("common.new_chat", {}, "새 대화"))}</span>`;
+        els.chatTabAddBtn.innerHTML = `<i data-lucide="square-pen" class="w-4 h-4"></i><span>${escapeHtml(t("common.new_chat"))}</span>`;
         els.sidebarChatActions.appendChild(els.chatTabAddBtn);
     }
 
@@ -863,7 +863,7 @@ function moveLegacyToolbarIntoSidebar() {
         deleteBtn.id = "sidebar-delete-chat-btn";
         deleteBtn.type = "button";
         deleteBtn.className = "app-sidebar-action-btn";
-        deleteBtn.innerHTML = `<i data-lucide="trash-2" class="w-4 h-4"></i><span>${escapeHtml(t("sidebar.action.delete_chat", {}, "대화 삭제"))}</span>`;
+        deleteBtn.innerHTML = `<i data-lucide="trash-2" class="w-4 h-4"></i><span>${escapeHtml(t("sidebar.action.delete_chat"))}</span>`;
         els.sidebarChatActions.appendChild(deleteBtn);
     }
 
@@ -872,7 +872,7 @@ function moveLegacyToolbarIntoSidebar() {
         exportBtn.id = "sidebar-export-chat-btn";
         exportBtn.type = "button";
         exportBtn.className = "app-sidebar-action-btn";
-        exportBtn.innerHTML = `<i data-lucide="download" class="w-4 h-4"></i><span>${escapeHtml(t("sidebar.action.export_chat", {}, "내보내기"))}</span>`;
+        exportBtn.innerHTML = `<i data-lucide="download" class="w-4 h-4"></i><span>${escapeHtml(t("sidebar.action.export_chat"))}</span>`;
         els.sidebarChatActions.appendChild(exportBtn);
     }
 
@@ -893,12 +893,12 @@ function initializeNavigationSidebar() {
 
 function renderSidebarStaticText() {
     if (els.sidebarTitleText) {
-        els.sidebarTitleText.textContent = t("sidebar.title", {}, "워크스페이스");
+        els.sidebarTitleText.textContent = t("sidebar.title");
     }
     const chatLabel = document.getElementById("sidebar-panel-chat-label");
     const workspaceLabel = document.getElementById("sidebar-panel-workspace-label");
-    if (chatLabel) chatLabel.textContent = t("sidebar.panel.chat", {}, "대화");
-    if (workspaceLabel) workspaceLabel.textContent = t("sidebar.panel.workspace", {}, "모델/환경");
+    if (chatLabel) chatLabel.textContent = t("sidebar.panel.chat");
+    if (workspaceLabel) workspaceLabel.textContent = t("sidebar.panel.workspace");
 
     const updateButtonText = (id, textKey, fallback) => {
         const node = document.getElementById(id);
@@ -908,18 +908,18 @@ function renderSidebarStaticText() {
         node.setAttribute("title", t(textKey, {}, fallback));
         node.setAttribute("aria-label", t(textKey, {}, fallback));
     };
-    updateButtonText("sidebar-delete-chat-btn", "sidebar.action.delete_chat", "대화 삭제");
-    updateButtonText("sidebar-export-chat-btn", "sidebar.action.export_chat", "내보내기");
-    updateButtonText("sidebar-open-model-btn", "common.model_management", "모델 관리");
-    updateButtonText("sidebar-open-settings-btn", "sidebar.action.open_settings", "설정 열기");
-    updateButtonText("sidebar-open-theme-btn", "sidebar.action.open_theme", "테마 설정");
-    updateButtonText("sidebar-open-language-btn", "sidebar.action.open_language", "언어 설정");
+    updateButtonText("sidebar-delete-chat-btn", "sidebar.action.delete_chat");
+    updateButtonText("sidebar-export-chat-btn", "sidebar.action.export_chat");
+    updateButtonText("sidebar-open-model-btn", "common.model_management");
+    updateButtonText("sidebar-open-settings-btn", "sidebar.action.open_settings");
+    updateButtonText("sidebar-open-theme-btn", "sidebar.action.open_theme");
+    updateButtonText("sidebar-open-language-btn", "sidebar.action.open_language");
 
     if (els.chatTabAddBtn) {
         const span = els.chatTabAddBtn.querySelector("span");
-        if (span) span.textContent = t("common.new_chat", {}, "새 대화");
-        els.chatTabAddBtn.setAttribute("title", t("common.new_chat", {}, "새 대화"));
-        els.chatTabAddBtn.setAttribute("aria-label", t("common.new_chat", {}, "새 대화"));
+        if (span) span.textContent = t("common.new_chat");
+        els.chatTabAddBtn.setAttribute("title", t("common.new_chat"));
+        els.chatTabAddBtn.setAttribute("aria-label", t("common.new_chat"));
         els.chatTabAddBtn.setAttribute("aria-keyshortcuts", "Control+N Meta+N");
     }
 
@@ -929,19 +929,19 @@ function renderSidebarStaticText() {
     if (exportBtn) exportBtn.setAttribute("aria-keyshortcuts", "Control+Shift+E Meta+Shift+E");
 
     const shortcuts = [
-        ["sidebar-shortcut-new", "sidebar.shortcut.new", "새 대화: Ctrl+N"],
-        ["sidebar-shortcut-send", "sidebar.shortcut.send", "메시지 전송: Ctrl+Enter"],
-        ["sidebar-shortcut-focus-input", "sidebar.shortcut.focus_input", "입력창 포커스: Ctrl+L"],
-        ["sidebar-shortcut-settings", "sidebar.shortcut.settings", "설정 열기/닫기: Ctrl+,"],
-        ["sidebar-shortcut-delete", "sidebar.shortcut.delete", "대화 삭제: Ctrl+Shift+Backspace"],
-        ["sidebar-shortcut-export", "sidebar.shortcut.export", "대화 내보내기: Ctrl+Shift+E"],
-        ["sidebar-shortcut-toggle", "sidebar.shortcut.toggle", "사이드바 토글: Ctrl+B"],
-        ["sidebar-shortcut-help", "sidebar.shortcut.help", "단축키 도움말: Ctrl+/"],
+        ["sidebar-shortcut-new", "sidebar.shortcut.new"],
+        ["sidebar-shortcut-send", "sidebar.shortcut.send"],
+        ["sidebar-shortcut-focus-input", "sidebar.shortcut.focus_input"],
+        ["sidebar-shortcut-settings", "sidebar.shortcut.settings"],
+        ["sidebar-shortcut-delete", "sidebar.shortcut.delete"],
+        ["sidebar-shortcut-export", "sidebar.shortcut.export"],
+        ["sidebar-shortcut-toggle", "sidebar.shortcut.toggle"],
+        ["sidebar-shortcut-help", "sidebar.shortcut.help"],
     ];
-    for (const [id, key, fallback] of shortcuts) {
+    for (const [id, key] of shortcuts) {
         const node = document.getElementById(id);
         if (!node) continue;
-        node.textContent = t(key, {}, fallback);
+        node.textContent = t(key);
     }
 
     if (els.sidebarMobileToggle) {
@@ -1500,9 +1500,11 @@ function cacheElements() {
         themeOptionDark: document.getElementById("theme-option-dark"),
         themeOptionLight: document.getElementById("theme-option-light"),
         themeOptionOled: document.getElementById("theme-option-oled"),
+        themeOptionHighContrast: document.getElementById("theme-option-high-contrast"),
         themeDarkLabel: document.getElementById("theme-dark-label"),
         themeLightLabel: document.getElementById("theme-light-label"),
         themeOledLabel: document.getElementById("theme-oled-label"),
+        themeHighContrastLabel: document.getElementById("theme-high-contrast-label"),
         themeStatusText: document.getElementById("theme-status-text"),
         languageTitle: document.getElementById("language-title"),
         languageSelectLabel: document.getElementById("language-select-label"),
@@ -1670,6 +1672,12 @@ function handleThemeOptionLightChange() {
 function handleThemeOptionOledChange() {
     if (els.themeOptionOled?.checked) {
         applyTheme("oled");
+    }
+}
+
+function handleThemeOptionHighContrastChange() {
+    if (els.themeOptionHighContrast?.checked) {
+        applyTheme("high-contrast");
     }
 }
 
@@ -1901,6 +1909,10 @@ function bindEvents() {
 
     if (els.themeOptionOled) {
         els.themeOptionOled.addEventListener("change", handleThemeOptionOledChange);
+    }
+
+    if (els.themeOptionHighContrast) {
+        els.themeOptionHighContrast.addEventListener("change", handleThemeOptionHighContrastChange);
     }
 
     if (els.languageSelect) {
@@ -2688,6 +2700,9 @@ function hydrateProfileSettings() {
     if (els.themeOptionOled) {
         els.themeOptionOled.checked = getProfileTheme() === "oled";
     }
+    if (els.themeOptionHighContrast) {
+        els.themeOptionHighContrast.checked = getProfileTheme() === "high-contrast";
+    }
     if (els.languageSelect) {
         els.languageSelect.value = getProfileLanguage();
     }
@@ -2766,6 +2781,9 @@ function applyTheme(theme, options = {}) {
     }
     if (els.themeOptionOled) {
         els.themeOptionOled.checked = normalized === "oled";
+    }
+    if (els.themeOptionHighContrast) {
+        els.themeOptionHighContrast.checked = normalized === "high-contrast";
     }
 
     if (!options.silent) {
@@ -2946,7 +2964,7 @@ async function reloadActiveSessionForInferenceDevice(preferredDevice) {
 
 async function onInferenceDeviceSelectChange(event) {
     if (state.isSendingChat) {
-        showToast("응답 생성 중에는 추론 백엔드를 변경할 수 없습니다.", "error", 2200);
+        showToast(t("toast.cannot_change_backend_during_response"), "error", 2200);
         renderInferenceDeviceToggle();
         return;
     }
@@ -3110,7 +3128,9 @@ function renderDriveBackupUi() {
 
     if (els.driveConnectBtn) {
         els.driveConnectBtn.disabled = state.driveBackup.inProgress;
-        els.driveConnectBtn.textContent = state.driveBackup.connected ? "Google 계정 다시 연결" : "Google 로그인";
+        els.driveConnectBtn.textContent = state.driveBackup.connected
+            ? t(I18N_KEYS.DRIVE_RECONNECT_ACCOUNT)
+            : t(I18N_KEYS.DRIVE_LOGIN);
     }
     if (els.driveDisconnectBtn) {
         els.driveDisconnectBtn.disabled = state.driveBackup.inProgress;
@@ -4701,7 +4721,7 @@ function requestResetSettingsTab(tabId) {
     if (!tab) return;
     const tabTitle = getSettingsTabTitle(tab);
     const confirmed = window.confirm(
-        t("settings.reset.confirm", { tab: tabTitle }, `${tabTitle} 설정을 기본값으로 복원할까요?`),
+        t("settings.reset.confirm", { tab: tabTitle }),
     );
     if (!confirmed) return;
 
@@ -4716,19 +4736,19 @@ function requestResetSettingsTab(tabId) {
     };
 
     showToast(
-        t("settings.reset.done", { tab: tabTitle }, `${tabTitle} 설정이 기본값으로 복원되었습니다.`),
+        t("settings.reset.done", { tab: tabTitle }),
         "info",
         6500,
         {
             position: "top-right",
-            actionLabel: t("settings.reset.undo", {}, "되돌리기"),
+            actionLabel: t("settings.reset.undo"),
             onAction: () => {
                 const pending = state.settings.pendingResetUndo;
                 if (!pending || pending.tab !== tab) return;
                 restoreSettingsTabFromSnapshot(tab, pending.snapshot);
                 state.settings.pendingResetUndo = null;
                 showToast(
-                    t("settings.reset.undone", { tab: tabTitle }, `${tabTitle} 설정 복원을 되돌렸습니다.`),
+                    t("settings.reset.undone", { tab: tabTitle }),
                     "success",
                     2200,
                     { position: "top-right" },
@@ -4763,7 +4783,7 @@ function initChatSessionSystem() {
 
 function createChatSession() {
     if (state.isSendingChat) {
-        showToast("응답 생성 중에는 세션을 변경할 수 없습니다.", "error", 2200);
+        showToast(t("toast.cannot_change_session_during_response"), "error", 2200);
         return;
     }
 
@@ -4780,7 +4800,7 @@ function createChatSession() {
     renderChatTabs();
     renderActiveChatMessages();
     persistChatSessions();
-    addMessage("assistant", t("chat.new_session_hint", {}, "새 대화를 시작합니다. 메시지를 입력하세요."));
+    addMessage("assistant", t("chat.new_session_hint"));
 }
 
 function activateChatSession(sessionId) {
@@ -4790,7 +4810,7 @@ function activateChatSession(sessionId) {
     }
 
     if (state.isSendingChat) {
-        showToast("응답 생성 중에는 세션을 변경할 수 없습니다.", "error", 2200);
+        showToast(t("toast.cannot_change_session_during_response"), "error", 2200);
         return;
     }
 
@@ -4810,7 +4830,7 @@ function deleteChatSession(sessionId) {
     if (!targetId) return;
 
     if (state.isSendingChat) {
-        showToast("응답 생성 중에는 세션을 삭제할 수 없습니다.", "error", 2200);
+        showToast(t("toast.cannot_delete_during_response"), "error", 2200);
         return;
     }
 
@@ -6618,7 +6638,7 @@ function renderDownloadPanel() {
             if (options.length === 0) {
                 const placeholder = document.createElement("option");
                 placeholder.value = "";
-                placeholder.textContent = "선택 가능한 ONNX 파일 없음";
+                placeholder.textContent = t(I18N_KEYS.MODEL_DOWNLOAD_QUANT_NONE);
                 els.downloadQuantizationSelect.appendChild(placeholder);
             } else {
                 for (const option of options) {
@@ -7750,8 +7770,8 @@ function setExplorerLoading(isLoading) {
     if (els.opfsRefreshBtn) {
         els.opfsRefreshBtn.disabled = !!isLoading;
         els.opfsRefreshBtn.innerHTML = isLoading
-            ? '<i data-lucide="loader-circle" class="w-3 h-3 animate-spin"></i> 갱신 중...'
-            : '<i data-lucide="refresh-cw" class="w-3 h-3"></i> 새로고침';
+            ? `<i data-lucide="loader-circle" class="w-3 h-3 animate-spin"></i> ${escapeHtml(t(I18N_KEYS.OPFS_REFRESHING))}`
+            : `<i data-lucide="refresh-cw" class="w-3 h-3"></i> ${escapeHtml(t(I18N_KEYS.OPFS_BTN_REFRESH))}`;
     }
     if (els.opfsUpBtn) {
         els.opfsUpBtn.disabled = !!isLoading;
@@ -7813,7 +7833,7 @@ function renderStorageUsage() {
     }
 
     const percent = (usageBytes / quotaBytes) * 100;
-    els.opfsUsageText.textContent = `사용량 ${formatBytes(usageBytes)} / ${formatBytes(quotaBytes)} (${percent.toFixed(1)}%)`;
+    els.opfsUsageText.textContent = t(I18N_KEYS.OPFS_USAGE_TEXT, { used: formatBytes(usageBytes), total: formatBytes(quotaBytes), percent: percent.toFixed(1) });
 }
 
 async function refreshStorageEstimate() {
@@ -8981,8 +9001,8 @@ function setModelSessionLoading(isLoading) {
     if (els.sessionRefreshBtn) {
         els.sessionRefreshBtn.disabled = isLoading;
         els.sessionRefreshBtn.innerHTML = isLoading
-            ? '<i data-lucide="loader-circle" class="w-3 h-3 animate-spin"></i> 갱신 중...'
-            : '<i data-lucide="refresh-cw" class="w-3 h-3"></i> 새로고침';
+            ? `<i data-lucide="loader-circle" class="w-3 h-3 animate-spin"></i> ${escapeHtml(t(I18N_KEYS.OPFS_REFRESHING))}`
+            : `<i data-lucide="refresh-cw" class="w-3 h-3"></i> ${escapeHtml(t(I18N_KEYS.OPFS_BTN_REFRESH))}`;
     }
     lucide.createIcons();
 }
@@ -9258,34 +9278,31 @@ function renderModelSessionList() {
                         data-action="session-load-toggle"
                         data-file-name="${escapeHtml(fileName)}"
                         data-row-state="${escapeHtml(rowState)}"
-                        class="inline-flex items-center justify-center w-9 h-9 gap-1 rounded ${action.buttonClass}"
+                        class="inline-flex items-center justify-center w-8 h-8 rounded ${action.buttonClass}"
                         ${action.disabled ? "disabled" : ""}
                         aria-label="${escapeHtml(`${fileName} ${action.label}`)}"
                         title="${escapeHtml(`${fileName} ${action.label}`)}"
                     >
                         <i data-lucide="${escapeHtml(action.icon)}" class="${escapeHtml(action.iconClass)}"></i>
-                        <span class="hidden md:inline text-[11px]">${escapeHtml(action.label)}</span>
                     </button>
                     <button
                         data-action="session-update"
                         data-file-name="${escapeHtml(fileName)}"
-                        class="inline-flex items-center justify-center w-9 h-9 gap-1 rounded border border-slate-500/55 text-slate-100 hover:bg-slate-700/45 ${canUpdate ? "" : "opacity-50"}"
+                        class="inline-flex items-center justify-center w-8 h-8 rounded border border-slate-500/55 text-slate-100 hover:bg-slate-700/45 ${canUpdate ? "" : "opacity-50"}"
                         ${canUpdate ? "" : "disabled"}
-                        aria-label="${escapeHtml(`${fileName} 업데이트`)}"
-                        title="${escapeHtml(`${fileName} 업데이트`)}"
+                        aria-label="${escapeHtml(t(I18N_KEYS.MODEL_UPDATE_ACTION, { fileName }))}"
+                        title="${escapeHtml(t(I18N_KEYS.MODEL_UPDATE_ACTION, { fileName }))}"
                     >
                         <i data-lucide="download" class="w-4 h-4"></i>
-                        <span class="hidden md:inline text-[11px]">업데이트</span>
                     </button>
                     <button
                         data-action="session-delete"
                         data-file-name="${escapeHtml(fileName)}"
-                        class="inline-flex items-center justify-center w-9 h-9 gap-1 rounded border border-rose-300/40 text-rose-100 hover:bg-rose-500/15"
-                        aria-label="${escapeHtml(`${fileName} 삭제`)}"
-                        title="${escapeHtml(`${fileName} 삭제`)}"
+                        class="inline-flex items-center justify-center w-8 h-8 rounded border border-rose-300/40 text-rose-100 hover:bg-rose-500/15"
+                        aria-label="${escapeHtml(t(I18N_KEYS.MODEL_DELETE_ACTION, { fileName }))}"
+                        title="${escapeHtml(t(I18N_KEYS.MODEL_DELETE_ACTION, { fileName }))}"
                     >
                         <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        <span class="hidden md:inline text-[11px]">${escapeHtml(t(I18N_KEYS.COMMON_DELETE))}</span>
                     </button>
                 </div>
             </td>
@@ -9316,9 +9333,9 @@ function setSessionRowState(fileName, status, errorMessage = "") {
 function getSessionRowActionMeta(rowState) {
     if (rowState === "loading") {
         return {
-            label: "로딩 중...",
+            label: t(I18N_KEYS.COMMON_LOADING),
             icon: "loader-circle",
-            iconClass: "w-3 h-3 animate-spin",
+            iconClass: "w-4 h-4 animate-spin",
             buttonClass: "border border-amber-300/45 bg-amber-500/15 text-amber-100",
             disabled: true,
         };
@@ -9326,9 +9343,9 @@ function getSessionRowActionMeta(rowState) {
 
     if (rowState === "loaded") {
         return {
-            label: "언로드",
+            label: t(I18N_KEYS.COMMON_UNLOAD),
             icon: "power",
-            iconClass: "w-3 h-3",
+            iconClass: "w-4 h-4",
             buttonClass: "border border-emerald-300/45 bg-emerald-500/15 text-emerald-100",
             disabled: false,
         };
@@ -9336,18 +9353,18 @@ function getSessionRowActionMeta(rowState) {
 
     if (rowState === "failed") {
         return {
-            label: "재시도",
+            label: t(I18N_KEYS.COMMON_RETRY),
             icon: "rotate-cw",
-            iconClass: "w-3 h-3",
+            iconClass: "w-4 h-4",
             buttonClass: "border border-rose-300/45 bg-rose-500/15 text-rose-100",
             disabled: false,
         };
     }
 
     return {
-        label: "로드",
+        label: t(I18N_KEYS.COMMON_LOAD),
         icon: "play",
-        iconClass: "w-3 h-3",
+        iconClass: "w-4 h-4",
         buttonClass: "border border-cyan-300/35 hover:bg-cyan-500/15 text-cyan-100",
         disabled: false,
     };
@@ -10388,7 +10405,7 @@ class TransformersWorkerManager {
         if (!this.worker) {
             this.worker = new Worker("./script/worker.js", { type: "module" });
             this.worker.onmessage = (e) => {
-                const { type, id, key, error, output, token, tokenIncrement } = e.data;
+                const { type, id, key, error, output, token, tokenIncrement, totalTokens } = e.data;
                 if (type === 'error') {
                     const reject = this.pending.get(id)?.reject;
                     if (reject) {
@@ -10414,6 +10431,15 @@ class TransformersWorkerManager {
                             totalTokens: Number(totalTokens ?? 0)
                         });
                     }
+                } else if (type === 'generation_aborted') {
+                    const reject = this.pending.get(id)?.reject;
+                    if (reject) {
+                        const err = new Error('Generation aborted by user');
+                        err.code = 'generation_aborted';
+                        reject(err);
+                    }
+                    this.pending.delete(id);
+                    this.listeners.delete(id);
                 } else if (type === 'dispose_done') {
                     const resolve = this.pending.get(id)?.resolve;
                     if (resolve) resolve();
@@ -10459,6 +10485,12 @@ class TransformersWorkerManager {
 
     async dispose(key) {
         return this.request('dispose', { key });
+    }
+
+    abort() {
+        if (this.worker) {
+            this.worker.postMessage({ type: 'abort', id: Date.now() });
+        }
     }
 }
 
@@ -11116,28 +11148,28 @@ function renderShortcutHelpContent() {
 
     const categories = [
         {
-            label: t("shortcut_help.category.chat", {}, "채팅"),
+            label: t("shortcut_help.category.chat"),
             items: [
-                { keys: `${mod}+N`, desc: t("shortcut_help.desc.new_chat", {}, "새 대화") },
-                { keys: `${mod}+Enter`, desc: t("shortcut_help.desc.send", {}, "메시지 전송") },
-                { keys: `${mod}+L`, desc: t("shortcut_help.desc.focus_input", {}, "입력창 포커스") },
-                { keys: `${mod}+Shift+E`, desc: t("shortcut_help.desc.export", {}, "대화 내보내기") },
-                { keys: `${mod}+Shift+Backspace`, desc: t("shortcut_help.desc.delete_chat", {}, "대화 삭제") },
+                { keys: `${mod}+N`, desc: t("shortcut_help.desc.new_chat") },
+                { keys: `${mod}+Enter`, desc: t("shortcut_help.desc.send") },
+                { keys: `${mod}+L`, desc: t("shortcut_help.desc.focus_input") },
+                { keys: `${mod}+Shift+E`, desc: t("shortcut_help.desc.export") },
+                { keys: `${mod}+Shift+Backspace`, desc: t("shortcut_help.desc.delete_chat") },
             ],
         },
         {
-            label: t("shortcut_help.category.navigation", {}, "탐색"),
+            label: t("shortcut_help.category.navigation"),
             items: [
-                { keys: `${mod}+,`, desc: t("shortcut_help.desc.settings", {}, "설정 열기/닫기") },
-                { keys: `${mod}+B`, desc: t("shortcut_help.desc.sidebar", {}, "사이드바 토글") },
-                { keys: "Escape", desc: t("shortcut_help.desc.close", {}, "다이얼로그/패널 닫기") },
-                { keys: `${mod}+/`, desc: t("shortcut_help.desc.help", {}, "단축키 도움말") },
+                { keys: `${mod}+,`, desc: t("shortcut_help.desc.settings") },
+                { keys: `${mod}+B`, desc: t("shortcut_help.desc.sidebar") },
+                { keys: "Escape", desc: t("shortcut_help.desc.close") },
+                { keys: `${mod}+/`, desc: t("shortcut_help.desc.help") },
             ],
         },
     ];
 
     const titleEl = document.getElementById("shortcut-help-title");
-    if (titleEl) titleEl.textContent = t("shortcut_help.title", {}, "키보드 단축키");
+    if (titleEl) titleEl.textContent = t("shortcut_help.title");
 
     let html = "";
     for (const cat of categories) {
@@ -11862,13 +11894,8 @@ function abortGeneration() {
     
     console.info("[CHAT] Abort requested");
     
-    // Send abort message to worker
-    const session = sessionStore.activeSession;
-    if (session?.worker) {
-        session.worker.postMessage({ type: 'abort', id: Date.now() });
-    }
+    transformersWorker.abort();
     
-    // Update UI immediately
     state.isSendingChat = false;
     setChatSendingState(false);
     

@@ -33,6 +33,7 @@
 | **Real-time Token Streaming** | Live token generation with streaming display |
 | **Token Speed Statistics** | Shows Avg/Max/Min tokens per second |
 | **Memory Usage Display** | Real-time memory consumption monitoring |
+| **Abort Generation** | Stop AI response generation at any time with a single click |
 | **System Prompt Editor** | Customizable assistant behavior (max 20 lines) |
 | **Context Window Control** | Selectable context sizes: 4k, 8k, 16k, 32k, 128k |
 | **Chat Export** | Export conversations as JSON files |
@@ -55,11 +56,11 @@
 | Feature | Description |
 |---------|-------------|
 | **4-Language Support** | Korean, English, Japanese, Simplified Chinese with auto-detection |
-| **3 Theme Options** | Dark, Light, OLED Black (pure black for OLED displays) |
-| **Responsive Design** | Mobile-first with full smartphone/tablet support |
+| **4 Theme Options** | Dark, Light, OLED Black (pure black for OLED displays), High-Contrast |
+| **Responsive Design** | Mobile-first with full smartphone/tablet/desktop support |
 | **PWA Support** | Progressive Web App features (Planned) |
 | **Sidebar Navigation** | Collapsible sidebar with chat and workspace panels |
-| **Keyboard Shortcuts** | Ctrl+Shift+N (new chat), Ctrl+Shift+E (export), Ctrl+B (toggle sidebar) |
+| **Keyboard Shortcuts** | Ctrl+N (new chat), Ctrl+Enter (send), Ctrl+L (focus input), Ctrl+, (settings), Ctrl+Shift+Backspace (delete), Ctrl+Shift+E (export), Ctrl+B (sidebar), Ctrl+/ (help) |
 
 ## 📋 Requirements
 
@@ -85,8 +86,8 @@
 | Model | Size | Quantization | Use Case |
 |-------|------|--------------|----------|
 | SmolLM2-135M-Instruct | ~135M | FP32, BNB4 | Testing/Development |
-| Qwen2.5-0.5B-Instruct | ~500M | Q4_K_M | Balanced performance |
-| Phi-3-mini-4k-instruct | ~3.8B | Q4_K_M | High-quality responses |
+| Qwen2.5-0.5B-Instruct | ~500M | Q4 | Balanced performance |
+| Phi-4-mini-instruct | ~3.8B | Q4 | High-quality responses |
 
 ## 🚀 Quickstart
 
@@ -114,14 +115,47 @@ Open the app in Chrome/Edge and go to Settings → Model Management to fetch and
 
 - Optional: `npm install` (only required for running tests/development tools)
 - Run unit tests: `npm test` (Vitest)
+- Run end-to-end tests: `npx playwright test`
 
 ---
 
-## 📖 Usage (short)
+## 📖 Usage Guide
 
-- Add a model (Settings → Model Management) using a Hugging Face model ID or by placing files in OPFS.
-- Download → Activate the model → Start chatting in a session.
-- Use system prompt, context-window and generation controls in **Settings > LLM Settings**.
+### 1. Loading a Model
+
+1. Click the **Settings (⚙️)** button in the header.
+2. Navigate to the **Model Management** tab.
+3. Enter a Hugging Face model ID (e.g., `onnx-community/SmolLM2-135M-Instruct`).
+4. Click **Lookup** to fetch model information.
+5. Select your preferred **Quantization** option.
+6. Click **Download** to cache the model in OPFS (supports resume).
+7. Once downloaded, click **Activate** to load the model.
+
+### 2. Chatting
+
+1. Type a message in the input box and press **Send** or `Ctrl+Enter`.
+2. Click the **+** button in the tab bar to start a new chat session.
+3. Click any tab to switch between multiple conversation sessions.
+4. Click the **Stop** button (or press `Ctrl+Shift+Backspace`) to abort generation at any time.
+
+### 3. LLM Settings
+
+Navigate to **Settings > LLM Settings** to configure:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **System Prompt** | "You are a helpful assistant." | Defines the AI's role and personality |
+| **Max Output Tokens** | 512 | Maximum tokens per response |
+| **Context Window** | 8k | How much conversation history the model retains |
+| **Temperature** | 0.9 | Controls response creativity and randomness |
+
+### 4. Google Drive Backup
+
+1. Go to **Settings > Backup & Restore**.
+2. Click **Connect Google Drive** to log in (Client ID is pre-configured).
+3. Enable **Auto Backup** to save changes automatically (debounced 25s).
+4. Click **Backup Now** for an immediate manual backup.
+5. Select a restore point from the list and click **Restore** to revert.
 
 ---
 
@@ -131,9 +165,11 @@ Open the app in Chrome/Edge and go to Settings → Model Management to fetch and
 - Key sources:
   - `script/bootstrap.js` — startup & hydration
   - `script/main.js` — UI state, actions and rendering
+  - `script/i18n.js` — internationalization module (Korean, English, Japanese, Simplified Chinese)
   - `script/worker.js` — inference worker & pipeline management
+  - `script/shared-utils.js` — shared utilities & global API
   - `script/drive-backup.js` — encrypted Drive backup flow
-- Tests: Vitest (`npm test`).
+- Tests: Vitest unit tests (`npm test`), Playwright e2e tests (`npx playwright test`).
 - Debugging tips: open DevTools, inspect `state` in console, review `opfs` manifest and `transformers` pipeline cache.
 
 ---
@@ -164,7 +200,7 @@ LucidLLM/
 │   ├── shared-utils.js         # Shared utilities & global API
 │   ├── worker.js               # Web Worker for inference
 │   └── drive-backup.js         # Google Drive backup with encryption
-├── style.css                   # Custom styles and theme definitions
+├── docs/                       # Documentation & localized READMEs
 ├── favicon.svg                 # App icon
 └── package.json                # NPM package configuration
 ```
@@ -184,6 +220,7 @@ LucidLLM/
 | **Backup Auth** | Google Identity Services (OAuth 2.0) |
 | **Encryption** | Web Crypto API (PBKDF2, AES-GCM-256) |
 | **CDN** | jsDelivr, unpkg |
+| **Testing** | Vitest (unit), Playwright (e2e) |
 
 ## 📄 License
 

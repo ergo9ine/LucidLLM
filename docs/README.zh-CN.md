@@ -1,6 +1,6 @@
 # LucidLLM Chat
 
-[한국어](../README.md) | [English](README.en.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
+[한국어](README.ko.md) | [English](../README.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
 
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
 ![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0-yellow)
@@ -31,10 +31,13 @@
 |------|------|
 | **多会话聊天** | 可创建多个独立的聊天标签页，分别管理对话记录。 |
 | **实时流式传输** | 实时显示 Token 生成过程。 |
-| **性能监控** | 实时显示每秒 Token 数 (TPS) 统计（平均/最大/最小）和内存使用情况。 |
+| **Token 速度统计** | 实时显示每秒 Token 数 (TPS) 统计（平均/最大/最小）。 |
+| **内存使用量显示** | 实时监控内存消耗情况。 |
+| **中断生成** | 随时一键立即中断 AI 的响应生成。 |
 | **系统提示词** | 可自定义 AI 助手的角色和行为。 |
 | **上下文控制** | 可调节上下文窗口大小，从 4k 到 128k。 |
 | **聊天导出** | 可将对话内容作为 JSON 文件备份和导出。 |
+| **自动滚动** | 生成过程中自动滚动到底部，并提供手动覆盖按钮。 |
 
 ### 🔒 隐私与备份
 
@@ -42,7 +45,9 @@
 |------|------|
 | **Google Drive 备份** | 将设置和聊天记录安全备份到 Google Drive。 |
 | **强加密** | 在客户端使用 PBKDF2 密钥派生（250,000 次迭代）和 AES-GCM-256 算法进行加密。 |
-| **自动备份** | 数据变更时自动执行备份（应用防抖动）。 |
+| **Gzip 压缩** | 可选对备份数据进行 Gzip 压缩。 |
+| **自动备份** | 数据变更时自动执行备份（应用 25 秒防抖动）。 |
+| **备份还原** | 可从特定时间点的备份快照进行还原。 |
 | **版本管理** | 保留多个备份版本，可随时恢复到任意时间点。 |
 | **无服务器通信** | 除明确的备份操作外，任何数据都不会发送到外部服务器。 |
 
@@ -51,9 +56,11 @@
 | 功能 | 说明 |
 |------|------|
 | **4 种语言支持** | 支持韩语、英语、日语、简体中文，并自动检测浏览器语言。 |
-| **主题选项** | 支持深色模式、浅色模式和 OLED 纯黑模式。 |
+| **4 种主题** | 支持深色模式、浅色模式、OLED 纯黑模式和高对比度模式。 |
 | **响应式设计** | 为手机、平板、桌面等所有设备提供优化的 UI。 |
-| **快捷键支持** | 提供新聊天 (Ctrl+Shift+N)、导出 (Ctrl+Shift+E)、侧边栏切换 (Ctrl+B) 等提高效率的快捷键。 |
+| **PWA 支持** | 渐进式 Web 应用功能（计划中） |
+| **侧边栏导航** | 提供带有聊天和工作区面板的可折叠侧边栏。 |
+| **快捷键支持** | Ctrl+N（新聊天）、Ctrl+Enter（发送）、Ctrl+L（聚焦输入）、Ctrl+,（设置）、Ctrl+Shift+Backspace（删除）、Ctrl+Shift+E（导出）、Ctrl+B（侧边栏）、Ctrl+/（帮助） |
 
 ## 📋 系统要求
 
@@ -64,6 +71,7 @@
 | **推荐浏览器** | Chrome 113+ / Edge 113+ (支持 WebGPU) |
 | **最低配置** | 所有支持 WASM 的现代浏览器 |
 | **安全上下文** | 使用 OPFS 必须在 HTTPS 或 localhost 环境下 |
+| **JavaScript** | ES2020+ 模块支持 |
 
 ### 硬件推荐配置
 
@@ -72,6 +80,14 @@
 | **内存 (RAM)** | 4GB | 8GB 以上 |
 | **显卡 (GPU)** | 集成显卡 | 支持 WebGPU 的独立显卡 |
 | **存储空间** | 每个模型 100MB ~ 2GB | 推荐使用 SSD |
+
+### 推荐模型
+
+| 模型 | 大小 | 量化 | 用途 |
+|------|------|------|------|
+| SmolLM2-135M-Instruct | ~135M | FP32, BNB4 | 测试/开发 |
+| Qwen2.5-0.5B-Instruct | ~500M | Q4 | 均衡性能 |
+| Phi-4-mini-instruct | ~3.8B | Q4 | 高质量响应 |
 
 ## 🚀 快速开始
 
@@ -93,39 +109,15 @@ npm run serve    # 在 http://localhost:3000 启动
 
 在浏览器中打开后，前往 Settings → Model Management 下载并激活模型。
 
----
+### 开发与测试
 
-## 📖 使用（摘要）
-
-- 在 Settings → Model Management 中添加模型 → 下载 → 激活 → 开始聊天
-- 系统提示词与上下文窗口可在设置中调整
-
----
-
-## 🛠️ 开发者指南
-
-- 运行时：纯 ES 模块（无需打包器）
-- 主要文件：
-  - `script/bootstrap.js` — 启动流程
-  - `script/main.js` — UI 状态与操作
-  - `script/worker.js` — 推理 Worker
-  - `script/drive-backup.js` — 加密备份逻辑
-- 测试：`npm test`（Vitest）
+- 可选：`npm install`（仅在运行测试/开发工具时需要）
+- 单元测试：`npm test`（Vitest）
+- E2E 测试：`npx playwright test`
 
 ---
 
-## 🤝 贡献指南
-
-- 大改动请先创建 issue 讨论。
-- PR 流程：fork → branch → PR（附说明与测试）。
-
----
-
-## 🔒 安全与隐私
-
-- 默认情况下，推理与对话数据保存在本地。
-- 备份到 Google Drive 为可选且在客户端加密。
-- 请勿将敏感模型或数据上传到公共场所。
+## 📖 使用指南
 
 ### 1. 加载模型
 
@@ -139,9 +131,10 @@ npm run serve    # 在 http://localhost:3000 启动
 
 ### 2. 开始聊天
 
-1. 在底部输入框输入消息，点击 **发送** 按钮或按 `Enter` 键。
+1. 在底部输入框输入消息，点击 **发送** 按钮或按 `Ctrl+Enter` 键。
 2. 点击标签栏的 **+** 按钮创建新的聊天会话。
 3. 点击标签可自由切换多个对话会话。
+4. 点击 **停止** 按钮（或按 `Ctrl+Shift+Backspace`）随时中断生成。
 
 ### 3. LLM 设置
 
@@ -158,9 +151,39 @@ npm run serve    # 在 http://localhost:3000 启动
 
 1. 转到 **设置 > 备份与恢复**。
 2. 点击 **连接 Google Drive** 按钮并登录。（自动设置客户端 ID）
-3. 启用 **自动备份** 后，每次变更都会自动保存。
+3. 启用 **自动备份** 后，每次变更都会自动保存（25 秒防抖动）。
 4. 点击 **立即备份** 按钮可进行手动备份。
 5. 从恢复列表中选择所需的时间点，点击 **恢复** 按钮即可还原到之前的状态。
+
+---
+
+## 🛠️ 开发者指南
+
+- 运行时：纯 ES 模块（无需打包器）
+- 主要文件：
+  - `script/bootstrap.js` — 启动流程与水合
+  - `script/main.js` — UI 状态与操作及渲染
+  - `script/i18n.js` — 多语言处理模块（韩语、英语、日语、简体中文）
+  - `script/worker.js` — 推理 Worker 与管道管理
+  - `script/shared-utils.js` — 通用工具
+  - `script/drive-backup.js` — 加密备份逻辑
+- 测试：Vitest 单元测试（`npm test`）、Playwright E2E 测试（`npx playwright test`）
+- 调试：在 DevTools 中查看 `state` 控制台，检查 `opfs` 清单和 `transformers` 管道缓存
+
+---
+
+## 🤝 贡献指南
+
+- 大改动请先创建 issue 讨论。
+- PR 流程：fork → branch → PR（附说明、截图与测试）。
+
+---
+
+## 🔒 安全与隐私
+
+- 默认情况下，推理与对话数据保存在本地。
+- 备份到 Google Drive 为可选且在客户端加密。
+- 请勿将敏感模型或数据上传到公共场所。
 
 ## 🏗️ 项目结构
 
@@ -174,7 +197,7 @@ LucidLLM/
 │   ├── shared-utils.js         # 通用工具
 │   ├── worker.js               # 推理用 Web Worker
 │   └── drive-backup.js         # Google Drive 备份逻辑
-├── style.css                   # 样式及主题定义
+├── docs/                       # 文档及多语言 README
 ├── favicon.svg                 # 应用程序图标
 └── package.json                # NPM 配置
 ```
@@ -190,8 +213,11 @@ LucidLLM/
 | **存储** | Origin Private File System (OPFS), localStorage |
 | **样式** | Tailwind CSS v3 (CDN) + 自定义 CSS 变量 |
 | **图标** | Lucide Icons (CDN) |
+| **字体** | Space Grotesk (Google Fonts) |
 | **认证** | Google Identity Services (OAuth 2.0) |
 | **加密** | Web Crypto API (PBKDF2, AES-GCM-256) |
+| **CDN** | jsDelivr, unpkg |
+| **测试** | Vitest（单元）、Playwright（E2E） |
 
 ## 📄 许可证
 

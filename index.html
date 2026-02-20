@@ -46,6 +46,7 @@
                 function({ addVariant }) {
                     addVariant('light', ':root[data-theme="light"] &');
                     addVariant('oled', ':root[data-theme="oled"] &');
+                    addVariant('hc', ':root[data-theme="high-contrast"] &');
                 }
             ]
         }
@@ -55,11 +56,13 @@
         :root { --panel: rgba(10, 16, 34, 0.8); --border: rgba(133, 167, 218, 0.24); }
         :root[data-theme="light"] { --panel: rgba(255, 255, 255, 0.96); --border: rgba(100, 116, 139, 0.65); }
         :root[data-theme="oled"] { --panel: #000000; --border: #1f1f1f; }
+        :root[data-theme="high-contrast"] { --panel: #000000; --border: #ffffff; }
         
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.45); border-radius: 99px; }
         :root[data-theme="light"] ::-webkit-scrollbar-thumb { background: #cbd5e1; }
+        :root[data-theme="high-contrast"] ::-webkit-scrollbar-thumb { background: #ffffff; }
         
         .llm-stream-cursor::after {
             content: "▍";
@@ -90,6 +93,11 @@
             background-color: #4b5563;
             color: #4b5563;
         }
+
+        :root[data-theme="high-contrast"] .session-status-lamp--idle {
+            background-color: #ffffff;
+            color: #ffffff;
+        }
         
         .session-status-lamp--loading {
             background-color: #fbbf24;
@@ -106,6 +114,11 @@
             background-color: #d97706;
             color: #d97706;
         }
+
+        :root[data-theme="high-contrast"] .session-status-lamp--loading {
+            background-color: #ffff00;
+            color: #ffff00;
+        }
         
         .session-status-lamp--loaded {
             background-color: #4ade80;
@@ -121,6 +134,16 @@
             background-color: #16a34a;
             color: #16a34a;
         }
+
+        :root[data-theme="high-contrast"] .session-status-lamp--loaded {
+            background-color: #00ff66;
+            color: #00ff66;
+        }
+
+        :root[data-theme="high-contrast"] body {
+            background: #000000 !important;
+            color: #ffffff !important;
+        }
         
         @keyframes session-breath {
             0%, 100% { opacity: 0.4; }
@@ -130,7 +153,7 @@
     <script defer="defer" src="https://unpkg.com/lucide@latest"></script>
 </head>
 
-<body class="h-[100dvh] overflow-hidden font-sans min-h-[100dvh] text-slate-200 bg-[radial-gradient(70%_90%_at_8%_10%,rgba(34,211,238,0.16),transparent_65%),radial-gradient(85%_80%_at_92%_0%,rgba(56,189,248,0.13),transparent_65%),linear-gradient(155deg,#040710,#0b1530)] light:bg-[radial-gradient(none),radial-gradient(none),linear-gradient(155deg,#f8fbff,#eaf1fb)] light:text-slate-900 oled:bg-[linear-gradient(to_bottom,#000000,#000000)] oled:text-[#c4c4c4] transition-colors duration-300 flex">
+<body class="h-[100dvh] overflow-hidden font-sans min-h-[100dvh] text-slate-200 bg-[radial-gradient(70%_90%_at_8%_10%,rgba(34,211,238,0.16),transparent_65%),radial-gradient(85%_80%_at_92%_0%,rgba(56,189,248,0.13),transparent_65%),linear-gradient(155deg,#040710,#0b1530)] light:bg-[radial-gradient(none),radial-gradient(none),linear-gradient(155deg,#f8fbff,#eaf1fb)] light:text-slate-900 oled:bg-[linear-gradient(to_bottom,#000000,#000000)] oled:text-[#c4c4c4] hc:bg-black hc:text-white transition-colors duration-300 flex">
     
     <!-- Mobile Overlay -->
     <div id="mobile-sidebar-overlay" class="fixed inset-0 bg-black/60 z-40 hidden md:hidden transition-opacity duration-300 opacity-0" aria-hidden="true"></div>
@@ -632,7 +655,10 @@
                                         id="theme-light-label" data-i18n="theme.light"></span> </label> <label
                                     class="flex items-center gap-2 text-sm" data-i18n-title="theme.oled_tip"> <input
                                         id="theme-option-oled" type="radio" name="theme-option" value="oled"
-                                        class="accent-cyan-400"> <span id="theme-oled-label" data-i18n="theme.oled"></span> </label> </div>
+                                        class="accent-cyan-400"> <span id="theme-oled-label" data-i18n="theme.oled"></span> </label> <label
+                                    class="flex items-center gap-2 text-sm" data-i18n-title="theme.high_contrast_tip"> <input
+                                        id="theme-option-high-contrast" type="radio" name="theme-option" value="high-contrast"
+                                        class="accent-cyan-400"> <span id="theme-high-contrast-label" data-i18n="theme.high_contrast"></span> </label> </div>
                             <p id="theme-status-text" class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]" data-i18n="theme.hint"></p>
                         </article>
                     </section>
