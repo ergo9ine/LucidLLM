@@ -525,6 +525,16 @@ export const I18N_KEYS = {
     PROFILE_FREE_PLAN: "profile.free_plan",
     CHAT_DISCLAIMER: "chat.disclaimer",
     CHAT_TOKEN_SPEED_WAITING: "chat.token_speed_waiting",
+
+    // Update
+    UPDATE_BADGE_LABEL: "update.badge_label",
+    UPDATE_MODAL_TITLE: "update.modal_title",
+    UPDATE_MODAL_APPLY: "update.modal_apply",
+    UPDATE_MODAL_LATER: "update.modal_later",
+    UPDATE_MODAL_RELEASE_NOTES: "update.modal_release_notes",
+    UPDATE_MODAL_VIEW_GITHUB: "update.modal_view_github",
+    UPDATE_TOAST_NEW_VERSION: "update.toast_new_version",
+    UPDATE_TOAST_APPLYING: "update.toast_applying",
 };
 
 /* ─── 타입 정의 ─── */
@@ -542,27 +552,15 @@ let _appVersion = "Version-Pre-AT";
  */
 export function setAppVersion(version) {
     _appVersion = version;
-    // COMMON 사전을 업데이트하여 기존 캐시된 번역도 갱신
-    COMMON[I18N_KEYS.CHAT_VERSION] = version;
-    
-    // "무료 플랜" / "Free Plan" 텍스트를 버전 정보로 대체
-    COMMON[I18N_KEYS.PROFILE_FREE_PLAN] = version;
-    if (typeof KO_SPECIFIC !== "undefined") {
-        KO_SPECIFIC[I18N_KEYS.PROFILE_FREE_PLAN] = version;
-    }
-    if (typeof EN_SPECIFIC !== "undefined") {
-        EN_SPECIFIC[I18N_KEYS.PROFILE_FREE_PLAN] = version;
-    }
-
-    // 캐시 클리어로 모든 언어에서 새 버전 적용
     DICTIONARY_CACHE.clear();
 }
 
 /* ─── 번역 사전 (계층적 구조) ─── */
 
 // 공통 키 (모든 언어에서 동일)
-const COMMON = {
-    [I18N_KEYS.HEADER_DEVICE_WEBGPU]: "⚡ WebGPU",
+function getCommonEntries() {
+    return {
+        [I18N_KEYS.HEADER_DEVICE_WEBGPU]: "⚡ WebGPU",
     [I18N_KEYS.HEADER_DEVICE_WASM]: "🧩 CPU (WASM)",
     [I18N_KEYS.CHAT_LABEL_LUCID]: "Lucid Chat",
     [I18N_KEYS.CHAT_MEM_DEFAULT]: "Mem: -",
@@ -588,7 +586,16 @@ const COMMON = {
     [I18N_KEYS.PROFILE_FREE_PLAN]: "Free Plan",
     [I18N_KEYS.CHAT_DISCLAIMER]: "LucidLLM can make mistakes. Check important info.",
     [I18N_KEYS.CHAT_TOKEN_SPEED_WAITING]: "- tok/s",
-};
+    [I18N_KEYS.UPDATE_BADGE_LABEL]: "Update",
+    [I18N_KEYS.UPDATE_MODAL_TITLE]: "Update {version} ({date})",
+    [I18N_KEYS.UPDATE_MODAL_APPLY]: "Apply Update (Reload Page)",
+    [I18N_KEYS.UPDATE_MODAL_LATER]: "Later",
+    [I18N_KEYS.UPDATE_MODAL_RELEASE_NOTES]: "Release Notes",
+    [I18N_KEYS.UPDATE_MODAL_VIEW_GITHUB]: "View on GitHub →",
+    [I18N_KEYS.UPDATE_TOAST_NEW_VERSION]: "New version {version} is ready.",
+    [I18N_KEYS.UPDATE_TOAST_APPLYING]: "Applying update...",
+    };
+}
 
 // 한국어 전용
 const KO_SPECIFIC = {
@@ -1057,6 +1064,14 @@ const KO_SPECIFIC = {
     [I18N_KEYS.CHAT_DISCLAIMER]: "LucidLLM은 실수를 할 수 있습니다. 중요한 정보를 확인하세요.",
     [I18N_KEYS.SETTINGS_LABEL_PASSPHRASE]: "백업 암호 (AES-256)",
     [I18N_KEYS.SETTINGS_PLACEHOLDER_PASSPHRASE]: "설정 및 대화 백업 암호화에 사용됩니다.",
+    [I18N_KEYS.UPDATE_BADGE_LABEL]: "업데이트",
+    [I18N_KEYS.UPDATE_MODAL_TITLE]: "업데이트 {version} ({date})",
+    [I18N_KEYS.UPDATE_MODAL_APPLY]: "지금 업데이트 (페이지 새로고침)",
+    [I18N_KEYS.UPDATE_MODAL_LATER]: "나중에",
+    [I18N_KEYS.UPDATE_MODAL_RELEASE_NOTES]: "릴리스 노트",
+    [I18N_KEYS.UPDATE_MODAL_VIEW_GITHUB]: "GitHub에서 보기 →",
+    [I18N_KEYS.UPDATE_TOAST_NEW_VERSION]: "새 버전 {version}이(가) 준비되었습니다.",
+    [I18N_KEYS.UPDATE_TOAST_APPLYING]: "업데이트를 적용하는 중입니다...",
 };
 
 // 영어 전용
@@ -1525,6 +1540,14 @@ const EN_SPECIFIC = {
     [I18N_KEYS.COMMON_FILE]: "File",
     [I18N_KEYS.PROFILE_FREE_PLAN]: "Free Plan",
     [I18N_KEYS.CHAT_DISCLAIMER]: "LucidLLM can make mistakes. Check important info.",
+    [I18N_KEYS.UPDATE_BADGE_LABEL]: "Update",
+    [I18N_KEYS.UPDATE_MODAL_TITLE]: "Update {version} ({date})",
+    [I18N_KEYS.UPDATE_MODAL_APPLY]: "Apply Update (Reload Page)",
+    [I18N_KEYS.UPDATE_MODAL_LATER]: "Later",
+    [I18N_KEYS.UPDATE_MODAL_RELEASE_NOTES]: "Release Notes",
+    [I18N_KEYS.UPDATE_MODAL_VIEW_GITHUB]: "View on GitHub →",
+    [I18N_KEYS.UPDATE_TOAST_NEW_VERSION]: "New version {version} is ready.",
+    [I18N_KEYS.UPDATE_TOAST_APPLYING]: "Applying update...",
 };
 
 // 일본어 Overrides (영어 기반 + 차이점만)
@@ -1803,6 +1826,14 @@ const JA_OVERRIDES = {
     [I18N_KEYS.INFERENCE_TOGGLE_RELOADING]: "{device} でアクティブモデルを再読み込み中...",
     [I18N_KEYS.INFERENCE_TOGGLE_RELOAD_DONE]: "アクティブモデルを {device} で再読み込みしました。",
     [I18N_KEYS.INFERENCE_TOGGLE_RELOAD_FAILED]: "バックエンドの設定は保存されましたが、アクティブモデルの再読み込みに失敗しました。",
+    [I18N_KEYS.UPDATE_BADGE_LABEL]: "アップデート",
+    [I18N_KEYS.UPDATE_MODAL_TITLE]: "アップデート {version} ({date})",
+    [I18N_KEYS.UPDATE_MODAL_APPLY]: "今すぐ更新 (ページ再読み込み)",
+    [I18N_KEYS.UPDATE_MODAL_LATER]: "後で",
+    [I18N_KEYS.UPDATE_MODAL_RELEASE_NOTES]: "リリースノート",
+    [I18N_KEYS.UPDATE_MODAL_VIEW_GITHUB]: "GitHubで見る →",
+    [I18N_KEYS.UPDATE_TOAST_NEW_VERSION]: "新バージョン {version} が利用可能です。",
+    [I18N_KEYS.UPDATE_TOAST_APPLYING]: "更新を適用しています...",
 
     // Delete
     [I18N_KEYS.DELETE_DELETING]: "削除中...",
@@ -2295,19 +2326,14 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.CHAT_ERROR_TOKENIZATION_FAILED]: "本地分词失败。请检查模型和输入格式。",
     [I18N_KEYS.CHAT_ERROR_EMPTY_OUTPUT]: "模型响应为空或无意义。请检查提示格式或模型/管道兼容性。",
     [I18N_KEYS.CHAT_ERROR_MODEL_INCOMPATIBLE]: "当前模型与 Transformers.js 本地聊天格式不兼容。",
-};
-
-/* ─── 통합 번역 메시지 ─── */
-/**
- * 모든 언어의 번역 메시지를 하나의 객체로 export 합니다.
- * main.js 에서 import 하여 사용합니다.
- */
-export const I18N_MESSAGES = {
-    COMMON,
-    KO_SPECIFIC,
-    EN_SPECIFIC,
-    JA_OVERRIDES,
-    ZH_CN_OVERRIDES,
+    [I18N_KEYS.UPDATE_BADGE_LABEL]: "更新",
+    [I18N_KEYS.UPDATE_MODAL_TITLE]: "更新 {version} ({date})",
+    [I18N_KEYS.UPDATE_MODAL_APPLY]: "立即更新（重新加载页面）",
+    [I18N_KEYS.UPDATE_MODAL_LATER]: "稍后",
+    [I18N_KEYS.UPDATE_MODAL_RELEASE_NOTES]: "发行说明",
+    [I18N_KEYS.UPDATE_MODAL_VIEW_GITHUB]: "在 GitHub 上查看 →",
+    [I18N_KEYS.UPDATE_TOAST_NEW_VERSION]: "新版本 {version} 已准备就绪。",
+    [I18N_KEYS.UPDATE_TOAST_APPLYING]: "正在应用更新...",
 };
 
 /* ─── 지연 로드 캐시 ─── */
@@ -2320,29 +2346,31 @@ const DICTIONARY_CACHE = new Map();
  * @returns {Object}
  */
 function getDictionary(lang) {
-    if (DICTIONARY_CACHE.has(lang)) {
-        return DICTIONARY_CACHE.get(lang);
+    const normalizedLang = normalizeLanguage(lang);
+    if (DICTIONARY_CACHE.has(normalizedLang)) {
+        return DICTIONARY_CACHE.get(normalizedLang);
     }
 
+    const common = getCommonEntries();
     let dict;
-    switch (lang) {
+    switch (normalizedLang) {
         case "ko":
-            dict = { ...COMMON, ...KO_SPECIFIC };
+            dict = { ...common, ...KO_SPECIFIC };
             break;
         case "en":
-            dict = { ...COMMON, ...EN_SPECIFIC };
+            dict = { ...common, ...EN_SPECIFIC };
             break;
         case "ja":
-            dict = { ...COMMON, ...EN_SPECIFIC, ...JA_OVERRIDES };
+            dict = { ...common, ...EN_SPECIFIC, ...JA_OVERRIDES };
             break;
         case "zh-CN":
-            dict = { ...COMMON, ...EN_SPECIFIC, ...ZH_CN_OVERRIDES };
+            dict = { ...common, ...EN_SPECIFIC, ...ZH_CN_OVERRIDES };
             break;
         default:
-            dict = { ...COMMON, ...EN_SPECIFIC };
+            dict = { ...common, ...EN_SPECIFIC };
     }
 
-    DICTIONARY_CACHE.set(lang, dict);
+    DICTIONARY_CACHE.set(normalizedLang, dict);
     return dict;
 }
 
@@ -2355,11 +2383,11 @@ function getDictionary(lang) {
  * @returns {string}
  */
 function interpolate(template, vars) {
-    if (!vars || Object.keys(vars).length === 0) return template;
+    if (!vars || !Object.keys(vars).length) return template;
 
     return template.replace(/\{(\w+)\}/g, (_, key) => {
         return Object.hasOwn(vars, key)
-            ? String(vars[key])
+            ? `${vars[key]}`
             : `{${key}}`;  // 변수 없으면 원본 표시 (디버깅 용이)
     });
 }
@@ -2440,6 +2468,11 @@ export function getCurrentLanguage() {
  * @returns {string}
  */
 export function t(key, vars = {}, fallback = "") {
+    if (key === I18N_KEYS.CHAT_VERSION) {
+        const version = String(_appVersion ?? "").trim();
+        if (version) return version;
+    }
+
     const lang = _currentLanguage;
     const dict = getDictionary(lang);
 
@@ -2492,7 +2525,9 @@ export function applyI18nToDOM(root = document) {
         // placeholder
         const placeholderKey = el.getAttribute("data-i18n-placeholder");
         if (placeholderKey) {
-            el.placeholder = t(placeholderKey);
+            if ("placeholder" in el) {
+                el.placeholder = t(placeholderKey);
+            }
         }
 
         // title
@@ -2514,5 +2549,3 @@ export function applyI18nToDOM(root = document) {
         }
     }
 }
-
-

@@ -4,24 +4,23 @@
  */
 
 import { t, I18N_KEYS } from "./i18n.js";
+import { safeJsonParse } from "./shared-utils.js";
 
 // ============================================================================
 // Compression Utilities
 // ============================================================================
 
-function supportsCompressionStream() {
-    return typeof CompressionStream === "function" && typeof DecompressionStream === "function";
-}
+const HAS_COMPRESSION_STREAM = typeof CompressionStream === "function" && typeof DecompressionStream === "function";
 
 async function compressBytesGzip(bytes) {
-    if (!supportsCompressionStream()) return bytes;
+    if (!HAS_COMPRESSION_STREAM) return bytes;
     const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
     const blob = await new Response(stream).blob();
     return new Uint8Array(await blob.arrayBuffer());
 }
 
 async function decompressBytesGzip(bytes) {
-    if (!supportsCompressionStream()) {
+    if (!HAS_COMPRESSION_STREAM) {
         throw new Error(t(I18N_KEYS.ERROR_DECOMPRESSION_UNSUPPORTED));
     }
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
@@ -55,6 +54,10 @@ function base64ToBytes(value) {
 // ============================================================================
 // Cryptography Utilities
 // ============================================================================
+
+function normalizeKdfIterations(n) {
+    return Math.max(1, Math.trunc(Number(n || 1)));
+}
 
 async function deriveBackupAesKey(passphrase, saltBytes, iterations) {
     const enc = new TextEncoder();
@@ -109,14 +112,14 @@ export async function createBackupUploadText(payload, options = {}) {
     const enc = new TextEncoder();
     let bytes = enc.encode(plainText);
     let compressed = false;
-    if (compress && supportsCompressionStream()) {
+    if (compress && HAS_COMPRESSION_STREAM) {
         bytes = await compressBytesGzip(bytes);
         compressed = true;
     }
 
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const iterations = Math.max(1, Math.trunc(Number(kdfIterations || 1)));
+    const iterations = normalizeKdfIterations(kdfIterations);
     const key = await deriveBackupAesKey(normalizedPassphrase, salt, iterations);
     const cipher = await crypto.subtle.encrypt(
         { name: "AES-GCM", iv },
@@ -157,7 +160,11 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
         kdfIterations = 250000,
     } = options;
 
-    const parsed = JSON.parse(String(rawText ?? ""));
+    const parsedResult = safeJsonParse(String(rawText ?? ""));
+    if (!parsedResult.success) {
+        throw new Error(`${t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID)}: ${parsedResult.error ?? "invalid json"}`);
+    }
+    const parsed = parsedResult.value;
     if (!parsed || parsed.format !== "lucid-backup-envelope.v1" || !parsed.encrypted) {
         return parsed;
     }
@@ -167,11 +174,21 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
         throw new Error(t(I18N_KEYS.ERROR_ENCRYPTED_BACKUP_PASSWORD));
     }
 
-    const salt = base64ToBytes(parsed.salt);
-    const iv = base64ToBytes(parsed.iv);
-    const encrypted = base64ToBytes(parsed.data);
-    const fallbackIterations = Math.max(1, Math.trunc(Number(kdfIterations || 1)));
-    const parsedIterations = Math.max(1, Math.trunc(Number(parsed?.kdf?.iterations || fallbackIterations)));
+    if (!parsed.salt || !parsed.iv || !parsed.data) {
+        throw new Error(t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID));
+    }
+
+    let salt;
+    let iv;
+    let encrypted;
+    try {
+        salt = base64ToBytes(parsed.salt);
+        iv = base64ToBytes(parsed.iv);
+        encrypted = base64ToBytes(parsed.data);
+    } catch {
+        throw new Error(`${t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID)}: invalid base64`);
+    }
+    const parsedIterations = normalizeKdfIterations(parsed?.kdf?.iterations ?? kdfIterations);
     const key = await deriveBackupAesKey(normalizedPassphrase, salt, parsedIterations);
     const plainBuffer = await crypto.subtle.decrypt(
         { name: "AES-GCM", iv },
@@ -182,8 +199,12 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
     if (String(parsed.compression ?? "none").toLowerCase() === "gzip") {
         plainBytes = await decompressBytesGzip(plainBytes);
     }
-    const plainText = new TextDecoder().decode(plainBytes);
-    return JSON.parse(plainText);
+    const plainText = new TextDecoder("utf-8", { fatal: true }).decode(plainBytes);
+    try {
+        return JSON.parse(plainText);
+    } catch {
+        throw new Error(`${t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID)}: decrypted content is not valid JSON`);
+    }
 }
 
 // ============================================================================

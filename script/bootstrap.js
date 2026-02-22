@@ -59,5 +59,38 @@ function bootstrapWithCodeSplitting() {
     window.setTimeout(start, 0);
 }
 
+function registerServiceWorker() {
+    if (!("serviceWorker" in navigator)) return;
+
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").then((reg) => {
+            console.log("[SW] Registered with scope:", reg.scope);
+
+            // 이미 대기 중인 SW가 있다면 이벤트 발생
+            if (reg.waiting) {
+                window.dispatchEvent(new CustomEvent("swUpdateWaiting"));
+                return;
+            }
+
+            // 새로운 SW 발견 시
+            reg.addEventListener("updatefound", () => {
+                const newWorker = reg.installing;
+                if (!newWorker) return;
+
+                newWorker.addEventListener("statechange", () => {
+                    if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                        // 새 버전이 설치되었고, 기존 컨트롤러(구버전)가 있는 경우 -> 업데이트 대기 중
+                        console.log("[SW] New update available (waiting)");
+                        window.dispatchEvent(new CustomEvent("swUpdateWaiting"));
+                    }
+                });
+            });
+        }).catch((err) => {
+            console.error("[SW] Registration failed:", err);
+        });
+    });
+}
+
+registerServiceWorker();
 bootstrapWithCodeSplitting();
 

@@ -11,6 +11,12 @@ import { t, I18N_KEYS } from "./i18n.js";
 
 export const OPFS_MODELS_DIR = "models";
 
+export const TRANSFORMERS_JS_VERSION = "4.0.0-next.1";
+export const TRANSFORMERS_JS_IMPORT_CANDIDATES = Object.freeze([
+    `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}/+esm`,
+    `https://unpkg.com/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}?module`,
+]);
+
 // ============================================================================
 // Error & HTML Utilities
 // ============================================================================
@@ -163,6 +169,61 @@ export function calculateExponentialBackoffDelay(baseDelayMs, attempt, options =
     const raw = base * (2 ** Math.max(0, step - 1));
     const bounded = Math.min(raw, maxDelay);
     return Math.max(0, Math.trunc(bounded));
+}
+
+/**
+ * 비동기 함수를 지수 백오프 기반으로 재시도합니다.
+ * @param {(attempt: number) => Promise<*>} fn
+ * @param {{
+ *   maxRetries?: number,
+ *   baseDelayMs?: number,
+ *   shouldRetry?: (error: any, attempt: number) => boolean,
+ *   onRetry?: ((attempt: number, maxRetries: number) => void) | null,
+ *   onNonRetryable?: ((error: any) => void) | null,
+ *   maxDelayMs?: number
+ * }} options
+ * @returns {Promise<*>}
+ */
+export async function withRetry(fn, options = {}) {
+    const {
+        maxRetries = 3,
+        baseDelayMs = 1000,
+        shouldRetry = () => true,
+        onRetry = null,
+        onNonRetryable = null,
+        maxDelayMs,
+    } = options;
+    let lastError = null;
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt += 1) {
+        try {
+            return await fn(attempt);
+        } catch (error) {
+            lastError = error;
+            if (attempt > maxRetries || !shouldRetry(error, attempt)) {
+                if (typeof onNonRetryable === "function") {
+                    try {
+                        onNonRetryable(error);
+                    } catch {
+                        // no-op
+                    }
+                }
+                throw error;
+            }
+            if (typeof onRetry === "function") {
+                try {
+                    onRetry(attempt, maxRetries);
+                } catch {
+                    // no-op
+                }
+            }
+            await delay(calculateExponentialBackoffDelay(
+                baseDelayMs,
+                attempt,
+                maxDelayMs != null ? { maxDelayMs } : {},
+            ));
+        }
+    }
+    throw lastError || new Error("Retry attempts exhausted");
 }
 
 /**
@@ -509,6 +570,11 @@ export function writeToStorage(key, value, options = {}) {
             stringValue = String(value);
         }
         
+        if (stringValue === null || stringValue === undefined) {
+            localStorage.removeItem(key);
+            return { success: true, error: null };
+        }
+
         localStorage.setItem(key, stringValue);
         return { success: true, error: null };
     } catch (error) {
@@ -518,156 +584,30 @@ export function writeToStorage(key, value, options = {}) {
 }
 
 /**
- * LocalStorage에서 JSON 객체를 읽고 검증합니다.
- * @param {string} key
- * @param {Function} validator - (value: any) => boolean
- * @param {*} defaultValue
- * @returns {*}
- */
-export function readStorageWithValidation(key, validator, defaultValue = null) {
-    const result = readFromStorage(key, null, { deserialize: true });
-    if (!result.success || result.value === null) {
-        return defaultValue;
-    }
-    try {
-        if (typeof validator === "function" && !validator(result.value)) {
-            return defaultValue;
-        }
-        return result.value;
-    } catch {
-        return defaultValue;
-    }
-}
-
-// ============================================================================
-// Event Binding Utilities
-// ============================================================================
-
-/**
- * 여러 이벤트 리스너를 일괄 등록합니다.
- * @param {{element: HTMLElement, event: string, handler: Function}[]} bindings
- * @returns {Function} - 등록된 모든 리스너를 제거하는 함수
- */
-/**
  * 브라우저 저장소 할당량 정보를 조회합니다.
- * @returns {Promise<{quota: number, usage: number}>}
+ * @returns {Promise<{quota: number, usage: number, available: number}>}
  */
 export async function getStorageEstimate() {
     try {
         const est = await (navigator.storage?.estimate
             ? navigator.storage.estimate()
             : Promise.resolve({ quota: 0, usage: 0 }));
-        return { quota: est.quota ?? 0, usage: est.usage ?? 0 };
-    } catch {
-        return { quota: 0, usage: 0 };
+        const quota = Number(est.quota ?? 0);
+        const usage = Number(est.usage ?? 0);
+        return {
+            quota,
+            usage,
+            available: Math.max(0, quota - usage),
+        };
+    } catch (error) {
+        console.warn("[Storage] Failed to read storage estimate:", getErrorMessage(error));
+        return { quota: 0, usage: 0, available: 0 };
     }
 }
 
-export function bindMultipleEvents(bindings) {
-    const handlers = [];
-    
-    for (const binding of bindings) {
-        const { element, event, handler } = binding;
-        if (!element || typeof event !== "string" || typeof handler !== "function") {
-            continue;
-        }
-        element.addEventListener(event, handler);
-        handlers.push({ element, event, handler });
-    }
-    
-    // 정리 함수 반환
-    return () => {
-        for (const { element, event, handler } of handlers) {
-            element.removeEventListener(event, handler);
-        }
-    };
-}
-
-/**
- * 이벤트 위임을 설정합니다 (event delegation).
- * @param {HTMLElement} container
- * @param {string} event - 이벤트 타입
- * @param {string} selector - CSS 선택자
- * @param {Function} handler - (event, element) => void
- * @returns {Function} - 리스너를 제거하는 함수
- */
-export function setupEventDelegation(container, event, selector, handler) {
-    if (!container) return () => {};
-    
-    const delegateHandler = (e) => {
-        const target = e.target;
-        if (target && typeof target.closest === "function") {
-            const element = target.closest(selector);
-            if (element && container.contains(element)) {
-                handler(e, element);
-            }
-        }
-    };
-    
-    container.addEventListener(event, delegateHandler);
-    
-    return () => {
-        container.removeEventListener(event, delegateHandler);
-    };
-}
-
-/**
- * 특정 조건이 만족될 때까지만 이벤트를 처리합니다.
- * @param {HTMLElement} element
- * @param {string} event
- * @param {Function} handler
- * @param {Function} predicate - () => boolean
- * @returns {Function} - 리스너를 제거하는 함수
- */
-export function bindConditionalEvent(element, event, handler, predicate) {
-    if (!element) return () => {};
-    
-    const conditionalHandler = (e) => {
-        if (typeof predicate === "function" && predicate()) {
-            handler(e);
-        }
-    };
-    
-    element.addEventListener(event, conditionalHandler);
-    
-    return () => {
-        element.removeEventListener(event, conditionalHandler);
-    };
-}
-
 // ============================================================================
-// Normalization & Validation Utilities (Enhanced)
+// Normalization Utilities
 // ============================================================================
-
-/**
- * 여러 문자열 정규화기를 조합합니다.
- * @param {Array<Function>} normalizers
- * @returns {Function}
- */
-export function composeNormalizers(...normalizers) {
-    return (value) => {
-        let result = value;
-        for (const normalizer of normalizers) {
-            if (typeof normalizer === "function") {
-                result = normalizer(result);
-            }
-        }
-        return result;
-    };
-}
-
-/**
- * 범위 내 값으로 제한합니다.
- * @param {number} value
- * @param {number} min
- * @param {number} max
- * @returns {number}
- */
-export function clamp(value, min, max) {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return Number.isFinite(min) ? min : 0;
-    return Math.max(min, Math.min(max, num));
-}
 
 /**
  * 문자열을 안전하게 정규화합니다.
@@ -688,188 +628,4 @@ export function normalizeString(value, defaultValue = "", transformer = null) {
         }
     }
     return str;
-}
-
-
-// ============================================================================
-// GPU/VRAM Utilities
-// ============================================================================
-
-/**
- * GPU 메모리 정보를 수집합니다.
- * WebGPU API를 사용하여 GPU 메모리 정보를 조회합니다.
- * @returns {Promise<{available: number, maxSize: number, adapter: string}>}
- */
-export async function getGPUMemoryInfo() {
-    try {
-        if (!navigator.gpu) {
-            return {
-                available: 0,
-                maxSize: 0,
-                adapter: "WebGPU 미지원",
-                error: "WebGPU not available"
-            };
-        }
-
-        const adapter = await navigator.gpu.requestAdapter();
-        if (!adapter) {
-            return {
-                available: 0,
-                maxSize: 0,
-                adapter: "GPU 어댑터 없음",
-                error: "No GPU adapter"
-            };
-        }
-
-        // WebGPU에서 직접 메모리 용량을 가져올 수는 없지만,
-        // 일반적인 GPU 메모리 크기를 추정할 수 있습니다
-        const info = adapter.limits || {};
-        const maxBufferSize = info.maxBufferSize || 0;
-        const maxStorageBufferBindingSize = info.maxStorageBufferBindingSize || 0;
-
-        const adapterInfo = await adapter.requestAdapterInfo?.() || {};
-        const vendor = adapterInfo.vendor || "Unknown";
-        const architecture = adapterInfo.architecture || "";
-
-        return {
-            available: maxStorageBufferBindingSize,
-            maxSize: maxBufferSize,
-            vendor,
-            architecture,
-            adapter: `${vendor} ${architecture}`.trim() || "WebGPU"
-        };
-    } catch (error) {
-        return {
-            available: 0,
-            maxSize: 0,
-            adapter: "GPU 정보 조회 실패",
-            error: getErrorMessage(error)
-        };
-    }
-}
-
-/**
- * WebGL을 사용하여 GPU 정보를 수집합니다.
- * @returns {{vendor: string, renderer: string, version: string}}
- */
-export function getWebGLInfo() {
-    try {
-        const canvas = document.createElement("canvas");
-        const gl = canvas.getContext("webgl") || canvas.getContext("webgl2");
-
-        if (!gl) {
-            return {
-                vendor: "WebGL 미지원",
-                renderer: "-",
-                version: "-"
-            };
-        }
-
-        const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
-        const vendor = debugInfo
-            ? gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL)
-            : gl.getParameter(gl.VENDOR);
-        const renderer = debugInfo
-            ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
-            : gl.getParameter(gl.RENDERER);
-        const version = gl.getParameter(gl.VERSION);
-
-        return { vendor, renderer, version };
-    } catch (error) {
-        return {
-            vendor: "WebGL 정보 조회 실패",
-            renderer: "-",
-            version: "-"
-        };
-    }
-}
-
-/**
- * 시스템 GPU 정보를 포맷팅합니다.
- * @param {{vendor: string, renderer: string, version: string}} glInfo
- * @returns {string}
- */
-export function formatGPUInfo(glInfo) {
-    if (!glInfo) return "GPU 정보 없음";
-
-    const parts = [];
-    if (glInfo.vendor) parts.push(glInfo.vendor);
-    if (glInfo.renderer && glInfo.renderer !== "-") {
-        // Render 정보가 너무 길면 간단히 함
-        const shortRenderer = glInfo.renderer.split(/\s+/).slice(0, 3).join(" ");
-        parts.push(shortRenderer);
-    }
-
-    return parts.length > 0 ? parts.join(" - ") : "GPU 정보 없음";
-}
-
-/**
- * VRAM 사용량 추정 (브라우저 제약으로 인한 추정값)
- * @returns {Promise<{used: number, estimate: number, unit: string}>}
- */
-export async function estimateVRAMUsage() {
-    try {
-        // 현재 성능 메트릭에서 추정
-        // 실제 VRAM은 WebGL/WebGPU 렌더링으로 인한 메모리 사용량
-        const perfMemory = performance.memory;
-        
-        // JavaScript 힙 메모리의 일부를 GPU 메모리 추정으로 사용
-        // 이는 정확하지 않지만 참고 정보로 제공
-        let estimatedGPUMB = 0;
-
-        if (perfMemory) {
-            // 일반적으로 JS 힙의 20-30%가 GPU 메모리로 사용되는 것으로 추정
-            estimatedGPUMB = (perfMemory.usedJSHeapSize * 0.25) / (1024 * 1024);
-        }
-
-        // WebGPU 정보 추가
-        const gpuInfo = await getGPUMemoryInfo();
-        if (gpuInfo.maxSize > 0) {
-            // 더 정확한 GPU 메모리 정보 사용
-            estimatedGPUMB = Math.max(estimatedGPUMB, gpuInfo.available / (1024 * 1024));
-        }
-
-        return {
-            used: estimatedGPUMB,
-            estimate: Math.max(512, estimatedGPUMB * 2), // 보수적 추정
-            unit: "MB"
-        };
-    } catch (error) {
-        return {
-            used: 0,
-            estimate: 0,
-            unit: "MB",
-            error: getErrorMessage(error)
-        };
-    }
-}
-
-/**
- * 메모리 및 VRAM 사용량을 통합 포맷팅합니다.
- * @returns {Promise<{cpu: string, gpu: string, timestamp: number}>}
- */
-export async function getMemoryStats() {
-    const cpuStats = {
-        used: 0,
-        total: 0
-    };
-
-    // CPU 메모리
-    if (performance && performance.memory) {
-        cpuStats.used = performance.memory.usedJSHeapSize / (1024 * 1024);
-        cpuStats.total = performance.memory.totalJSHeapSize / (1024 * 1024);
-    }
-
-    // GPU 메모리
-    const gpuStats = await estimateVRAMUsage();
-
-    return {
-        cpu: cpuStats.total > 0
-            ? `JS Heap: ${cpuStats.used.toFixed(1)} / ${cpuStats.total.toFixed(1)} MB`
-            : "JS Heap: - MB",
-        gpu: gpuStats.estimate > 0
-            ? `VRAM: ~${gpuStats.used.toFixed(1)} MB (est.)`
-            : "VRAM: - MB",
-        timestamp: Date.now()
-    };
 }

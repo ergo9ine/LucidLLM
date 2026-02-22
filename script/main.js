@@ -1,5 +1,5 @@
 // App Version - managed centrally in main.js
-const APP_VERSION = "Version-Pre-AT";
+const APP_VERSION = "0.0.3";
 
 import {
     calculateExponentialBackoffDelay,
@@ -7,8 +7,8 @@ import {
     computeTokensPerSecond,
     countApproxTokens,
     delay,
+    withRetry,
     escapeHtml,
-    extractTokenIdsFromBeamPayload,
     formatBytes,
     formatEta,
     formatSpeed,
@@ -22,26 +22,14 @@ import {
     // Storage utilities
     readFromStorage,
     writeToStorage,
-    readStorageWithValidation,
     safeJsonParse,
-    safeJsonStringify,
     getStorageEstimate,
-    // Event utilities
-    bindMultipleEvents,
-    setupEventDelegation,
-    bindConditionalEvent,
-    // Normalization utilities
-    clamp,
     normalizeString,
-    composeNormalizers,
-    // GPU/VRAM utilities
-    getGPUMemoryInfo,
-    getWebGLInfo,
-    formatGPUInfo,
-    estimateVRAMUsage,
-    getMemoryStats,
     // Constants
     OPFS_MODELS_DIR,
+    // Transformers module injection
+    getInjectedTransformersModule,
+    setInjectedTransformersModule,
 } from "./shared-utils.js";
 import {
     buildBackupSignature,
@@ -52,12 +40,7 @@ import {
     parseBackupPayloadFromText,
 } from "./drive-backup.js";
 import {
-    getInjectedTransformersModule,
-    setInjectedTransformersModule,
-} from "./shared-utils.js";
-import {
     SUPPORTED_LANGUAGES,
-    I18N_MESSAGES,
     I18N_KEYS,
     t,
     normalizeLanguage,
@@ -95,11 +78,6 @@ const LOCAL_GENERATION_DEFAULT_SETTINGS = Object.freeze({
     maxLength: 512,
 });
 const SYSTEM_PROMPT_MAX_LINES = 20;
-const TRANSFORMERS_JS_VERSION = "4.0.0-next.1";
-const TRANSFORMERS_JS_IMPORT_CANDIDATES = Object.freeze([
-    `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}/+esm`,
-    `https://unpkg.com/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}?module`,
-]);
 const TRANSFORMERS_DEFAULT_TASK = "text-generation";
 const TRANSFORMERS_PIPELINE_CACHE_LIMIT = 4;
 const MONITORING_NETWORK_LIMIT = 180;
@@ -115,11 +93,10 @@ const LOCAL_MAX_NEW_TOKENS_QWEN_CAP = 384;
 const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const GOOGLE_DRIVE_API_BASE = "https://www.googleapis.com/drive/v3";
 const GOOGLE_DRIVE_UPLOAD_API_BASE = "https://www.googleapis.com/upload/drive/v3";
-const GOOGLE_CLIENT_ID_DEFAULT = "721355891669-gcj22fgcj3g3v1o4jl2q8k4i66li6tq8.apps.googleusercontent.com";
+const GOOGLE_DRIVE_CLIENT_ID_INTERNAL = "721355891669-gcj22fgcj3g3v1o4jl2q8k4i66li6tq8.apps.googleusercontent.com";
 const DRIVE_BACKUP_PREFIX = "backup_";
 const DRIVE_BACKUP_FOLDER_NAME = "LucidLLM Backups";
 const DRIVE_BACKUP_DEFAULT_LIMIT_MB = 25;
-const GOOGLE_DRIVE_CLIENT_ID_INTERNAL = "721355891669-gcj22fgcj3g3v1o4jl2q8k4i66li6tq8.apps.googleusercontent.com";
 const DRIVE_BACKUP_MIN_LIMIT_MB = 1;
 const DRIVE_BACKUP_MAX_LIMIT_MB = 1024;
 const DRIVE_BACKUP_KDF_ITERATIONS = 250000;
@@ -127,6 +104,10 @@ const DRIVE_RETRY_BASE_DELAY_MS = 900;
 const DRIVE_MAX_RETRIES = 3;
 const DRIVE_AUTO_BACKUP_DEBOUNCE_MS = 25000;
 const DRIVE_FILE_LIST_POLL_MS = 45000;
+const GITHUB_RELEASES_URL = "https://api.github.com/repos/ergo9ine/LucidLLM/releases";
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
+
+
 const STORAGE_KEYS = {
     token: "lucid_hf_token",
     systemPrompt: "lucid_system_prompt",
@@ -144,10 +125,12 @@ const STORAGE_KEYS = {
     userProfile: "lucid_user_profile_v1",
     nicknameRegistry: "lucid_nickname_registry_v1",
     googleDriveClientId: "lucid_google_drive_client_id",
-    googleDriveClientSecret: "lucid_google_drive_client_secret",
     googleDriveAutoBackup: "lucid_google_drive_auto_backup",
     googleDriveLastSyncAt: "lucid_google_drive_last_sync_at",
     googleDriveBackupLimitMb: "lucid_google_drive_backup_limit_mb",
+    updateLastCheckAt: "lucid_update_last_check_at",
+    updateLatestRelease: "lucid_update_latest_release",
+    updateDismissedVersion: "lucid_update_dismissed_version",
 };
 
 const SUPPORTED_THEMES = ["dark", "light", "oled", "high-contrast"];
@@ -188,12 +171,14 @@ const state = {
         max: null,
         min: null,
     },
+
     chatSessions: [],
     activeChatSessionId: "",
     ui: {
         sidebarOpen: false,
         sidebarPanel: "chat",
         chatAutoScroll: true,
+        storageEstimateTimer: null,
     },
     inference: {
         preferredDevice: (navigator?.gpu ? "webgpu" : "wasm"),
@@ -301,7 +286,7 @@ const state = {
         accessToken: "",
         tokenExpiresAt: 0,
         tokenClient: null,
-        clientId: GOOGLE_CLIENT_ID_DEFAULT,
+        clientId: GOOGLE_DRIVE_CLIENT_ID_INTERNAL,
         connected: false,
         inProgress: false,
         progressPercent: 0,
@@ -323,6 +308,12 @@ const state = {
         chatSuccessCount: 0,
         chatFailureCount: 0,
         lastChatErrorAt: "",
+    },
+    update: {
+        swUpdateWaiting: false,
+        latestRelease: null,
+        isChecking: false,
+        changelogModalOpen: false,
     },
 };
 
@@ -494,6 +485,7 @@ async function bootstrapApplication() {
     setExplorerUploadStatus(state.opfs.explorer.uploadStatusText);
     renderOpfsExplorerList();
     renderModelSessionList();
+
     if (window.lucide?.createIcons) {
         window.lucide.createIcons();
     }
@@ -514,12 +506,16 @@ async function bootstrapApplication() {
 
     renderLocalizedStaticText();
 
-    window.setInterval(() => {
-        refreshStorageEstimate().catch(() => { });
+    state.ui.storageEstimateTimer = window.setInterval(() => {
+        refreshStorageEstimate().catch((err) => {
+            console.warn("[Storage] Estimate refresh failed:", getErrorMessage(err));
+        });
     }, 5000);
 
     // Auto-open settings on startup
     openSettings();
+
+    checkForAppUpdate();
 }
 
 function scheduleBootstrapApplication() {
@@ -1036,6 +1032,15 @@ function shouldBypassOpfsInterceptorForDownload(rawUrl) {
     }
 }
 
+function isHuggingFaceApiRequest(rawUrl) {
+    try {
+        const parsed = new URL(String(rawUrl ?? ""), window.location.origin);
+        return isHuggingFaceHostName(parsed.hostname) && parsed.pathname.startsWith("/api/");
+    } catch {
+        return false;
+    }
+}
+
 function parseHuggingFaceResolveRequestUrl(rawUrl) {
     const text = String(rawUrl ?? "").trim();
     if (!text) return null;
@@ -1287,7 +1292,7 @@ async function tryResolveHfFileFromOpfs(input, init = {}) {
     const isHfRequest = isHuggingFaceRequestUrl(url);
     const isLocalModelPathRequest = !!localModelRequest;
     if (!resolvedRequest) {
-        if (localSessionLoadOpfsOnlyMode && isHfRequest && !shouldBypassOpfsInterceptorForDownload(url)) {
+        if (localSessionLoadOpfsOnlyMode && isHfRequest && !shouldBypassOpfsInterceptorForDownload(url) && !isHuggingFaceApiRequest(url)) {
             console.warn("[LOCAL] blocked remote HF request during OPFS-only session load", {
                 request_url: url,
             });
@@ -1566,8 +1571,9 @@ function cacheElements() {
         chatForm: document.getElementById("chat-form"),
         chatInput: document.getElementById("chat-input"),
         chatSendBtn: document.getElementById("chat-send-btn"),
+        chatStopBtn: document.getElementById("chat-stop-btn"),
         tokenSpeedStats: document.getElementById("token-speed-stats"),
-        memoryUsageText: document.getElementById("memory-usage-text"),
+
         inferenceDeviceSelect: document.getElementById("inference-device-select"),
         sidebar: document.getElementById("app-sidebar"),
         sidebarTitleText: document.getElementById("sidebar-title-text"),
@@ -1615,6 +1621,17 @@ function cacheElements() {
         shortcutHelpOverlay: document.getElementById("shortcut-help-overlay"),
         shortcutHelpBody: document.getElementById("shortcut-help-body"),
         shortcutHelpCloseBtn: document.getElementById("shortcut-help-close-btn"),
+
+        // Update Elements
+        updateBadge: document.getElementById("update-badge"),
+        changelogModalOverlay: document.getElementById("changelog-modal-overlay"),
+        changelogModalWindow: document.getElementById("changelog-modal-window"),
+        changelogModalTitle: document.getElementById("changelog-modal-title"),
+        changelogModalCloseBtn: document.getElementById("changelog-modal-close-btn"),
+        changelogGithubLink: document.getElementById("changelog-github-link"),
+        changelogContent: document.getElementById("changelog-content"),
+        changelogDismissBtn: document.getElementById("changelog-dismiss-btn"),
+        changelogApplyBtn: document.getElementById("changelog-apply-btn"),
     };
 }
 
@@ -1757,6 +1774,159 @@ function handleSessionSwitchDialogCancelClick() {
 
 function handleSessionSwitchDialogConfirmClick() {
     closeSessionSwitchDialog(true);
+}
+
+function showUpdateBadge(version) {
+    if (!els.updateBadge) return;
+    state.update.swUpdateWaiting = true;
+    els.updateBadge.classList.remove("hidden");
+    els.updateBadge.classList.add("flex");
+    
+    // Animate badge appearance
+    els.updateBadge.animate([
+        { transform: "scale(0.8)", opacity: 0 },
+        { transform: "scale(1)", opacity: 1 }
+    ], { duration: 300, easing: "cubic-bezier(0.175, 0.885, 0.32, 1.275)" });
+
+    showToast(t(I18N_KEYS.UPDATE_TOAST_NEW_VERSION, { version: version || "New" }), "info", 4000);
+}
+
+function hideUpdateBadge() {
+    if (!els.updateBadge) return;
+    els.updateBadge.classList.add("hidden");
+    els.updateBadge.classList.remove("flex");
+}
+
+function openChangelogModal() {
+    if (!state.update.latestRelease) return;
+    
+    const release = state.update.latestRelease;
+    state.update.changelogModalOpen = true;
+
+    // Populate Modal
+    if (els.changelogModalTitle) {
+        const date = new Date(release.published_at).toLocaleDateString();
+        els.changelogModalTitle.textContent = t(I18N_KEYS.UPDATE_MODAL_TITLE, { 
+            version: release.tag_name, 
+            date: date 
+        });
+    }
+    
+    if (els.changelogContent) {
+        // Markdown body directly to textContent for safety (basic whitespace preserved by CSS)
+        els.changelogContent.textContent = release.body || "No release notes available.";
+    }
+    
+    if (els.changelogGithubLink) {
+        els.changelogGithubLink.href = release.html_url;
+    }
+
+    // Show Modal
+    if (els.changelogModalOverlay) {
+        els.changelogModalOverlay.classList.remove("hidden");
+        // Simple fade-in
+        els.changelogModalOverlay.animate([
+            { opacity: 0 },
+            { opacity: 1 }
+        ], { duration: 200, fill: "forwards" });
+    }
+}
+
+function closeChangelogModal(dismiss = false) {
+    state.update.changelogModalOpen = false;
+    
+    if (els.changelogModalOverlay) {
+        const anim = els.changelogModalOverlay.animate([
+            { opacity: 1 },
+            { opacity: 0 }
+        ], { duration: 200, fill: "forwards" });
+        
+        anim.onfinish = () => {
+            els.changelogModalOverlay.classList.add("hidden");
+        };
+    }
+
+    if (dismiss && state.update.latestRelease) {
+        // User clicked "Later" -> Dismiss this version
+        writeToStorage(STORAGE_KEYS.updateDismissedVersion, state.update.latestRelease.tag_name);
+        hideUpdateBadge();
+    }
+}
+
+async function applySwUpdate() {
+    if (!("serviceWorker" in navigator)) {
+        window.location.reload();
+        return;
+    }
+
+    showToast(t(I18N_KEYS.UPDATE_TOAST_APPLYING), "info");
+
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg && reg.waiting) {
+        // Send skipWaiting message
+        reg.waiting.postMessage({ type: "SKIP_WAITING" });
+    } else {
+        window.location.reload();
+    }
+}
+
+async function checkForAppUpdate() {
+    if (state.update.isChecking) return;
+    state.update.isChecking = true;
+
+    try {
+        const lastCheck = Number(readFromStorage(STORAGE_KEYS.updateLastCheckAt).value || 0);
+        const now = Date.now();
+        
+        // Rate limit: Check only once every 6 hours
+        if (now - lastCheck < UPDATE_CHECK_INTERVAL_MS) {
+            // Use cached release info if available
+            const rawRelease = readFromStorage(STORAGE_KEYS.updateLatestRelease).value;
+            const cachedRelease = safeJsonParse(rawRelease);
+            if (cachedRelease.success && cachedRelease.value) {
+                state.update.latestRelease = cachedRelease.value;
+                maybeShowUpdateBadge(cachedRelease.value.tag_name);
+            }
+            return;
+        }
+
+        const response = await fetch(GITHUB_RELEASES_URL);
+        if (!response.ok) return;
+
+        const releases = await response.json();
+        if (!Array.isArray(releases) || releases.length === 0) return;
+
+        const latest = releases[0]; // GitHub API returns sorted by date desc
+        
+        // Store latest check time and data
+        writeToStorage(STORAGE_KEYS.updateLastCheckAt, String(now));
+        writeToStorage(STORAGE_KEYS.updateLatestRelease, latest, { serialize: true });
+        
+        state.update.latestRelease = latest;
+        maybeShowUpdateBadge(latest.tag_name);
+
+    } catch (error) {
+        console.warn("[Update] Check failed:", error);
+    } finally {
+        state.update.isChecking = false;
+    }
+}
+
+function maybeShowUpdateBadge(latestVersion) {
+    if (!latestVersion) return;
+    
+    // Compare versions (Simple string comparison for now, assumming semver format)
+    // APP_VERSION is "1.0.0", latestVersion is likely "v1.1.0" or "1.1.0"
+    const current = APP_VERSION.replace(/^v/, "");
+    const latest = latestVersion.replace(/^v/, "");
+    
+    if (current === latest) return; // Same version
+    
+    // If user dismissed this version, don't show badge
+    const dismissed = readFromStorage(STORAGE_KEYS.updateDismissedVersion).value;
+    if (dismissed === latestVersion) return;
+
+    showUpdateBadge(latestVersion);
 }
 
 function handleChatInputSubmitOnEnter(event) {
@@ -1955,6 +2125,35 @@ function bindEvents() {
         els.closeSettingsBtn.addEventListener("click", handleCloseSettingsButtonClick);
     }
 
+    if (els.updateBadge) {
+        els.updateBadge.addEventListener("click", openChangelogModal);
+        els.updateBadge.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") openChangelogModal();
+        });
+    }
+
+    if (els.changelogModalCloseBtn) {
+        els.changelogModalCloseBtn.addEventListener("click", () => closeChangelogModal(true));
+    }
+
+    if (els.changelogDismissBtn) {
+        els.changelogDismissBtn.addEventListener("click", () => closeChangelogModal(true));
+    }
+
+    if (els.changelogApplyBtn) {
+        els.changelogApplyBtn.addEventListener("click", applySwUpdate);
+    }
+
+    if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+            window.location.reload();
+        });
+    }
+
+    window.addEventListener("swUpdateWaiting", () => {
+        showUpdateBadge();
+    });
+
     if (els.settingsOverlay) {
         els.settingsOverlay.addEventListener("click", (event) => {
             const closeButton = event.target.closest("[data-action='close-settings']");
@@ -1971,6 +2170,13 @@ function bindEvents() {
     document.addEventListener("keydown", (event) => {
         const accel = event.ctrlKey || event.metaKey;
         const key = String(event.key ?? "").toLowerCase();
+        
+        if (state.update.changelogModalOpen && key === "escape") {
+            event.preventDefault();
+            closeChangelogModal(true);
+            return;
+        }
+
         if (accel && event.shiftKey && key === "n") {
             event.preventDefault();
             createChatSession();
@@ -2760,7 +2966,6 @@ function renderLocalizedStaticText() {
     applyI18nToDOM();
     renderSidebarStaticText();
     renderInferenceDeviceToggle();
-    renderChatInferenceToggle();
     renderModelStatusHeader();
     renderTokenSpeedStats();
     if (window.lucide?.createIcons) {
@@ -2893,16 +3098,6 @@ function renderInferenceDeviceToggle() {
     }
 }
 
-function renderChatInferenceToggle() {
-    // removed: chat inference toggle UI (no-op)
-    return;
-}
-
-function onChatInferenceToggleClick() {
-    // removed: chat inference toggle handler (no-op)
-    return;
-}
-
 async function reloadActiveSessionForInferenceDevice(preferredDevice) {
     const activeFile = normalizeOnnxFileName(state.activeSessionFile ?? sessionStore.activeFileName ?? "");
     if (!activeFile) return;
@@ -3002,88 +3197,48 @@ async function onInferenceDeviceSelectChange(event) {
 }
 
 function getStoredDriveClientId() {
-    try {
-        const stored = String(localStorage.getItem(STORAGE_KEYS.googleDriveClientId) ?? "").trim();
-        return stored || GOOGLE_DRIVE_CLIENT_ID_INTERNAL;
-    } catch {
-        return GOOGLE_DRIVE_CLIENT_ID_INTERNAL;
-    }
+    const stored = String(readFromStorage(STORAGE_KEYS.googleDriveClientId, "").value ?? "").trim();
+    return stored || GOOGLE_DRIVE_CLIENT_ID_INTERNAL;
 }
 
 function setStoredDriveClientId(value) {
-    try {
-        const next = String(value ?? "").trim();
-        if (!next) {
-            localStorage.removeItem(STORAGE_KEYS.googleDriveClientId);
-            return;
-        }
-        localStorage.setItem(STORAGE_KEYS.googleDriveClientId, next);
-    } catch {
-        // no-op
-    }
+    const next = String(value ?? "").trim();
+    writeToStorage(STORAGE_KEYS.googleDriveClientId, next || null);
 }
 
 function getStoredDriveBackupLimitMb() {
-    try {
-        const raw = Number(localStorage.getItem(STORAGE_KEYS.googleDriveBackupLimitMb));
-        if (!Number.isFinite(raw)) return DRIVE_BACKUP_DEFAULT_LIMIT_MB;
-        return Math.max(DRIVE_BACKUP_MIN_LIMIT_MB, Math.min(DRIVE_BACKUP_MAX_LIMIT_MB, Math.round(raw)));
-    } catch {
-        return DRIVE_BACKUP_DEFAULT_LIMIT_MB;
-    }
+    const raw = Number(readFromStorage(STORAGE_KEYS.googleDriveBackupLimitMb, "").value);
+    if (!Number.isFinite(raw)) return DRIVE_BACKUP_DEFAULT_LIMIT_MB;
+    return Math.max(DRIVE_BACKUP_MIN_LIMIT_MB, Math.min(DRIVE_BACKUP_MAX_LIMIT_MB, Math.round(raw)));
 }
 
 function setStoredDriveBackupLimitMb(value) {
-    try {
-        const next = Math.max(
-            DRIVE_BACKUP_MIN_LIMIT_MB,
-            Math.min(DRIVE_BACKUP_MAX_LIMIT_MB, Math.round(Number(value) || DRIVE_BACKUP_DEFAULT_LIMIT_MB)),
-        );
-        localStorage.setItem(STORAGE_KEYS.googleDriveBackupLimitMb, String(next));
-    } catch {
-        // no-op
-    }
+    const next = Math.max(
+        DRIVE_BACKUP_MIN_LIMIT_MB,
+        Math.min(DRIVE_BACKUP_MAX_LIMIT_MB, Math.round(Number(value) || DRIVE_BACKUP_DEFAULT_LIMIT_MB)),
+    );
+    writeToStorage(STORAGE_KEYS.googleDriveBackupLimitMb, next);
 }
 
 function getStoredDriveAutoBackupEnabled() {
-    try {
-        return localStorage.getItem(STORAGE_KEYS.googleDriveAutoBackup) === "1";
-    } catch {
-        return false;
-    }
+    return readFromStorage(STORAGE_KEYS.googleDriveAutoBackup, "0").value === "1";
 }
 
 function setStoredDriveAutoBackupEnabled(enabled) {
-    try {
-        localStorage.setItem(STORAGE_KEYS.googleDriveAutoBackup, enabled ? "1" : "0");
-    } catch {
-        // no-op
-    }
+    writeToStorage(STORAGE_KEYS.googleDriveAutoBackup, enabled ? "1" : "0");
 }
 
 function getStoredDriveLastSyncAt() {
-    try {
-        return String(localStorage.getItem(STORAGE_KEYS.googleDriveLastSyncAt) ?? "").trim();
-    } catch {
-        return "";
-    }
+    return String(readFromStorage(STORAGE_KEYS.googleDriveLastSyncAt, "").value ?? "").trim();
 }
 
 function setStoredDriveLastSyncAt(value) {
-    try {
-        const next = String(value ?? "").trim();
-        if (!next) {
-            localStorage.removeItem(STORAGE_KEYS.googleDriveLastSyncAt);
-            return;
-        }
-        localStorage.setItem(STORAGE_KEYS.googleDriveLastSyncAt, next);
-    } catch {
-        // no-op
-    }
+    const next = String(value ?? "").trim();
+    writeToStorage(STORAGE_KEYS.googleDriveLastSyncAt, next || null);
 }
 
 function hydrateDriveBackupSettings() {
-    state.driveBackup.clientId = getStoredDriveClientId() || GOOGLE_CLIENT_ID_DEFAULT;
+    state.driveBackup.clientId = getStoredDriveClientId() || GOOGLE_DRIVE_CLIENT_ID_INTERNAL;
     state.driveBackup.backupLimitMb = getStoredDriveBackupLimitMb();
     state.driveBackup.autoEnabled = getStoredDriveAutoBackupEnabled();
     state.driveBackup.lastSyncAt = getStoredDriveLastSyncAt();
@@ -3193,7 +3348,7 @@ function renderDriveBackupFileOptions() {
     }).join("");
 
     const canRestorePrevious = files.some((file) => file.id === previous);
-    els.driveBackupFileSelect.value = canRestorePrevious ? previous : files[0].id;
+    els.driveBackupFileSelect.value = canRestorePrevious ? previous : (files[0]?.id ?? "");
 
     if (els.driveFileListMeta) {
         const latest = files[0];
@@ -3392,7 +3547,9 @@ function startDriveFileListPolling() {
     stopDriveFileListPolling();
     if (!state.driveBackup.connected) return;
     state.driveBackup.pollTimer = window.setInterval(() => {
-        refreshDriveBackupFileList({ silent: true, interactiveAuth: false }).catch(() => { });
+        refreshDriveBackupFileList({ silent: true, interactiveAuth: false }).catch((err) => {
+            console.warn("[Drive] Silent poll failed:", getErrorMessage(err));
+        });
     }, DRIVE_FILE_LIST_POLL_MS);
 }
 
@@ -3417,59 +3574,58 @@ async function driveRequest(url, options = {}, context = {}) {
         ? Number(rawBaseDelayMs)
         : DRIVE_RETRY_BASE_DELAY_MS;
     let authRefreshed = false;
-    let lastError = null;
+    let authRefreshAttempt = 0;
 
-    for (let attempt = 1; attempt <= (maxRetries + 1); attempt += 1) {
-        try {
-            if (!navigator.onLine) {
-                const offlineError = new Error("오프라인 상태입니다. 네트워크 연결 후 다시 시도하세요.");
-                offlineError.status = 0;
-                throw offlineError;
-            }
-            const token = await ensureDriveAccessToken({ interactive: !!interactiveAuth && attempt === 1 });
-            const headers = {
-                ...(options.headers || {}),
-                Authorization: `Bearer ${token}`,
-            };
-            const response = await trackedFetch(url, {
-                ...options,
-                headers,
-            }, {
-                purpose,
-                mode: "drive",
-            });
+    return await withRetry(async (attempt) => {
+        if (!navigator.onLine) {
+            const offlineError = new Error("오프라인 상태입니다. 네트워크 연결 후 다시 시도하세요.");
+            offlineError.status = 0;
+            throw offlineError;
+        }
+        const token = await ensureDriveAccessToken({ interactive: !!interactiveAuth && attempt === 1 });
+        const headers = {
+            ...(options.headers || {}),
+            Authorization: `Bearer ${token}`,
+        };
+        const response = await trackedFetch(url, {
+            ...options,
+            headers,
+        }, {
+            purpose,
+            mode: "drive",
+        });
 
-            if (!response.ok) {
-                const error = new Error(t(I18N_KEYS.ERROR_DRIVE_API_FAILED, { status: response.status }));
-                error.status = response.status;
-                error.response = response;
-                throw error;
-            }
+        if (!response.ok) {
+            const error = new Error(t(I18N_KEYS.ERROR_DRIVE_API_FAILED, { status: response.status }));
+            error.status = response.status;
+            error.response = response;
+            throw error;
+        }
 
-            return response;
-        } catch (error) {
-            lastError = error;
-
+        return response;
+    }, {
+        maxRetries,
+        baseDelayMs: baseDelay,
+        shouldRetry: (error, attempt) => {
             if (Number(error?.status ?? 0) === 401 && !authRefreshed) {
                 authRefreshed = true;
+                authRefreshAttempt = attempt;
                 state.driveBackup.accessToken = "";
                 state.driveBackup.tokenExpiresAt = 0;
-                continue;
+                return true;
             }
-
-            if (attempt > maxRetries || !shouldRetryDriveError(error)) {
-                throw error;
+            return shouldRetryDriveError(error);
+        },
+        onRetry: (attempt) => {
+            if (attempt === authRefreshAttempt) {
+                return;
             }
-
             setDriveProgress(
                 Math.min(95, 20 + (attempt * 15)),
                 `네트워크 재시도 중... (${attempt}/${maxRetries})`,
             );
-            await delay(calculateExponentialBackoffDelay(baseDelay, attempt));
-        }
-    }
-
-    throw lastError || new Error("Drive API 요청에 실패했습니다.");
+        },
+    });
 }
 
 async function ensureDriveBackupFolder() {
@@ -3610,6 +3766,7 @@ async function uploadResumableBlobWithProgress(uploadUrl, blob, progressRange = 
         try {
             resolve(JSON.parse(xhr.responseText ?? "{}"));
         } catch {
+            console.warn("[Drive] Failed to parse upload response");
             resolve({});
         }
     };
@@ -3658,28 +3815,25 @@ async function uploadBackupPayloadToDrive(uploadText, options = {}) {
         throw new Error("Google Drive 업로드 세션 URL을 받지 못했습니다.");
     }
 
-    let lastError = null;
-    for (let attempt = 1; attempt <= (DRIVE_MAX_RETRIES + 1); attempt += 1) {
-        try {
-            if (!navigator.onLine) {
-                throw new Error("오프라인 상태에서는 백업 업로드를 수행할 수 없습니다.");
-            }
-            const uploaded = await uploadResumableBlobWithProgress(uploadUrl, blob);
-            return uploaded;
-        } catch (error) {
-            lastError = error;
+    return await withRetry(async () => {
+        if (!navigator.onLine) {
+            throw new Error("오프라인 상태에서는 백업 업로드를 수행할 수 없습니다.");
+        }
+        return await uploadResumableBlobWithProgress(uploadUrl, blob);
+    }, {
+        maxRetries: DRIVE_MAX_RETRIES,
+        baseDelayMs: DRIVE_RETRY_BASE_DELAY_MS,
+        shouldRetry: (error) => {
             if (Number(error?.status ?? 0) === 401) {
                 state.driveBackup.accessToken = "";
                 state.driveBackup.tokenExpiresAt = 0;
             }
-            if (attempt > DRIVE_MAX_RETRIES || !shouldRetryDriveError(error)) {
-                throw error;
-            }
-            setDriveProgress(Math.min(95, 30 + (attempt * 12)), `업로드 재시도 중... (${attempt}/${DRIVE_MAX_RETRIES})`);
-            await delay(calculateExponentialBackoffDelay(DRIVE_RETRY_BASE_DELAY_MS, attempt));
-        }
-    }
-    throw lastError || new Error("업로드 실패");
+            return shouldRetryDriveError(error);
+        },
+        onRetry: (attempt, maxRetries) => {
+            setDriveProgress(Math.min(95, 30 + (attempt * 12)), `업로드 재시도 중... (${attempt}/${maxRetries})`);
+        },
+    });
 }
 async function backupChatsToGoogleDrive({ manual = false } = {}) {
     if (state.driveBackup.inProgress) return;
@@ -3857,11 +4011,11 @@ function applyBackupPayload(payload, { overwrite = true } = {}) {
     if (!overwrite) {
         // append mode
         const merged = [...state.chatSessions, ...compact].slice(0, CHAT_TAB_MAX_COUNT);
-        localStorage.setItem(STORAGE_KEYS.chatSessions, JSON.stringify(merged));
-        localStorage.setItem(STORAGE_KEYS.activeChatSessionId, nextActive);
+        writeToStorage(STORAGE_KEYS.chatSessions, merged, { serialize: true });
+        writeToStorage(STORAGE_KEYS.activeChatSessionId, nextActive);
     } else {
-        localStorage.setItem(STORAGE_KEYS.chatSessions, JSON.stringify(compact));
-        localStorage.setItem(STORAGE_KEYS.activeChatSessionId, nextActive);
+        writeToStorage(STORAGE_KEYS.chatSessions, compact, { serialize: true });
+        writeToStorage(STORAGE_KEYS.activeChatSessionId, nextActive);
     }
 
     const settings = payload?.settings;
@@ -3978,12 +4132,10 @@ function scheduleAutoBackup(reason = "change") {
 }
 
 function hydrateSettings() {
-    let rawSystemPrompt = "";
-    try {
-        rawSystemPrompt = localStorage.getItem(STORAGE_KEYS.systemPrompt) ?? LLM_DEFAULT_SETTINGS.systemPrompt;
-    } catch {
-        rawSystemPrompt = LLM_DEFAULT_SETTINGS.systemPrompt;
-    }
+    const rawSystemPrompt = readFromStorage(
+        STORAGE_KEYS.systemPrompt,
+        LLM_DEFAULT_SETTINGS.systemPrompt,
+    ).value;
     const normalizedSystemPrompt = clampSystemPromptLines(rawSystemPrompt);
     if (normalizedSystemPrompt.trimmed) {
         setSystemPrompt(normalizedSystemPrompt.value);
@@ -5077,51 +5229,38 @@ function renderActiveChatMessages() {
 }
 
 function getStoredChatSessions() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEYS.chatSessions);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        if (!Array.isArray(parsed)) return [];
-
-        return parsed
-            .filter((item) => item && typeof item === "object")
-            .map((item) => ({
-                id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-                title: typeof item.title === "string" && item.title.trim() ? item.title.trim() : getDefaultChatTitle(),
-                createdAt: typeof item.createdAt === "string" && item.createdAt.trim() ? item.createdAt : new Date().toISOString(),
-                updatedAt: typeof item.updatedAt === "string" && item.updatedAt.trim() ? item.updatedAt : new Date().toISOString(),
-                messages: Array.isArray(item.messages) ? item.messages : [],
-            }));
-    } catch {
-        return [];
-    }
+    const parsed = readFromStorage(STORAGE_KEYS.chatSessions, [], { deserialize: true }).value;
+    const list = Array.isArray(parsed) ? parsed : [];
+    return list
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+            id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            title: typeof item.title === "string" && item.title.trim() ? item.title.trim() : getDefaultChatTitle(),
+            createdAt: typeof item.createdAt === "string" && item.createdAt.trim() ? item.createdAt : new Date().toISOString(),
+            updatedAt: typeof item.updatedAt === "string" && item.updatedAt.trim() ? item.updatedAt : new Date().toISOString(),
+            messages: Array.isArray(item.messages) ? item.messages : [],
+        }));
 }
 
 function getStoredActiveChatSessionId() {
-    try {
-        return String(localStorage.getItem(STORAGE_KEYS.activeChatSessionId) ?? "").trim();
-    } catch {
-        return "";
-    }
+    return String(readFromStorage(STORAGE_KEYS.activeChatSessionId, "").value ?? "").trim();
 }
 
 function persistChatSessions() {
-    try {
-        const compact = state.chatSessions
-            .slice(0, CHAT_TAB_MAX_COUNT)
-            .map((item) => ({
-                id: String(item.id ?? "").trim(),
-                title: String(item.title || getDefaultChatTitle()).trim() || getDefaultChatTitle(),
-                createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
-                updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : new Date().toISOString(),
-                messages: Array.isArray(item.messages) ? item.messages : [],
-            }));
+    const compact = state.chatSessions
+        .slice(0, CHAT_TAB_MAX_COUNT)
+        .map((item) => ({
+            id: String(item.id ?? "").trim(),
+            title: String(item.title || getDefaultChatTitle()).trim() || getDefaultChatTitle(),
+            createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
+            updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : new Date().toISOString(),
+            messages: Array.isArray(item.messages) ? item.messages : [],
+        }));
 
-        localStorage.setItem(STORAGE_KEYS.chatSessions, JSON.stringify(compact));
-        localStorage.setItem(STORAGE_KEYS.activeChatSessionId, state.activeChatSessionId ?? "");
+    const sessionsResult = writeToStorage(STORAGE_KEYS.chatSessions, compact, { serialize: true });
+    const activeResult = writeToStorage(STORAGE_KEYS.activeChatSessionId, state.activeChatSessionId ?? "");
+    if (sessionsResult.success && activeResult.success) {
         scheduleAutoBackup("chat_persist");
-    } catch {
-        // no-op
     }
 }
 
@@ -6768,7 +6907,7 @@ async function onClickDownloadStart() {
 
     const queue = Array.isArray(state.download.queue) ? state.download.queue : [];
     if (queue.length === 0) {
-        showToast("다운로드할 파일 정보를 찾을 ��� 없습니다.", "error", 2600);
+        showToast("다운로드할 파일 정보를 찾을 수 없습니다.", "error", 2600);
         return;
     }
 
@@ -6776,86 +6915,46 @@ async function onClickDownloadStart() {
         return;
     }
 
-    // Pre-download quota check — auto-cleanup if needed
+    // Pre-download quota check — verify capacity first, auto-reclaim immediately when needed.
     try {
         const estimate = await getStorageEstimate();
         if (estimate.quota > 0) {
-            const available = estimate.quota - estimate.usage;
+            const available = Math.max(0, estimate.quota - estimate.usage);
             const requiredBytes = queue.reduce((sum, item) => {
                 const size = Number(item?.expectedSizeBytes ?? item?.size ?? 0);
                 return sum + (Number.isFinite(size) ? Math.max(0, size) : 0);
             }, 0);
-            if (requiredBytes > 0 && available > 0 && requiredBytes > available) {
-                // Identify other model bundle directories that can be freed
-                const currentModelPrefix = normalizeStoragePrefixFromModelId(state.download.modelId);
-                const modelsDir = await getOpfsModelsDirectoryHandle();
+            if (requiredBytes > 0 && requiredBytes > available) {
+                const keepPrefix = normalizeStoragePrefixFromModelId(state.download.modelId);
+                const neededBytes = Math.max(0, requiredBytes - available);
 
-                // Enumerate top-level entries in /models/
-                const otherDirs = [];
-                let otherTotalBytes = 0;
-                for await (const [name, handle] of modelsDir.entries()) {
-                    if (name === currentModelPrefix) continue; // keep current model
-                    if (handle.kind === "directory") {
-                        const files = await listOpfsFilesRecursive(handle, { baseSegments: [] });
-                        const dirSize = files.reduce((s, f) => s + (Number(f.size) || 0), 0);
-                        otherDirs.push({ name, size: dirSize });
-                        otherTotalBytes += dirSize;
+                let reclaimed = false;
+                if (typeof attemptAutoFreeOpfsSpace === "function") {
+                    reclaimed = await attemptAutoFreeOpfsSpace(neededBytes, { keepPrefix });
+                }
+
+                const estimateAfter = await getStorageEstimate();
+                const availableAfter = Math.max(0, estimateAfter.quota - estimateAfter.usage);
+                if (requiredBytes > availableAfter) {
+                    const isAutomatedRun = navigator?.webdriver === true || window?.__isAutomated === true;
+                    if (isAutomatedRun) {
+                        showToast(
+                            `자동 모드: 저장소 여유가 부족해도 다운로드를 시작합니다. 필요: ${formatBytes(requiredBytes)}, 여유: ${formatBytes(availableAfter)}.`,
+                            "warning",
+                            4200,
+                        );
                     } else {
-                        // top-level file
-                        try {
-                            const file = await handle.getFile();
-                            otherDirs.push({ name, size: file.size, isFile: true });
-                            otherTotalBytes += file.size;
-                        } catch {}
+                        showToast(
+                            `저장소 용량이 부족합니다. 필요: ${formatBytes(requiredBytes)}, 여유: ${formatBytes(availableAfter)}.`,
+                            "error",
+                            5000,
+                        );
+                        return;
                     }
                 }
 
-                if (otherTotalBytes > 0) {
-                    const needed = formatBytes(requiredBytes);
-                    const free = formatBytes(available);
-                    const reclaimable = formatBytes(otherTotalBytes);
-                    const dirList = otherDirs.map((d) => `  • ${d.name} (${formatBytes(d.size)})`).join("\n");
-
-                    // If running under automation (Playwright) or user previously accepted auto-reclaim,
-                    // perform automatic deletion without prompting to keep automated test flows robust.
-                    const shouldAutoDelete = (navigator?.webdriver === true) || state.download.autoReclaimAttempted === true;
-
-                    if (!shouldAutoDelete) {
-                        const ok = confirm(
-                            `저장소 용량이 부족합니다.\n필요: ${needed} / 여유: ${free}\n\n` +
-                            `다음 모델 파일을 삭제하면 ${reclaimable}을 확보할 수 있습니다:\n${dirList}\n\n삭제하고 계속할까요?`,
-                        );
-                        if (!ok) {
-                            showToast("다운로드가 취소되었습니다. OPFS 탐색기에서 불필요한 모델을 삭제해 주세요.", "warning", 4000);
-                            return;
-                        }
-                    }
-
-                    // Proceed to delete reclaimable entries
-                    for (const d of otherDirs) {
-                        try {
-                            await modelsDir.removeEntry(d.name, { recursive: true });
-                        } catch { /* ignore individual delete failures */ }
-                    }
-                    // Clean manifest entries for deleted models
-                    const manifest = getOpfsManifest();
-                    for (const key of Object.keys(manifest)) {
-                        if (!key.startsWith(currentModelPrefix)) {
-                            removeOpfsManifestEntry(key);
-                        }
-                    }
-                    await refreshModelSessionList({ silent: true });
-                    await refreshStorageEstimate();
-                    showToast(`이전 모델 파일을 삭제하여 ${reclaimable}을 확보했습니다.`, "success", 3000);
-                } else {
-                    const needed = formatBytes(requiredBytes);
-                    const free = formatBytes(available);
-                    showToast(
-                        `저장소 용량이 부족합니다. 필요: ${needed}, 여유: ${free}. 디스크 공간을 확보해 주세요.`,
-                        "error",
-                        5000,
-                    );
-                    return;
+                if (reclaimed) {
+                    showToast("저장 공간을 자동 정리했습니다. 다운로드를 다시 시작합니다.", "info", 2600);
                 }
             }
         }
@@ -9396,7 +9495,6 @@ function syncSessionRuntimeState() {
         const activeEntry = sessionStore.sessions.get(activeByStore) ?? null;
         sessionStore.activeSession = activeEntry?.session ?? null;
         setSessionRowState(activeByStore, "loaded", "");
-        renderChatInferenceToggle();
         return activeByStore;
     }
 
@@ -9406,14 +9504,12 @@ function syncSessionRuntimeState() {
         const activeEntry = sessionStore.sessions.get(activeByState) ?? null;
         sessionStore.activeSession = activeEntry?.session ?? null;
         setSessionRowState(activeByState, "loaded", "");
-        renderChatInferenceToggle();
         return activeByState;
     }
 
     state.activeSessionFile = "";
     sessionStore.activeFileName = "";
     sessionStore.activeSession = null;
-    renderChatInferenceToggle();
     return "";
 }
 
@@ -9465,6 +9561,8 @@ async function onClickSessionLoad(fileName, options = {}) {
             await unloadCachedSession(activeBefore, { silent: true, skipRender: true });
             setSessionRowState(activeBefore, "idle", "");
         }
+
+
 
         setSessionRowState(normalizedFileName, "loading", "");
         renderModelSessionList();
@@ -9894,6 +9992,7 @@ async function unloadCachedSession(fileName, options = {}) {
     if (state.activeSessionFile === normalizedFileName) {
         state.activeSessionFile = "";
     }
+
     syncSessionRuntimeState();
 
     setSessionRowState(normalizedFileName, "idle", "");
@@ -10405,7 +10504,17 @@ class TransformersWorkerManager {
         if (!this.worker) {
             this.worker = new Worker("./script/worker.js", { type: "module" });
             this.worker.onmessage = (e) => {
-                const { type, id, key, error, output, token, tokenIncrement, totalTokens } = e.data;
+                const {
+                    type,
+                    id,
+                    key,
+                    error,
+                    output,
+                    token,
+                    tokenIncrement,
+                    totalTokens,
+                    heapDeltaMB,
+                } = e.data;
                 if (type === 'error') {
                     const reject = this.pending.get(id)?.reject;
                     if (reject) {
@@ -10444,6 +10553,10 @@ class TransformersWorkerManager {
                     const resolve = this.pending.get(id)?.resolve;
                     if (resolve) resolve();
                     this.pending.delete(id);
+                } else if (type === 'token_error') {
+                    console.warn("[Worker] Token decode error:", e.data.error);
+                } else if (type === 'abort_ack') {
+                    // Acknowledged — no action needed
                 }
             };
             this.worker.onerror = (e) => {
@@ -10489,7 +10602,18 @@ class TransformersWorkerManager {
 
     abort() {
         if (this.worker) {
-            this.worker.postMessage({ type: 'abort', id: Date.now() });
+            // Reject all pending promises so the UI knows it was aborted
+            for (const [id, { reject }] of this.pending) {
+                const err = new Error('Generation aborted by user');
+                err.code = 'generation_aborted';
+                reject(err);
+            }
+            this.pending.clear();
+            this.listeners.clear();
+
+            // Terminate the worker immediately to unblock the main thread
+            this.worker.terminate();
+            this.worker = null;
         }
     }
 }
@@ -11346,7 +11470,6 @@ function renderModelStatusHeader() {
     }
 
     els.modelStatusText.textContent = text;
-    renderChatInferenceToggle();
 }
 
 function renderModelCardWindow(metadata, fallbackModelId = "") {
@@ -11467,46 +11590,8 @@ function renderTokenSpeedStats() {
     });
     if (els.tokenSpeedStats) {
         els.tokenSpeedStats.textContent = text;
-
-        // 메모리 사용량 표시 업데이트 (CPU + GPU)
-        if (els.memoryUsageText) {
-            updateMemoryDisplay();
-        }
     }
 }
-
-/**
- * 메모리 및 VRAM 사용량을 표시합니다.
- */
-async function updateMemoryDisplay() {
-    if (!els.memoryUsageText) return;
-
-    try {
-        const stats = await getMemoryStats();
-
-        // CPU 메모리 + VRAM 합쳐서 표시
-        let displayText = stats.cpu;
-
-        // VRAM 정보 추가
-        if (stats.gpu && stats.gpu !== "VRAM: - MB") {
-            displayText += ` | ${stats.gpu}`;
-        }
-
-        els.memoryUsageText.textContent = displayText;
-    } catch (error) {
-        // 에러가 발생해도 최소한 CPU 메모리는 표시
-        if (performance && performance.memory) {
-            const usedMB = performance.memory.usedJSHeapSize / (1024 * 1024);
-            const totalMB = performance.memory.totalJSHeapSize / (1024 * 1024);
-            els.memoryUsageText.textContent = `JS Heap: ${usedMB.toFixed(1)} / ${totalMB.toFixed(1)} MB`;
-        }
-    }
-}
-
-// 메모리 사용량 주기적 업데이트 (1초마다)
-setInterval(() => {
-    updateMemoryDisplay();
-}, 1000);
 
 function updateTokenSpeedStats(tokens, elapsed) {
     const tps = Number(tokens) / Math.max(0.001, Number(elapsed));
@@ -11892,14 +11977,15 @@ async function sendMessage(userText) {
 function abortGeneration() {
     if (!state.isSendingChat) return;
     
-    console.info("[CHAT] Abort requested");
+    console.info("[CHAT] Abort requested — terminating worker");
     
     transformersWorker.abort();
+
+    // Worker가 terminate되었으므로 파이프라인 캐시 무효화
+    // → 다음 요청 시 getWorker()로 새 Worker 생성 + init() 재호출
+    transformersStore.pipelines.clear();
     
-    state.isSendingChat = false;
-    setChatSendingState(false);
-    
-    showToast("생성을 중단합니다.", "info", 2000);
+    showToast(t("chat.generation_aborted") ?? "생성이 중단되었습니다.", "info", 2000);
 }
 
 function getRecentNetworkEvents(limit = 8) {
@@ -11979,33 +12065,22 @@ function formatChatFailureMessage(error, diagnostics = {}, errorId = "") {
 function setChatSendingState(isSending) {
     if (!els.chatSendBtn || !els.chatInput) return;
 
-    els.chatSendBtn.disabled = false; // Always enabled (to allow stop)
+    els.chatSendBtn.disabled = isSending;
     els.chatInput.disabled = isSending;
-    
-    // Change button text and icon based on state
+
     if (isSending) {
-        // Show "Stop" button
-        els.chatSendBtn.innerHTML = `
-            <i data-lucide="square" class="w-4 h-4"></i> 
-            ${escapeHtml(t("chat.stop") ?? "중지")}
-        `;
-        els.chatSendBtn.onclick = abortGeneration;
-        els.chatSendBtn.classList.add("chat-send-btn--sending");
+        els.chatSendBtn.classList.add("hidden");
+        if (els.chatStopBtn) {
+            els.chatStopBtn.classList.remove("hidden");
+            els.chatStopBtn.onclick = abortGeneration;
+        }
     } else {
-        // Show "Send" button
-        els.chatSendBtn.innerHTML = `
-            <i data-lucide="send" class="w-4 h-4"></i> 
-            ${escapeHtml(t("chat.send") ?? "전송")}
-        `;
-        els.chatSendBtn.onclick = () => {
-            const text = els.chatInput.value.trim();
-            if (text) sendMessage(text);
-        };
-        els.chatSendBtn.classList.remove("chat-send-btn--sending");
+        els.chatSendBtn.classList.remove("hidden");
+        if (els.chatStopBtn) {
+            els.chatStopBtn.classList.add("hidden");
+            els.chatStopBtn.onclick = null;
+        }
     }
-    
-    lucide.createIcons();
-    renderChatInferenceToggle();
 }
 
 async function requestChatCompletion(userText, options = {}) {
@@ -12056,6 +12131,9 @@ async function requestLocalSessionCompletion(userText, options = {}) {
             outputsPreview: [{ attempt: 1, normalized: String(cleaned ?? "").slice(0, 160) }],
         });
     } catch (error) {
+        if (error?.code === "generation_aborted" || error?.message?.includes("aborted")) {
+            throw error;
+        }
         const code = String(error?.code ?? "");
         const currentDevice = String(session?.device ?? "").trim().toLowerCase();
         const recoveryDevices = resolveInferenceBackendChain(currentDevice ?? "webgpu", getRuntimeCapabilities())
@@ -12592,6 +12670,9 @@ async function runInference(session, userText, options = {}) {
                 normalized_preview: String(normalized ?? "").slice(0, 120),
             });
         } catch (error) {
+            if (error?.code === "generation_aborted" || error?.message?.includes("aborted")) {
+                throw error;
+            }
             if (index >= prompts.length - 1) {
                 throw buildLocalRunFailure(error, session, {
                     step: index + 1,
@@ -12833,98 +12914,62 @@ function addMessage(role, text, options = {}) {
 }
 
 function getToken() {
-    try {
-        return (localStorage.getItem(STORAGE_KEYS.token) ?? "").trim();
-    } catch {
-        return "";
-    }
+    return String(readFromStorage(STORAGE_KEYS.token, "").value ?? "").trim();
 }
 
 function setToken(value) {
-    try {
-        if (!value) {
-            localStorage.removeItem(STORAGE_KEYS.token);
-            return;
-        }
-        localStorage.setItem(STORAGE_KEYS.token, value);
-    } catch {
-        // no-op
-    }
+    writeToStorage(STORAGE_KEYS.token, value || null);
 }
 
 function getSystemPrompt() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEYS.systemPrompt) ?? "";
-        const limited = clampSystemPromptLines(raw);
-        if (limited.trimmed) {
-            localStorage.setItem(STORAGE_KEYS.systemPrompt, limited.value);
-        }
-        return limited.value;
-    } catch {
-        return "";
+    const raw = readFromStorage(STORAGE_KEYS.systemPrompt, "").value ?? "";
+    const limited = clampSystemPromptLines(raw);
+    if (limited.trimmed) {
+        writeToStorage(STORAGE_KEYS.systemPrompt, limited.value);
     }
+    return limited.value;
 }
 
 function setSystemPrompt(value) {
     const limited = clampSystemPromptLines(value);
-    try {
-        localStorage.setItem(STORAGE_KEYS.systemPrompt, limited.value);
-    } catch {
-        // no-op
-    }
+    writeToStorage(STORAGE_KEYS.systemPrompt, limited.value);
     return limited;
 }
 
 function getMaxOutputTokens() {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEYS.maxOutputTokens);
-        if (stored === null || stored === "") {
-            localStorage.setItem(STORAGE_KEYS.maxOutputTokens, String(LLM_DEFAULT_SETTINGS.maxOutputTokens));
-            return LLM_DEFAULT_SETTINGS.maxOutputTokens;
-        }
-        const raw = Number(stored);
-        if (!Number.isInteger(raw) || raw <= 0) {
-            localStorage.setItem(STORAGE_KEYS.maxOutputTokens, String(LLM_DEFAULT_SETTINGS.maxOutputTokens));
-            return LLM_DEFAULT_SETTINGS.maxOutputTokens;
-        }
-        const next = Math.max(1, Math.min(32768, raw));
-        if (next !== raw) {
-            localStorage.setItem(STORAGE_KEYS.maxOutputTokens, String(next));
-        }
-        return next;
-    } catch {
+    const stored = readFromStorage(STORAGE_KEYS.maxOutputTokens, "").value;
+    if (stored === null || stored === "") {
+        writeToStorage(STORAGE_KEYS.maxOutputTokens, LLM_DEFAULT_SETTINGS.maxOutputTokens);
         return LLM_DEFAULT_SETTINGS.maxOutputTokens;
     }
+    const raw = Number(stored);
+    if (!Number.isInteger(raw) || raw <= 0) {
+        writeToStorage(STORAGE_KEYS.maxOutputTokens, LLM_DEFAULT_SETTINGS.maxOutputTokens);
+        return LLM_DEFAULT_SETTINGS.maxOutputTokens;
+    }
+    const next = Math.max(1, Math.min(32768, raw));
+    if (next !== raw) {
+        writeToStorage(STORAGE_KEYS.maxOutputTokens, next);
+    }
+    return next;
 }
 
 function setMaxOutputTokens(value) {
     const numeric = Math.max(1, Math.min(32768, Math.round(Number(value) || LLM_DEFAULT_SETTINGS.maxOutputTokens)));
-    try {
-        localStorage.setItem(STORAGE_KEYS.maxOutputTokens, String(numeric));
-    } catch {
-        // no-op
-    }
+    writeToStorage(STORAGE_KEYS.maxOutputTokens, numeric);
 }
 
 function getContextWindowSize() {
-    try {
-        const value = String(localStorage.getItem(STORAGE_KEYS.contextWindow) ?? "8k");
-        if (!["4k", "8k", "16k", "32k", "128k"].includes(value)) {
-            return "8k";
-        }
-        return value;
-    } catch {
+    const value = String(readFromStorage(STORAGE_KEYS.contextWindow, "8k").value ?? "8k");
+    if (!["4k", "8k", "16k", "32k", "128k"].includes(value)) {
         return "8k";
     }
+    return value;
 }
 
 function setContextWindowSize(value) {
     const next = ["4k", "8k", "16k", "32k", "128k"].includes(String(value ?? "")) ? String(value) : "8k";
-    try {
-        localStorage.setItem(STORAGE_KEYS.contextWindow, next);
-    } catch {
-        // no-op
-    }
+    writeToStorage(STORAGE_KEYS.contextWindow, next);
 }
 
 function clampGenerationTemperature(value) {
@@ -12960,27 +13005,28 @@ function clampGenerationMaxLength(value) {
 }
 
 function hydrateLocalGenerationSettings() {
-    const fromStorage = (() => {
-        try {
-            const rawTemperature = localStorage.getItem(STORAGE_KEYS.generationTemperature);
-            const rawTopP = localStorage.getItem(STORAGE_KEYS.generationTopP);
-            const rawPresencePenalty = localStorage.getItem(STORAGE_KEYS.generationPresencePenalty);
-            const rawMaxLength = localStorage.getItem(STORAGE_KEYS.generationMaxLength);
-            return {
-                temperature: clampGenerationTemperature(rawTemperature),
-                topP: clampGenerationTopP(rawTopP),
-                presencePenalty: clampGenerationPresencePenalty(rawPresencePenalty),
-                maxLength: clampGenerationMaxLength(rawMaxLength),
-            };
-        } catch {
-            return {
-                temperature: LOCAL_GENERATION_DEFAULT_SETTINGS.temperature,
-                topP: LOCAL_GENERATION_DEFAULT_SETTINGS.topP,
-                presencePenalty: LOCAL_GENERATION_DEFAULT_SETTINGS.presencePenalty,
-                maxLength: LOCAL_GENERATION_DEFAULT_SETTINGS.maxLength,
-            };
-        }
-    })();
+    const rawTemperature = readFromStorage(
+        STORAGE_KEYS.generationTemperature,
+        LOCAL_GENERATION_DEFAULT_SETTINGS.temperature,
+    ).value;
+    const rawTopP = readFromStorage(
+        STORAGE_KEYS.generationTopP,
+        LOCAL_GENERATION_DEFAULT_SETTINGS.topP,
+    ).value;
+    const rawPresencePenalty = readFromStorage(
+        STORAGE_KEYS.generationPresencePenalty,
+        LOCAL_GENERATION_DEFAULT_SETTINGS.presencePenalty,
+    ).value;
+    const rawMaxLength = readFromStorage(
+        STORAGE_KEYS.generationMaxLength,
+        LOCAL_GENERATION_DEFAULT_SETTINGS.maxLength,
+    ).value;
+    const fromStorage = {
+        temperature: clampGenerationTemperature(rawTemperature),
+        topP: clampGenerationTopP(rawTopP),
+        presencePenalty: clampGenerationPresencePenalty(rawPresencePenalty),
+        maxLength: clampGenerationMaxLength(rawMaxLength),
+    };
 
     state.settings.generationTemperature = fromStorage.temperature;
     state.settings.generationTopP = fromStorage.topP;
@@ -12997,14 +13043,10 @@ function hydrateLocalGenerationSettings() {
 
 // Helper to persist all 4 generation settings to localStorage
 function persistGenerationSettings(temperature, topP, presencePenalty, maxLength) {
-    try {
-        localStorage.setItem(STORAGE_KEYS.generationTemperature, String(temperature));
-        localStorage.setItem(STORAGE_KEYS.generationTopP, String(topP));
-        localStorage.setItem(STORAGE_KEYS.generationPresencePenalty, String(presencePenalty));
-        localStorage.setItem(STORAGE_KEYS.generationMaxLength, String(maxLength));
-    } catch {
-        // no-op
-    }
+    writeToStorage(STORAGE_KEYS.generationTemperature, temperature);
+    writeToStorage(STORAGE_KEYS.generationTopP, topP);
+    writeToStorage(STORAGE_KEYS.generationPresencePenalty, presencePenalty);
+    writeToStorage(STORAGE_KEYS.generationMaxLength, maxLength);
 }
 
 function getLocalGenerationSettings() {
@@ -13051,135 +13093,50 @@ function setLocalGenerationSettings(next = {}) {
 }
 
 function getOpfsManifest() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEYS.opfsModelManifest);
-        if (!raw) return {};
-
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object") {
-            return {};
-        }
-
-        const next = {};
-        for (const [fileName, value] of Object.entries(parsed)) {
-            const normalizedFileName = normalizeOnnxFileName(fileName);
-            if (!normalizedFileName || !value || typeof value !== "object") continue;
-            next[normalizedFileName] = {
-                fileName: normalizedFileName,
-                modelId: isValidModelId(value.modelId) ? normalizeModelId(value.modelId) : "",
-                fileUrl: String(value.fileUrl ?? ""),
-                downloadedAt: String(value.downloadedAt ?? ""),
-                sizeBytes: Number.isFinite(Number(value.sizeBytes)) ? Number(value.sizeBytes) : null,
-                task: typeof value.task === "string" ? value.task : "-",
-                downloads: Number.isFinite(Number(value.downloads)) ? Number(value.downloads) : null,
-                revision: typeof value.revision === "string" && value.revision.trim() ? value.revision.trim() : "main",
-                downloadStatus: typeof value.downloadStatus === "string" && value.downloadStatus.trim()
-                    ? value.downloadStatus.trim()
-                    : "downloaded",
-            };
-        }
-
-        return next;
-    } catch {
+    const parsed = readFromStorage(STORAGE_KEYS.opfsModelManifest, {}, { deserialize: true }).value;
+    if (!parsed || typeof parsed !== "object") {
         return {};
     }
+
+    const next = {};
+    for (const [fileName, value] of Object.entries(parsed)) {
+        const normalizedFileName = normalizeOnnxFileName(fileName);
+        if (!normalizedFileName || !value || typeof value !== "object") continue;
+        next[normalizedFileName] = {
+            fileName: normalizedFileName,
+            modelId: isValidModelId(value.modelId) ? normalizeModelId(value.modelId) : "",
+            fileUrl: String(value.fileUrl ?? ""),
+            downloadedAt: String(value.downloadedAt ?? ""),
+            sizeBytes: Number.isFinite(Number(value.sizeBytes)) ? Number(value.sizeBytes) : null,
+            task: typeof value.task === "string" ? value.task : "-",
+            downloads: Number.isFinite(Number(value.downloads)) ? Number(value.downloads) : null,
+            revision: typeof value.revision === "string" && value.revision.trim() ? value.revision.trim() : "main",
+            downloadStatus: typeof value.downloadStatus === "string" && value.downloadStatus.trim()
+                ? value.downloadStatus.trim()
+                : "downloaded",
+        };
+    }
+
+    return next;
 }
 
 function setOpfsManifest(next) {
-    try {
-        localStorage.setItem(STORAGE_KEYS.opfsModelManifest, JSON.stringify(next || {}));
-    } catch {
-        // no-op
-    }
-}
-
-function upsertOpfsManifestEntry(entry) {
-    const normalizedFileName = normalizeOnnxFileName(entry?.fileName ?? "");
-    if (!normalizedFileName) return;
-
-    const current = getOpfsManifest();
-    current[normalizedFileName] = {
-        fileName: normalizedFileName,
-        modelId: isValidModelId(entry?.modelId) ? normalizeModelId(entry.modelId) : "",
-        fileUrl: String(entry?.fileUrl ?? ""),
-        downloadedAt: String(entry?.downloadedAt || new Date().toISOString()),
-        sizeBytes: Number.isFinite(Number(entry?.sizeBytes)) ? Number(entry.sizeBytes) : null,
-        task: typeof entry?.task === "string" ? entry.task : "-",
-        downloads: Number.isFinite(Number(entry?.downloads)) ? Number(entry.downloads) : null,
-        revision: typeof entry?.revision === "string" && entry.revision.trim() ? entry.revision.trim() : "main",
-        downloadStatus: typeof entry?.downloadStatus === "string" && entry.downloadStatus.trim()
-            ? entry.downloadStatus.trim()
-            : "downloaded",
-    };
-    setOpfsManifest(current);
-}
-
-function removeOpfsManifestEntry(fileName) {
-    const normalizedFileName = normalizeOnnxFileName(fileName);
-    if (!normalizedFileName) return;
-
-    const current = getOpfsManifest();
-    if (!Object.prototype.hasOwnProperty.call(current, normalizedFileName)) {
-        return;
-    }
-
-    delete current[normalizedFileName];
-    setOpfsManifest(current);
-    if (getLastLoadedSessionFile() === normalizedFileName) {
-        clearLastLoadedSessionFile();
-    }
-}
-
-function removeOpfsManifestEntriesByPrefix(prefixPath) {
-    const normalizedPrefix = normalizeOpfsModelRelativePath(prefixPath);
-    if (!normalizedPrefix) return [];
-
-    const current = getOpfsManifest();
-    const removedKeys = [];
-    for (const key of Object.keys(current)) {
-        if (key === normalizedPrefix || key.startsWith(`${normalizedPrefix}/`)) {
-            delete current[key];
-            removedKeys.push(key);
-        }
-    }
-
-    if (removedKeys.length === 0) {
-        return [];
-    }
-
-    setOpfsManifest(current);
-    const lastLoaded = getLastLoadedSessionFile();
-    if (removedKeys.includes(lastLoaded)) {
-        clearLastLoadedSessionFile();
-    }
-    return removedKeys;
+    writeToStorage(STORAGE_KEYS.opfsModelManifest, next || {}, { serialize: true });
 }
 
 function getLastLoadedSessionFile() {
-    try {
-        const value = normalizeOnnxFileName(localStorage.getItem(STORAGE_KEYS.lastLoadedSessionFile) ?? "");
-        return value ?? "";
-    } catch {
-        return "";
-    }
+    const value = normalizeOnnxFileName(readFromStorage(STORAGE_KEYS.lastLoadedSessionFile, "").value ?? "");
+    return value ?? "";
 }
 
 function setLastLoadedSessionFile(fileName) {
     const normalizedFileName = normalizeOnnxFileName(fileName);
     if (!normalizedFileName) return;
-    try {
-        localStorage.setItem(STORAGE_KEYS.lastLoadedSessionFile, normalizedFileName);
-    } catch {
-        // no-op
-    }
+    writeToStorage(STORAGE_KEYS.lastLoadedSessionFile, normalizedFileName);
 }
 
 function clearLastLoadedSessionFile() {
-    try {
-        localStorage.removeItem(STORAGE_KEYS.lastLoadedSessionFile);
-    } catch {
-        // no-op
-    }
+    writeToStorage(STORAGE_KEYS.lastLoadedSessionFile, null);
 }
 
 /* autoLoadLastSessionOnStartup removed — auto-load last session feature deleted */
@@ -13248,8 +13205,64 @@ function showToast(message, kind = "info", duration = 3000, options = {}) {
     }, duration);
 }
 
+function upsertOpfsManifestEntry(entry) {
+    const normalizedFileName = normalizeOnnxFileName(entry?.fileName ?? "");
+    if (!normalizedFileName) return;
 
+    const current = getOpfsManifest();
+    current[normalizedFileName] = {
+        fileName: normalizedFileName,
+        modelId: isValidModelId(entry?.modelId) ? normalizeModelId(entry.modelId) : "",
+        fileUrl: String(entry?.fileUrl ?? ""),
+        downloadedAt: String(entry?.downloadedAt || new Date().toISOString()),
+        sizeBytes: Number.isFinite(Number(entry?.sizeBytes)) ? Number(entry.sizeBytes) : null,
+        task: typeof entry?.task === "string" ? entry.task : "-",
+        downloads: Number.isFinite(Number(entry?.downloads)) ? Number(entry.downloads) : null,
+        revision: typeof entry?.revision === "string" && entry.revision.trim() ? entry.revision.trim() : "main",
+        downloadStatus: typeof entry?.downloadStatus === "string" && entry.downloadStatus.trim()
+            ? entry.downloadStatus.trim()
+            : "downloaded",
+    };
+    setOpfsManifest(current);
+}
 
+function removeOpfsManifestEntry(fileName) {
+    const normalizedFileName = normalizeOnnxFileName(fileName);
+    if (!normalizedFileName) return;
 
+    const current = getOpfsManifest();
+    if (!Object.prototype.hasOwnProperty.call(current, normalizedFileName)) {
+        return;
+    }
 
+    delete current[normalizedFileName];
+    setOpfsManifest(current);
+    if (getLastLoadedSessionFile() === normalizedFileName) {
+        clearLastLoadedSessionFile();
+    }
+}
 
+function removeOpfsManifestEntriesByPrefix(prefixPath) {
+    const normalizedPrefix = normalizeOpfsModelRelativePath(prefixPath);
+    if (!normalizedPrefix) return [];
+
+    const current = getOpfsManifest();
+    const removedKeys = [];
+    for (const key of Object.keys(current)) {
+        if (key === normalizedPrefix || key.startsWith(`${normalizedPrefix}/`)) {
+            delete current[key];
+            removedKeys.push(key);
+        }
+    }
+
+    if (removedKeys.length === 0) {
+        return [];
+    }
+
+    setOpfsManifest(current);
+    const lastLoaded = getLastLoadedSessionFile();
+    if (removedKeys.includes(lastLoaded)) {
+        clearLastLoadedSessionFile();
+    }
+    return removedKeys;
+}

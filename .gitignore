@@ -12,5 +12,6 @@
 !/LICENSE
 !/script
 !/script/*.js
+!/sw.js
 !/docs/
 !/docs/*.md

@@ -7,6 +7,7 @@ import {
     extractTokenIdsFromBeamPayload,
     computeStreamTokenDelta,
     OPFS_MODELS_DIR,
+    TRANSFORMERS_JS_IMPORT_CANDIDATES,
 } from "./shared-utils.js";
 
 // Monkey-patch navigator.gpu.requestAdapter to suppress 'powerPreference' warning on Windows
@@ -179,10 +180,28 @@ self.fetch = async (input, init) => {
                 if (startText && endText) {
                     start = parseInt(startText, 10);
                     end = parseInt(endText, 10);
+                    if (Number.isNaN(start) || Number.isNaN(end)) {
+                        if (method === "HEAD") {
+                            return new Response(null, { status: 200, headers });
+                        }
+                        return new Response(file, { status: 200, headers });
+                    }
                 } else if (startText) {
                     start = parseInt(startText, 10);
+                    if (Number.isNaN(start)) {
+                        if (method === "HEAD") {
+                            return new Response(null, { status: 200, headers });
+                        }
+                        return new Response(file, { status: 200, headers });
+                    }
                 } else if (endText) {
                     const suffix = parseInt(endText, 10);
+                    if (Number.isNaN(suffix)) {
+                        if (method === "HEAD") {
+                            return new Response(null, { status: 200, headers });
+                        }
+                        return new Response(file, { status: 200, headers });
+                    }
                     start = Math.max(0, file.size - suffix);
                 }
 
@@ -208,16 +227,6 @@ self.fetch = async (input, init) => {
     // OPFS miss — fall through to real network fetch
     return originalWorkerFetch(input, init);
 };
-
-const TRANSFORMERS_JS_VERSION = "4.0.0-next.1";
-
-/**
- * Transformers.js CDN 미러 목록
- */
-const TRANSFORMERS_JS_IMPORT_CANDIDATES = [
-    `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}/+esm`,
-    `https://unpkg.com/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}?module`,
-];
 
 /**
  * @type {Object|null}
@@ -322,6 +331,12 @@ self.onmessage = async (e) => {
             await handleAbort(id, data);
         } else if (type === 'dispose') {
             await handleDispose(id, data);
+        } else {
+            self.postMessage({
+                type: 'error',
+                id,
+                error: { message: `[Worker] Unknown message type: ${type}`, stack: "" }
+            });
         }
     } catch (error) {
         self.postMessage({
@@ -406,7 +421,8 @@ async function handleGenerate(id, data) {
     let aborted = false;
 
     // Set up abort controller
-    currentGenerationAbortController = { aborted: false };
+    const localAbortController = { aborted: false };
+    currentGenerationAbortController = localAbortController;
 
     /**
      * 빔 서치 콜백 함수 — 토큰이 생성될 때마다 호출됩니다.
@@ -414,13 +430,14 @@ async function handleGenerate(id, data) {
      */
     const callback_function = (beamPayload) => {
         // Check for abort
-        if (currentGenerationAbortController?.aborted) {
+        if (localAbortController.aborted) {
             aborted = true;
             throw new Error('Generation aborted by user');
         }
 
+        let tokenIds = [];
         try {
-            const tokenIds = extractTokenIdsFromBeamPayload(beamPayload);
+            tokenIds = extractTokenIdsFromBeamPayload(beamPayload);
             if (!Array.isArray(tokenIds) || tokenIds.length === 0) return;
 
             const currentTokenCount = tokenIds.length;
