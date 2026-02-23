@@ -1,5 +1,5 @@
 // App Version - managed centrally in main.js
-const APP_VERSION = "0.0.4";
+const APP_VERSION = "0.0.6"; //Pre-Alpha Test
 
 import {
     calculateExponentialBackoffDelay,
@@ -1445,6 +1445,7 @@ function cacheElements() {
         profileIdentityChip: document.getElementById("profile-identity-chip"),
         profileChipAvatar: document.getElementById("profile-chip-avatar"),
         profileChipName: document.getElementById("profile-chip-name"),
+        profileChipVersion: document.getElementById("profile-chip-version"),
 
         opfsUsageText: document.getElementById("opfs-usage-text"),
         opfsPathText: document.getElementById("opfs-path-text"),
@@ -2884,6 +2885,9 @@ function renderProfileIdentityChip() {
     }
     if (els.profileAvatarPreview) {
         els.profileAvatarPreview.src = avatar;
+    }
+    if (els.profileChipVersion) {
+        els.profileChipVersion.textContent = "v" + APP_VERSION;
     }
 }
 
@@ -11846,26 +11850,19 @@ function createAssistantStreamRenderer(options = {}) {
         const resolvedFinalText = String(finalText ?? "");
 
         if (resolvedFinalText) {
-            fullRawText = resolvedFinalText;
-            buffered = "";
+            const alreadyRendered = fullRawText + buffered;
+            if (resolvedFinalText.length > alreadyRendered.length) {
+                buffered += resolvedFinalText.slice(alreadyRendered.length);
+            } else if (resolvedFinalText !== alreadyRendered) {
+                fullRawText = "";
+                buffered = resolvedFinalText;
+            }
             if (!skipMetrics) {
                 totalTokens = Math.max(totalTokens, Math.max(1, countApproxTokens(resolvedFinalText)));
             }
-            flush(true);
-        } else {
-            const checkDrain = () => {
-                if (buffered.length > 0) {
-                    flush(false);
-                    requestAnimationFrame(checkDrain);
-                } else {
-                    finishFinish();
-                }
-            };
-            checkDrain();
-            return message;
         }
 
-        function finishFinish() {
+        const finishFinish = () => {
             cancelScheduledFlush();
             const forceTokenCount = Number(meta.forceTokenCount);
             if (!skipMetrics && Number.isFinite(forceTokenCount) && forceTokenCount > 0) {
@@ -11876,7 +11873,6 @@ function createAssistantStreamRenderer(options = {}) {
             }
 
             if (message.content) {
-                // The actual text is already set in flush(), we just remove the cursor.
                 message.content.classList.remove("llm-stream-cursor");
             }
             if (message.thinkingContainer) {
@@ -11922,9 +11918,17 @@ function createAssistantStreamRenderer(options = {}) {
                 scrollChatToBottom();
             }
             closed = true;
-        }
+        };
 
-        finishFinish();
+        const drainAndFinish = () => {
+            if (buffered.length > 0) {
+                flush(false);
+                requestAnimationFrame(drainAndFinish);
+            } else {
+                finishFinish();
+            }
+        };
+        drainAndFinish();
         return message;
     };
 

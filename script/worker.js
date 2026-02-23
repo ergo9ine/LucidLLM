@@ -4,8 +4,6 @@
  */
 
 import {
-    extractTokenIdsFromBeamPayload,
-    computeStreamTokenDelta,
     OPFS_MODELS_DIR,
     TRANSFORMERS_JS_IMPORT_CANDIDATES,
 } from "./shared-utils.js";
@@ -301,23 +299,19 @@ async function loadTransformersModule() {
                 env.useBrowserCache = false;
                 if (typeof env.useCache !== "undefined") env.useCache = false;
 
-                // ── ONNX Runtime WASM thread fix ──────────────────────────
-                // When Transformers.js / ONNX Runtime is loaded from CDN, the
-                // multi-threaded WASM backend tries to create a Worker from a
-                // cross-origin script URL, which browsers block with a
-                // SecurityError.  Disable multi-threading to avoid this.
-                // Also disable the WASM proxy worker for the same reason.
+                // ── ONNX Runtime WASM paths ───────────────────────────────
+                // Point ONNX Runtime to our self-hosted WASM files so it can
+                // find the .wasm and worker .mjs files at the correct path.
+                // Use absolute path from site root to avoid Worker cwd issues.
                 if (env.backends?.onnx?.wasm) {
-                    env.backends.onnx.wasm.numThreads = 1;
-                    env.backends.onnx.wasm.proxy = false;
+                    env.backends.onnx.wasm.wasmPaths = "/vendor/transformers/";
                 }
             }
 
-            // Also try configuring via ONNX Runtime's own env if available
+            // Also configure via ONNX Runtime's own env if available
             const ort = mod.ort || mod.default?.ort;
             if (ort?.env?.wasm) {
-                ort.env.wasm.numThreads = 1;
-                ort.env.wasm.proxy = false;
+                ort.env.wasm.wasmPaths = "/vendor/transformers/";
             }
             return mod;
         } catch (e) {
@@ -463,79 +457,57 @@ async function handleGenerate(id, data) {
         throw new Error(`Pipeline not found for key: ${key}`);
     }
 
-    let streamedText = "";
-    let lastTokenCount = 0;
     let totalTokenCount = 0;
+    let pendingTokenIncrement = 0;
     let aborted = false;
 
     // Set up abort controller
     const localAbortController = { aborted: false };
     currentGenerationAbortController = localAbortController;
 
-    /**
-     * 빔 서치 콜백 함수 — 토큰이 생성될 때마다 호출됩니다.
-     * @param {Object} beamPayload
-     */
-    const callback_function = (beamPayload) => {
-        // Check for abort
-        if (localAbortController.aborted) {
-            aborted = true;
-            throw new Error('Generation aborted by user');
-        }
+    // ── TextStreamer 기반 토큰 스트리밍 ──────────────────────────────────
+    // Transformers.js v4 에서는 generate() 의 callback_function 옵션이
+    // generation_config 에 존재하지 않아 무시됩니다.
+    // 대신 TextStreamer 를 streamer 옵션으로 전달해야 토큰별 콜백이 호출됩니다.
+    const TextStreamer = transformersModule?.TextStreamer;
+    let streamer = null;
 
-        let tokenIds = [];
-        try {
-            tokenIds = extractTokenIdsFromBeamPayload(beamPayload);
-            if (!Array.isArray(tokenIds) || tokenIds.length === 0) return;
+    if (TextStreamer && pipe.tokenizer) {
+        streamer = new TextStreamer(pipe.tokenizer, {
+            skip_prompt: true,
+            skip_special_tokens: true,
 
-            const currentTokenCount = tokenIds.length;
-            const tokenIncrement = Math.max(0, currentTokenCount - lastTokenCount);
-            lastTokenCount = currentTokenCount;
-            totalTokenCount += tokenIncrement;
-
-            if (pipe.tokenizer && typeof pipe.tokenizer.decode === "function") {
-                const decoded = pipe.tokenizer.decode(tokenIds, { skip_special_tokens: true });
-                const { delta, fullText } = computeStreamTokenDelta(decoded, streamedText);
-                streamedText = fullText;
-
-                if (delta || tokenIncrement > 0) {
-                    self.postMessage({
-                        type: "token",
-                        id,
-                        token: delta,
-                        tokenIncrement,
-                        totalTokens: totalTokenCount,
-                    });
+            // token_callback_function: 토큰 ID 가 생성될 때마다 호출됩니다.
+            // 여기서 abort 체크 및 토큰 카운트를 수행합니다.
+            token_callback_function: (_tokenIds) => {
+                if (localAbortController.aborted) {
+                    aborted = true;
+                    throw new Error('Generation aborted by user');
                 }
-            }
-        } catch (e) {
-            // Check if this is an abort error
-            if (aborted || e.message === 'Generation aborted by user') {
-                // Notify main thread of abort
+                totalTokenCount++;
+                pendingTokenIncrement++;
+            },
+
+            // callback_function: 디코딩된 텍스트 청크가 준비되면 호출됩니다.
+            // TextStreamer 가 내부적으로 토큰을 디코딩하고 불완전한 유니코드
+            // 시퀀스를 버퍼링한 뒤, 출력 가능한 텍스트만 전달합니다.
+            callback_function: (textChunk) => {
+                if (!textChunk) return;
                 self.postMessage({
-                    type: "generation_aborted",
+                    type: "token",
                     id,
-                    reason: "user_cancelled"
+                    token: textChunk,
+                    tokenIncrement: pendingTokenIncrement,
+                    totalTokens: totalTokenCount,
                 });
-                throw e; // Re-throw to stop generation
-            }
-            
-            console.error("[Worker] Token decode error", e);
-            // Notify main thread of decode error
-            self.postMessage({
-                type: "token_error",
-                id,
-                error: {
-                    message: e.message,
-                    tokenCount: tokenIds?.length ?? 0
-                }
-            });
-        }
-    };
+                pendingTokenIncrement = 0;
+            },
+        });
+    }
 
     const generateOptions = {
         ...options,
-        callback_function,
+        ...(streamer ? { streamer } : {}),
     };
 
     try {
@@ -548,6 +520,17 @@ async function handleGenerate(id, data) {
                 output,
             });
         }
+    } catch (e) {
+        // Re-throw abort errors so the outer handler sends them to main thread
+        if (aborted || e.message === 'Generation aborted by user') {
+            self.postMessage({
+                type: "generation_aborted",
+                id,
+                reason: "user_cancelled"
+            });
+            throw e;
+        }
+        throw e;
     } finally {
         currentGenerationAbortController = null;
     }

@@ -13,6 +13,9 @@ export const OPFS_MODELS_DIR = "models";
 
 export const TRANSFORMERS_JS_VERSION = "4.0.0-next.1";
 export const TRANSFORMERS_JS_IMPORT_CANDIDATES = Object.freeze([
+    // Local self-hosted bundle (same-origin → enables multi-threaded WASM)
+    `../vendor/transformers/transformers.bundle.min.mjs`,
+    // CDN fallback
     `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}/+esm`,
     `https://unpkg.com/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}?module`,
 ]);
@@ -360,7 +363,7 @@ export function computeStreamDrainCount(bufferedLength) {
     if (len <= 0) return 0;
     if (len > 500) return 20;
     if (len > 100) return 5;
-    return 1;
+    return Math.min(len, 3);
 }
 
 /**
@@ -558,7 +561,7 @@ export function writeToStorage(key, value, options = {}) {
             localStorage.removeItem(key);
             return { success: true, error: null };
         }
-        
+
         let stringValue;
         if (serialize) {
             const stringifyResult = safeJsonStringify(value);
@@ -569,7 +572,7 @@ export function writeToStorage(key, value, options = {}) {
         } else {
             stringValue = String(value);
         }
-        
+
         if (stringValue === null || stringValue === undefined) {
             localStorage.removeItem(key);
             return { success: true, error: null };

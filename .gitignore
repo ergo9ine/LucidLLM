@@ -10,8 +10,7 @@
 !/favicon.svg
 !/*.md
 !/LICENSE
-!/script
-!/script/*.js
+!/script/
 !/sw.js
 !/docs/
-!/docs/*.md
+!/vendor/

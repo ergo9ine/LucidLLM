@@ -248,7 +248,8 @@
                     <div class="flex flex-col min-w-0">
                         <span id="profile-chip-name"
                             class="text-sm font-medium text-slate-200 truncate light:text-slate-800"></span>
-                        <span class="text-[10px] text-slate-500 truncate" data-i18n="profile.free_plan">Free Plan</span>
+                        <span id="profile-chip-version" class="text-[10px] text-slate-500 truncate"
+                            data-i18n="profile.version_label">v0.0.4</span>
                     </div>
                 </div>
             </div>
@@ -369,8 +370,8 @@
                 <div
                     class="inline-flex items-center gap-2 text-cyan-100 light:text-sky-700 oled:text-[#eee] font-semibold light:text-sky-600">
                     <i data-lucide="panel-top" class="w-4 h-4"></i> <span id="settings-title"
-                        data-i18n="common.settings"></span> </div> <button id="close-settings-btn" type="button"
-                    data-action="close-settings"
+                        data-i18n="common.settings"></span>
+                </div> <button id="close-settings-btn" type="button" data-action="close-settings"
                     class="inline-flex items-center justify-center rounded-lg border border-slate-500/70 hover:bg-slate-700/60 w-9 h-9 text-slate-100 text-lg leading-none light:text-slate-700 light:border-slate-300 light:hover:bg-slate-100 oled:border-[#2a2a2a] oled:hover:bg-[#1f1f1f] oled:text-[#c4c4c4]"
                     data-i18n-aria-label="common.close" data-i18n-title="common.close">&times;</button>
             </div>
@@ -608,7 +609,8 @@
                                         class="inline-flex items-center gap-2 border border-emerald-300/40 hover:bg-emerald-500/15 rounded-lg px-3 py-2 text-xs disabled:opacity-50"
                                         disabled="disabled"> <i data-lucide="play" class="w-4 h-4"></i> <span
                                             id="download-resume-btn-label" data-i18n="model.download.btn_resume"></span>
-                                    </button> </div>
+                                    </button>
+                                </div>
                                 <div class="space-y-2">
                                     <div
                                         class="w-full h-2 rounded-full bg-slate-800/90 overflow-hidden border border-slate-700/70">

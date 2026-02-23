@@ -522,7 +522,7 @@ export const I18N_KEYS = {
     OPFS_USAGE_TEXT: "opfs.usage_text",
     COMMON_DIRECTORY: "common.directory",
     COMMON_FILE: "common.file",
-    PROFILE_FREE_PLAN: "profile.free_plan",
+    PROFILE_VERSION_LABEL: "profile.version_label",
     CHAT_DISCLAIMER: "chat.disclaimer",
     CHAT_TOKEN_SPEED_WAITING: "chat.token_speed_waiting",
 
@@ -583,7 +583,7 @@ function getCommonEntries() {
         [I18N_KEYS.HTML_TITLE]: "LucidLLM Chat",
         [I18N_KEYS.LLM_TOP_K]: "top_k",
         [I18N_KEYS.LLM_REPEAT_PENALTY]: "repeat_penalty",
-        [I18N_KEYS.PROFILE_FREE_PLAN]: "Free Plan",
+        [I18N_KEYS.PROFILE_VERSION_LABEL]: "v{appVersion}",
         [I18N_KEYS.CHAT_DISCLAIMER]: "LucidLLM can make mistakes. Check important info.",
         [I18N_KEYS.CHAT_TOKEN_SPEED_WAITING]: "- tok/s",
         [I18N_KEYS.UPDATE_BADGE_LABEL]: "Update",
@@ -1060,7 +1060,7 @@ const KO_SPECIFIC = {
     [I18N_KEYS.OPFS_USAGE_TEXT]: "사용량 {used} / {total} ({percent}%)",
     [I18N_KEYS.COMMON_DIRECTORY]: "디렉터리",
     [I18N_KEYS.COMMON_FILE]: "파일",
-    [I18N_KEYS.PROFILE_FREE_PLAN]: "무료 플랜",
+    [I18N_KEYS.PROFILE_VERSION_LABEL]: "v{appVersion}",
     [I18N_KEYS.CHAT_DISCLAIMER]: "LucidLLM은 실수를 할 수 있습니다. 중요한 정보를 확인하세요.",
     [I18N_KEYS.SETTINGS_LABEL_PASSPHRASE]: "백업 암호 (AES-256)",
     [I18N_KEYS.SETTINGS_PLACEHOLDER_PASSPHRASE]: "설정 및 대화 백업 암호화에 사용됩니다.",
@@ -1538,7 +1538,7 @@ const EN_SPECIFIC = {
     [I18N_KEYS.OPFS_USAGE_TEXT]: "Usage {used} / {total} ({percent}%)",
     [I18N_KEYS.COMMON_DIRECTORY]: "Directory",
     [I18N_KEYS.COMMON_FILE]: "File",
-    [I18N_KEYS.PROFILE_FREE_PLAN]: "Free Plan",
+    [I18N_KEYS.PROFILE_VERSION_LABEL]: "v{appVersion}",
     [I18N_KEYS.CHAT_DISCLAIMER]: "LucidLLM can make mistakes. Check important info.",
     [I18N_KEYS.UPDATE_BADGE_LABEL]: "Update",
     [I18N_KEYS.UPDATE_MODAL_TITLE]: "Update {version} ({date})",
@@ -1593,6 +1593,7 @@ const JA_OVERRIDES = {
     [I18N_KEYS.CHAT_EXPORT_EMPTY]: "エクスポートするチャットがありません。",
     // Profile
     [I18N_KEYS.PROFILE_CHIP_AVATAR_ALT]: "プロフィールアバター",
+    [I18N_KEYS.PROFILE_VERSION_LABEL]: "v{appVersion}",
     // Settings
     [I18N_KEYS.SETTINGS_CLOSE]: "設定を閉じる",
     [I18N_KEYS.SETTINGS_TITLE]: "設定",
@@ -2171,6 +2172,7 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.STATUS_MODEL_LOADING]: "{model} 加载中...",
     [I18N_KEYS.STATUS_MODEL_LOADED]: "{model} 运行中",
     [I18N_KEYS.STATUS_MODEL_FAILED]: "{model} 加载失败",
+    [I18N_KEYS.PROFILE_VERSION_LABEL]: "v{appVersion}",
     // Token
     [I18N_KEYS.TOKEN_STATS]: "令牌速度 平均: {avg} tok/s | 最大: {max} | 最小: {min}",
     // Sidebar
@@ -2494,7 +2496,8 @@ export function t(key, vars = {}, fallback = "") {
         template = fallback || key;
     }
 
-    return interpolate(template, vars);
+    const mergedVars = { appVersion: _appVersion, ...vars };
+    return interpolate(template, mergedVars);
 }
 
 /* ─── data-i18n 자동 적용 (최적화) ─── */
