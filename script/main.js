@@ -123,7 +123,8 @@ const STORAGE_KEYS = {
     chatSessions: "lucid_chat_sessions_v1",
     activeChatSessionId: "lucid_active_chat_session_id_v1",
     userProfile: "lucid_user_profile_v1",
-    nicknameRegistry: "lucid_nickname_registry_v1",
+    theme: "lucid_theme",
+    language: "lucid_language",
     googleDriveClientId: "lucid_google_drive_client_id",
     googleDriveAutoBackup: "lucid_google_drive_auto_backup",
     googleDriveLastSyncAt: "lucid_google_drive_last_sync_at",
@@ -280,9 +281,9 @@ const state = {
         id: "",
         nickname: "YOU",
         avatarDataUrl: "",
-        language: "ko",
-        theme: "dark",
     },
+    theme: "dark",
+    language: "ko",
     driveBackup: {
         accessToken: "",
         tokenExpiresAt: 0,
@@ -2733,8 +2734,6 @@ function buildDefaultProfile() {
         id: `profile_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         nickname: "YOU",
         avatarDataUrl: "",
-        language: detectNavigatorLanguage(),
-        theme: "dark",
     };
 }
 
@@ -2753,8 +2752,6 @@ function getStoredUserProfile() {
             ? parsed.nickname.trim()
             : "YOU",
         avatarDataUrl: typeof parsed.avatarDataUrl === "string" ? parsed.avatarDataUrl : "",
-        language: matchSupportedLanguage(parsed.language) || detectNavigatorLanguage(),
-        theme: normalizeTheme(parsed.theme),
     };
 }
 
@@ -2782,25 +2779,44 @@ function hydrateUserProfile() {
         id: profile.id,
         nickname: profile.nickname,
         avatarDataUrl: profile.avatarDataUrl,
-        language: normalizeLanguage(profile.language),
-        theme: normalizeTheme(profile.theme),
     };
-    reserveNicknameForProfile(state.profile.nickname);
     setStoredUserProfile(state.profile);
+
+    // Migration logic
+    const themeRes = readFromStorage(STORAGE_KEYS.theme, null, { deserialize: false });
+    const langRes = readFromStorage(STORAGE_KEYS.language, null, { deserialize: false });
+
+    if (!themeRes.success || !themeRes.value) {
+        // Try legacy
+        const legacy = readFromStorage(STORAGE_KEYS.userProfile, null, { deserialize: true });
+        const legacyTheme = legacy?.value?.theme;
+        state.theme = normalizeTheme(legacyTheme || "dark");
+        writeToStorage(STORAGE_KEYS.theme, state.theme, { serialize: false });
+    } else {
+        state.theme = normalizeTheme(themeRes.value);
+    }
+
+    if (!langRes.success || !langRes.value) {
+        // Try legacy
+        const legacy = readFromStorage(STORAGE_KEYS.userProfile, null, { deserialize: true });
+        const legacyLang = legacy?.value?.language;
+        state.language = normalizeLanguage(legacyLang || detectNavigatorLanguage());
+        writeToStorage(STORAGE_KEYS.language, state.language, { serialize: false });
+    } else {
+        state.language = normalizeLanguage(langRes.value);
+    }
 }
 
 function saveUserProfile(nextFields = {}) {
     state.profile = {
         ...state.profile,
         ...nextFields,
-        language: normalizeLanguage(nextFields.language ?? state.profile.language),
-        theme: normalizeTheme(nextFields.theme ?? state.profile.theme),
     };
     setStoredUserProfile(state.profile);
 }
 
 function getProfileLanguage() {
-    return getCurrentLanguage();
+    return state.language || getCurrentLanguage();
 }
 
 function getLocaleForLanguage(language = getProfileLanguage()) {
@@ -2812,7 +2828,7 @@ function getLocaleForLanguage(language = getProfileLanguage()) {
 }
 
 function getProfileTheme() {
-    return normalizeTheme(state.profile?.theme ?? "dark");
+    return normalizeTheme(state.theme ?? "dark");
 }
 
 function getProfileNickname() {
@@ -2824,33 +2840,6 @@ function getProfileAvatarDataUrl() {
     return String(state.profile?.avatarDataUrl ?? "");
 }
 
-function getNicknameRegistry() {
-    const result = readFromStorage(STORAGE_KEYS.nicknameRegistry, {}, { deserialize: true });
-    const value = result.value;
-    if (typeof value === "object" && !Array.isArray(value)) {
-        return value;
-    }
-    return {};
-}
-
-function setNicknameRegistry(registry) {
-    writeToStorage(STORAGE_KEYS.nicknameRegistry, registry || {}, { serialize: true });
-}
-
-function reserveNicknameForProfile(nickname) {
-    const normalizedNickname = String(nickname ?? "").trim();
-    if (!normalizedNickname || !state.profile?.id) return;
-
-    const registry = getNicknameRegistry();
-    for (const [key, owner] of Object.entries(registry)) {
-        if (owner === state.profile.id) {
-            delete registry[key];
-        }
-    }
-    registry[normalizedNickname.toLowerCase()] = state.profile.id;
-    setNicknameRegistry(registry);
-}
-
 function validateNickname(rawNickname) {
     const value = String(rawNickname ?? "").trim();
     if (!/^[A-Za-z0-9가-힣_-]{2,24}$/.test(value)) {
@@ -2858,16 +2847,6 @@ function validateNickname(rawNickname) {
             valid: false,
             reason: "invalid",
             message: t("profile.nickname_invalid"),
-        };
-    }
-
-    const registry = getNicknameRegistry();
-    const owner = registry[value.toLowerCase()];
-    if (owner && owner !== state.profile.id) {
-        return {
-            valid: false,
-            reason: "duplicate",
-            message: t("profile.nickname_duplicate"),
         };
     }
 
@@ -2941,7 +2920,6 @@ function onProfileNicknameInput() {
     }
 
     saveUserProfile({ nickname: input });
-    reserveNicknameForProfile(input);
     renderProfileIdentityChip();
     renderActiveChatMessages();
     setProfileStatus(t("profile.saved"), "success");
@@ -2990,7 +2968,8 @@ function renderLocalizedStaticText() {
 
 function applyTheme(theme, options = {}) {
     const normalized = normalizeTheme(theme);
-    saveUserProfile({ theme: normalized });
+    state.theme = normalized;
+    writeToStorage(STORAGE_KEYS.theme, normalized, { serialize: false });
     document.documentElement.setAttribute("data-theme", normalized);
 
     if (els.themeOptionDark) {
@@ -3013,8 +2992,9 @@ function applyTheme(theme, options = {}) {
 
 function applyLanguage(language, options = {}) {
     const normalized = normalizeLanguage(language);
+    state.language = normalized;
     setCurrentLanguage(normalized);
-    saveUserProfile({ language: normalized });
+    writeToStorage(STORAGE_KEYS.language, normalized, { serialize: false });
     document.documentElement.lang = normalized;
 
     if (els.languageSelect) {
@@ -4739,21 +4719,21 @@ function restoreProfileTabFromSnapshot(snapshot) {
 }
 
 function resetThemeTabDefaults() {
-    applyTheme(buildDefaultProfile().theme, { silent: true });
+    applyTheme("dark", { silent: true });
 }
 
 function restoreThemeTabFromSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== "object") return;
-    applyTheme(String(snapshot.theme || buildDefaultProfile().theme), { silent: true });
+    applyTheme(String(snapshot.theme || "dark"), { silent: true });
 }
 
 function resetLanguageTabDefaults() {
-    applyLanguage(buildDefaultProfile().language, { silent: true });
+    applyLanguage(detectNavigatorLanguage(), { silent: true });
 }
 
 function restoreLanguageTabFromSnapshot(snapshot) {
     if (!snapshot || typeof snapshot !== "object") return;
-    applyLanguage(String(snapshot.language || buildDefaultProfile().language), { silent: true });
+    applyLanguage(String(snapshot.language || detectNavigatorLanguage()), { silent: true });
 }
 
 function resetBackupTabDefaults() {

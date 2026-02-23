@@ -9,18 +9,28 @@ import {
 
 const MAIN_MODULE_PATH = "./main.js";
 const USER_PROFILE_KEY = "lucid_user_profile_v1";
+const THEME_KEY = "lucid_theme";
+const LANGUAGE_KEY = "lucid_language";
 
 /**
  * 초기 i18n 설정: main.js 로드 전에 기본적인 UI 번역 적용
  */
 function initEarlyI18n() {
     const defaultLang = detectNavigatorLanguage();
-    const result = readFromStorage(USER_PROFILE_KEY, null, { deserialize: true });
 
-    let lang = defaultLang;
-    if (result.success && result.value && typeof result.value === "object") {
-        lang = result.value.language || defaultLang;
+    // 1. New key (primary)
+    let lang = readFromStorage(LANGUAGE_KEY, null, { deserialize: false }).value;
+
+    // 2. Legacy key (fallback)
+    if (!lang) {
+        const result = readFromStorage(USER_PROFILE_KEY, null, { deserialize: true });
+        if (result.success && result.value && typeof result.value === "object") {
+            lang = result.value.language;
+        }
     }
+
+    // 3. Final fallback
+    lang = lang || defaultLang;
 
     setCurrentLanguage(lang);
     document.documentElement.lang = lang;

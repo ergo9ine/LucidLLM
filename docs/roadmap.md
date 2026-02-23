@@ -23,6 +23,9 @@
 - [ ] **스마트 모델 라우팅 및 폴백** — 지연시간·품질·비용 기준의 동적 라우팅 및 폴백 정책
 - [ ] **서명된 모델 번들 & 출처 검증** — 디지털 서명으로 모델 무결성 및 출처 확인
 - [ ] **온디맨드 정밀도 튜닝(실험용)** — FP16/INT8 변환과 성능‑정확도 비교 툴 제공
+- [ ] **WebNN 추론 백엔드 (실험적)** — ONNX Runtime Web의 WebNN EP를 통해 Intel/Qualcomm NPU 하드웨어 가속 지원. 기존 Transformers.js(WebGPU/WASM) 경로와 병행하여 사용자가 설정에서 선택 가능
+- [ ] **NPU 최적화 모델 큐레이션** — Qualcomm AI Hub Workbench 등으로 NPU에 최적화된 ONNX 모델을 사전 변환하여 전용 프리셋으로 제공. Snapdragon X Elite/Intel Core Ultra 등 NPU 탑재 디바이스에서 저전력·고효율 추론 실현
+- [ ] **하드웨어 감지 및 자동 백엔드 선택** — `navigator.gpu`, WebNN 가용 여부, NPU 디바이스 정보를 자동 감지하여 최적 추론 백엔드(WebGPU → WebNN → WASM) 자동 선택 및 추천
 
 ## 채팅 UX
 

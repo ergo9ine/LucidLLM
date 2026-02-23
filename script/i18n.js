@@ -115,7 +115,6 @@ export const I18N_KEYS = {
     PROFILE_AVATAR_INVALID: "profile.avatar_invalid",
     PROFILE_AVATAR_TOO_LARGE: "profile.avatar_too_large",
     PROFILE_NICKNAME_INVALID: "profile.nickname_invalid",
-    PROFILE_NICKNAME_DUPLICATE: "profile.nickname_duplicate",
     PROFILE_PREVIEW_ALT: "profile.preview_alt",
     // OPFS
     OPFS_BTN_MODELS: "opfs.btn_models",
@@ -754,7 +753,6 @@ const KO_SPECIFIC = {
     [I18N_KEYS.PROFILE_AVATAR_INVALID]: "이미지 파일만 업로드할 수 있습니다.",
     [I18N_KEYS.PROFILE_AVATAR_TOO_LARGE]: "이미지 파일은 5MB 이하만 지원됩니다.",
     [I18N_KEYS.PROFILE_NICKNAME_INVALID]: "닉네임은 2~24 자, 영문/숫자/한글/_/- 만 사용할 수 있습니다.",
-    [I18N_KEYS.PROFILE_NICKNAME_DUPLICATE]: "이미 사용 중인 닉네임입니다. 다른 닉네임을 입력하세요.",
     [I18N_KEYS.PROFILE_PREVIEW_ALT]: "프로필 미리보기",
     [I18N_KEYS.THEME_TITLE]: "테마",
     [I18N_KEYS.THEME_APPLIED]: "테마가 적용되었습니다.",
@@ -1232,7 +1230,6 @@ const EN_SPECIFIC = {
     [I18N_KEYS.PROFILE_AVATAR_INVALID]: "Only image files are allowed.",
     [I18N_KEYS.PROFILE_AVATAR_TOO_LARGE]: "Image must be 5MB or smaller.",
     [I18N_KEYS.PROFILE_NICKNAME_INVALID]: "Nickname must be 2-24 chars and use letters/numbers/Korean/_/- only.",
-    [I18N_KEYS.PROFILE_NICKNAME_DUPLICATE]: "Nickname is already in use. Choose another one.",
     [I18N_KEYS.PROFILE_PREVIEW_ALT]: "Profile preview",
     [I18N_KEYS.THEME_TITLE]: "Theme",
     [I18N_KEYS.THEME_APPLIED]: "Theme applied.",
@@ -1718,7 +1715,6 @@ const JA_OVERRIDES = {
     [I18N_KEYS.PROFILE_AVATAR_INVALID]: "画像ファイルのみ許可されています。",
     [I18N_KEYS.PROFILE_AVATAR_TOO_LARGE]: "画像は5MB以下である必要があります。",
     [I18N_KEYS.PROFILE_NICKNAME_INVALID]: "ニックネームは2〜24文字で、英数字・日本語・_・-のみ使用できます。",
-    [I18N_KEYS.PROFILE_NICKNAME_DUPLICATE]: "そのニックネームはすでに使用されています。別のものを選んでください。",
     [I18N_KEYS.PROFILE_PREVIEW_ALT]: "プロフィールプレビュー",
     // Theme
     [I18N_KEYS.THEME_TITLE]: "テーマ",
@@ -2112,7 +2108,6 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.PROFILE_AVATAR_INVALID]: "只允许上传图片文件。",
     [I18N_KEYS.PROFILE_AVATAR_TOO_LARGE]: "图片大小不能超过5MB。",
     [I18N_KEYS.PROFILE_NICKNAME_INVALID]: "昵称必须为2-24个字符，只能使用字母、数字、中文、_或-。",
-    [I18N_KEYS.PROFILE_NICKNAME_DUPLICATE]: "该昵称已被使用，请选择其他昵称。",
     [I18N_KEYS.PROFILE_PREVIEW_ALT]: "个人资料预览",
     // Theme
     [I18N_KEYS.THEME_TITLE]: "主题",

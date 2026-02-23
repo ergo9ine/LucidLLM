@@ -10,17 +10,40 @@ import {
     TRANSFORMERS_JS_IMPORT_CANDIDATES,
 } from "./shared-utils.js";
 
-// Monkey-patch navigator.gpu.requestAdapter to suppress 'powerPreference' warning on Windows
-// See https://crbug.com/369219127
-if (typeof navigator !== 'undefined' && navigator.gpu && typeof navigator.gpu.requestAdapter === 'function') {
-    const originalRequestAdapter = navigator.gpu.requestAdapter;
-    navigator.gpu.requestAdapter = function(options) {
-        const newOptions = { ...options };
-        if (newOptions && Object.hasOwn(newOptions, 'powerPreference')) {
-            delete newOptions.powerPreference;
+// ── WebGPU Adapter Probe (deferred) ────────────────────────────────────────
+// Probing must NOT be a top-level await because it causes a race condition:
+// postMessage() sent during the await is delivered before self.onmessage is
+// set, silently dropping the message and leaving the Worker idle forever.
+// Instead, the probe runs lazily on the first loadTransformersModule() call.
+let _gpuProbeComplete = false;
+
+async function ensureGpuProbeComplete() {
+    if (_gpuProbeComplete) return;
+    _gpuProbeComplete = true;
+
+    if (typeof navigator !== 'undefined' && navigator.gpu && typeof navigator.gpu.requestAdapter === 'function') {
+        try {
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) {
+                console.info("[Worker] WebGPU adapter not available, disabling navigator.gpu for WASM fallback");
+                Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true });
+            } else {
+                // GPU available — patch requestAdapter to suppress 'powerPreference' warning
+                // See https://crbug.com/369219127
+                const originalRequestAdapter = navigator.gpu.requestAdapter;
+                navigator.gpu.requestAdapter = function(options) {
+                    const newOptions = { ...options };
+                    if (newOptions && Object.hasOwn(newOptions, 'powerPreference')) {
+                        delete newOptions.powerPreference;
+                    }
+                    return originalRequestAdapter.call(this, newOptions);
+                };
+            }
+        } catch (e) {
+            console.info("[Worker] WebGPU probe failed, disabling:", e.message);
+            Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true });
         }
-        return originalRequestAdapter.call(this, newOptions);
-    };
+    }
 }
 
 // ============================================================================
@@ -163,6 +186,8 @@ self.fetch = async (input, init) => {
         const file = await readOpfsFileInWorker(candidatePath);
         if (!file || file.size <= 0) continue;
 
+
+
         const headers = new Headers();
         headers.set("content-type", inferWorkerContentType(candidatePath));
         headers.set("content-length", String(file.size));
@@ -252,6 +277,11 @@ const initializingKeys = new Map(); // key → Promise<void>
 async function loadTransformersModule() {
     if (transformersModule) return transformersModule;
 
+    // Probe WebGPU adapter before loading ONNX Runtime (via Transformers.js).
+    // Must happen before the first import() so ONNX RT sees navigator.gpu state
+    // correctly and doesn't attempt a broken WebGPU backend.
+    await ensureGpuProbeComplete();
+
     let lastError = null;
     for (const url of TRANSFORMERS_JS_IMPORT_CANDIDATES) {
         try {
@@ -270,6 +300,24 @@ async function loadTransformersModule() {
                 // and causes "Failed to execute 'put' on 'Cache'" errors.
                 env.useBrowserCache = false;
                 if (typeof env.useCache !== "undefined") env.useCache = false;
+
+                // ── ONNX Runtime WASM thread fix ──────────────────────────
+                // When Transformers.js / ONNX Runtime is loaded from CDN, the
+                // multi-threaded WASM backend tries to create a Worker from a
+                // cross-origin script URL, which browsers block with a
+                // SecurityError.  Disable multi-threading to avoid this.
+                // Also disable the WASM proxy worker for the same reason.
+                if (env.backends?.onnx?.wasm) {
+                    env.backends.onnx.wasm.numThreads = 1;
+                    env.backends.onnx.wasm.proxy = false;
+                }
+            }
+
+            // Also try configuring via ONNX Runtime's own env if available
+            const ort = mod.ort || mod.default?.ort;
+            if (ort?.env?.wasm) {
+                ort.env.wasm.numThreads = 1;
+                ort.env.wasm.proxy = false;
             }
             return mod;
         } catch (e) {
