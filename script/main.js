@@ -1,5 +1,5 @@
 // App Version - managed centrally in main.js
-const APP_VERSION = "0.0.3";
+const APP_VERSION = "0.0.4";
 
 import {
     calculateExponentialBackoffDelay,
@@ -131,6 +131,7 @@ const STORAGE_KEYS = {
     updateLastCheckAt: "lucid_update_last_check_at",
     updateLatestRelease: "lucid_update_latest_release",
     updateDismissedVersion: "lucid_update_dismissed_version",
+    generationConfigBootstrapByModel: "lucid_generation_config_bootstrap_by_model",
 };
 
 const SUPPORTED_THEMES = ["dark", "light", "oled", "high-contrast"];
@@ -495,7 +496,7 @@ async function bootstrapApplication() {
     try {
         await initOpfs();
         await refreshModelSessionList({ silent: true });
-    
+
         await refreshOpfsExplorer({ silent: true });
     } catch (error) {
         showToast(`OPFS 초기화 실패: ${getErrorMessage(error)}`, "error", 3200);
@@ -1781,7 +1782,7 @@ function showUpdateBadge(version) {
     state.update.swUpdateWaiting = true;
     els.updateBadge.classList.remove("hidden");
     els.updateBadge.classList.add("flex");
-    
+
     // Animate badge appearance
     els.updateBadge.animate([
         { transform: "scale(0.8)", opacity: 0 },
@@ -1799,24 +1800,24 @@ function hideUpdateBadge() {
 
 function openChangelogModal() {
     if (!state.update.latestRelease) return;
-    
+
     const release = state.update.latestRelease;
     state.update.changelogModalOpen = true;
 
     // Populate Modal
     if (els.changelogModalTitle) {
         const date = new Date(release.published_at).toLocaleDateString();
-        els.changelogModalTitle.textContent = t(I18N_KEYS.UPDATE_MODAL_TITLE, { 
-            version: release.tag_name, 
-            date: date 
+        els.changelogModalTitle.textContent = t(I18N_KEYS.UPDATE_MODAL_TITLE, {
+            version: release.tag_name,
+            date: date
         });
     }
-    
+
     if (els.changelogContent) {
         // Markdown body directly to textContent for safety (basic whitespace preserved by CSS)
         els.changelogContent.textContent = release.body || "No release notes available.";
     }
-    
+
     if (els.changelogGithubLink) {
         els.changelogGithubLink.href = release.html_url;
     }
@@ -1834,13 +1835,13 @@ function openChangelogModal() {
 
 function closeChangelogModal(dismiss = false) {
     state.update.changelogModalOpen = false;
-    
+
     if (els.changelogModalOverlay) {
         const anim = els.changelogModalOverlay.animate([
             { opacity: 1 },
             { opacity: 0 }
         ], { duration: 200, fill: "forwards" });
-        
+
         anim.onfinish = () => {
             els.changelogModalOverlay.classList.add("hidden");
         };
@@ -1877,7 +1878,7 @@ async function checkForAppUpdate() {
     try {
         const lastCheck = Number(readFromStorage(STORAGE_KEYS.updateLastCheckAt).value || 0);
         const now = Date.now();
-        
+
         // Rate limit: Check only once every 6 hours
         if (now - lastCheck < UPDATE_CHECK_INTERVAL_MS) {
             // Use cached release info if available
@@ -1897,11 +1898,11 @@ async function checkForAppUpdate() {
         if (!Array.isArray(releases) || releases.length === 0) return;
 
         const latest = releases[0]; // GitHub API returns sorted by date desc
-        
+
         // Store latest check time and data
         writeToStorage(STORAGE_KEYS.updateLastCheckAt, String(now));
         writeToStorage(STORAGE_KEYS.updateLatestRelease, latest, { serialize: true });
-        
+
         state.update.latestRelease = latest;
         maybeShowUpdateBadge(latest.tag_name);
 
@@ -1914,14 +1915,14 @@ async function checkForAppUpdate() {
 
 function maybeShowUpdateBadge(latestVersion) {
     if (!latestVersion) return;
-    
+
     // Compare versions (Simple string comparison for now, assumming semver format)
     // APP_VERSION is "1.0.0", latestVersion is likely "v1.1.0" or "1.1.0"
     const current = APP_VERSION.replace(/^v/, "");
     const latest = latestVersion.replace(/^v/, "");
-    
+
     if (current === latest) return; // Same version
-    
+
     // If user dismissed this version, don't show badge
     const dismissed = readFromStorage(STORAGE_KEYS.updateDismissedVersion).value;
     if (dismissed === latestVersion) return;
@@ -2170,7 +2171,7 @@ function bindEvents() {
     document.addEventListener("keydown", (event) => {
         const accel = event.ctrlKey || event.metaKey;
         const key = String(event.key ?? "").toLowerCase();
-        
+
         if (state.update.changelogModalOpen && key === "escape") {
             event.preventDefault();
             closeChangelogModal(true);
@@ -2759,6 +2760,20 @@ function getStoredUserProfile() {
 
 function setStoredUserProfile(profile) {
     writeToStorage(STORAGE_KEYS.userProfile, profile || buildDefaultProfile(), { serialize: true });
+}
+
+function getGenerationConfigBootstrapMap() {
+    return readFromStorage(STORAGE_KEYS.generationConfigBootstrapByModel, {}, { deserialize: true }).value || {};
+}
+
+function setGenerationConfigBootstrapMap(next) {
+    writeToStorage(STORAGE_KEYS.generationConfigBootstrapByModel, next || {}, { serialize: true });
+}
+
+function buildGenerationBootstrapKey(modelId, revision) {
+    if (!modelId) return "";
+    const rev = String(revision || "main").trim();
+    return `${modelId}@${rev}`;
 }
 
 function hydrateUserProfile() {
@@ -3730,7 +3745,7 @@ function buildBackupPayload() {
             theme: getProfileTheme(),
             language: getProfileLanguage(),
             inferenceDevice: normalizeInferenceDevice(state.inference.preferredDevice),
-    
+
             hfTokenConfigured: !!String(getToken() ?? "").trim(),
         },
     };
@@ -4063,7 +4078,7 @@ function applyBackupPayload(payload, { overwrite = true } = {}) {
                 maxLength: settings.generationMaxLength,
             });
         }
-        
+
     }
 
     initChatSessionSystem();
@@ -5057,6 +5072,7 @@ function syncActiveSessionToState() {
             id: normalizedId,
             role: item?.role === "user" ? "user" : "assistant",
             text: String(item?.text ?? ""),
+            reasoning: typeof item?.reasoning === "string" ? item.reasoning : null,
             at: typeof item?.at === "string" && item.at.trim() ? item.at : new Date().toISOString(),
             tokenPerSecond: Number.isFinite(Number(item?.tokenPerSecond)) ? Number(item.tokenPerSecond) : null,
             tokenCount: Number.isFinite(Number(item?.tokenCount)) ? Number(item.tokenCount) : null,
@@ -5078,6 +5094,7 @@ function persistActiveSessionMessages() {
         id: Number(item.id),
         role: item.role === "user" ? "user" : "assistant",
         text: String(item.text ?? ""),
+        reasoning: typeof item.reasoning === "string" ? item.reasoning : null,
         at: typeof item.at === "string" && item.at.trim() ? item.at : new Date().toISOString(),
         tokenPerSecond: Number.isFinite(Number(item.tokenPerSecond)) ? Number(item.tokenPerSecond) : null,
         tokenCount: Number.isFinite(Number(item.tokenCount)) ? Number(item.tokenCount) : null,
@@ -5111,12 +5128,12 @@ function renderChatTabs() {
         const active = session.id === state.activeChatSessionId;
         const openLabel = getProfileLanguage() === "ko" ? "대화 열기" : "Open chat";
         const deleteLabel = t(I18N_KEYS.SIDEBAR_ACTION_DELETE_CHAT);
-        
+
         // Base classes for the list item
         const baseClass = "group relative flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all duration-200 text-left";
         const activeClass = "bg-slate-800 text-cyan-50 border border-slate-700/50 light:bg-white light:border-slate-200 light:text-slate-900 light:shadow-sm oled:bg-[#1a1a1a] oled:border-[#333]";
         const inactiveClass = "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200 light:text-slate-600 light:hover:bg-slate-100 light:hover:text-slate-900 oled:text-[#888] oled:hover:bg-[#111] oled:hover:text-[#ccc]";
-        
+
         const itemClass = `${baseClass} ${active ? activeClass : inactiveClass}`;
 
         return `
@@ -5149,7 +5166,7 @@ function renderChatTabs() {
     if (activeTab && typeof activeTab.scrollIntoView === "function") {
         activeTab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
     }
-    
+
     // Re-initialize icons for new elements
     if (window.lucide) {
         window.lucide.createIcons();
@@ -7017,7 +7034,7 @@ async function attemptAutoFreeOpfsSpace(requiredBytes = 0, { keepPrefix = null }
                 try {
                     const file = await handle.getFile();
                     if (file && file.size > 0) candidates.push({ name, size: file.size, isFile: true });
-                } catch {}
+                } catch { }
             }
         }
 
@@ -7052,7 +7069,7 @@ async function attemptAutoFreeOpfsSpace(requiredBytes = 0, { keepPrefix = null }
 
 // Expose helper on window for callers that reference it dynamically (tests/automation)
 if (typeof window !== 'undefined') {
-    try { window.attemptAutoFreeOpfsSpace = attemptAutoFreeOpfsSpace; } catch (_) {}
+    try { window.attemptAutoFreeOpfsSpace = attemptAutoFreeOpfsSpace; } catch (_) { }
 }
 
 async function runDownloadFlow({ resume = false } = {}) {
@@ -7350,7 +7367,7 @@ async function runDownloadFlow({ resume = false } = {}) {
                                     try {
                                         const file = await handle.getFile();
                                         if (file && file.size > 0) candidates.push({ name, size: file.size, isFile: true });
-                                    } catch {}
+                                    } catch { }
                                 }
                             }
                             candidates.sort((a, b) => b.size - a.size);
@@ -9049,7 +9066,7 @@ async function scanOpfsModelFiles() {
 
     // 2. Calculate size for each ONNX entry
     const entrySizes = new Map(); // folderPath/fileName -> sizeBytes
-    
+
     for (const [folderPath, group] of Object.entries(folderGroups)) {
         const commonSize = group.common.reduce((sum, f) => sum + f.size, 0);
 
@@ -9062,7 +9079,7 @@ async function scanOpfsModelFiles() {
                     size += data.size;
                 }
             }
-            
+
             const fullPath = folderPath ? `${folderPath}/${onnx.name}` : onnx.name;
             entrySizes.set(fullPath, size);
         }
@@ -9078,7 +9095,7 @@ async function scanOpfsModelFiles() {
 
         const segments = splitOpfsModelRelativePathSegments(normalizedFileName);
         const folderPath = segments.length > 1 ? segments.slice(0, -1).join("/") : "";
-        
+
         // Use calculated entry size if available, otherwise fallback to file size
         const totalSizeBytes = entrySizes.get(item.relativePath) ?? file.size;
 
@@ -9267,7 +9284,7 @@ function renderModelSessionList() {
         const action = getSessionRowActionMeta(rowState);
         const lampMeta = getSessionStateLampMeta(rowState);
         const manifestEntry = manifest[fileName] ?? null;
-        
+
         // Model ID Resolution
         let modelId = manifestEntry?.modelId;
         if (!isValidModelId(modelId)) {
@@ -9290,27 +9307,27 @@ function renderModelSessionList() {
         const modelPageUrl = normalizedModelId
             ? `${HF_BASE_URL}/${normalizedModelId}`
             : "";
-        
+
         // Quantization Label
         let quantLabel = "-";
         const quantInfo = resolveQuantizationInfoFromFileName(fileName);
         if (quantInfo && quantInfo.label) {
             quantLabel = quantInfo.label;
         } else if (item.bundlePath) {
-             // Try to guess from folder name if filename doesn't have it
-             const folderName = item.bundlePath.split("/").pop();
-             if (folderName && (folderName.includes("q4") || folderName.includes("Q4"))) quantLabel = "Q4_K_M";
-             else if (folderName && (folderName.includes("q8") || folderName.includes("Q8"))) quantLabel = "Q8_0";
+            // Try to guess from folder name if filename doesn't have it
+            const folderName = item.bundlePath.split("/").pop();
+            if (folderName && (folderName.includes("q4") || folderName.includes("Q4"))) quantLabel = "Q4_K_M";
+            else if (folderName && (folderName.includes("q8") || folderName.includes("Q8"))) quantLabel = "Q8_0";
         }
 
         const revision = manifestEntry?.revision ?? (item.bundlePath ? "main" : "-");
-        
+
         // Download Status Logic
         // If we have local files and they pass basic checks, consider it "downloaded"
         // Manifest status is secondary source of truth
         let downloadStatus = manifestEntry?.downloadStatus ?? "downloaded";
         if (!manifestEntry && item.sizeBytes > 0) {
-             downloadStatus = "downloaded";
+            downloadStatus = "downloaded";
         }
 
         const canUpdate = !!(manifestEntry?.fileUrl || isValidModelId(modelId));
@@ -9318,11 +9335,11 @@ function renderModelSessionList() {
         const statusTextClass = downloadStatus === "downloaded"
             ? "text-emerald-400"
             : (downloadStatus === "uploaded" ? "text-cyan-400" : "text-slate-400");
-            
+
         // Formatting
         const formattedSize = formatBytes(item.sizeBytes);
         const formattedDate = formatModelDate(item.lastModified);
-        const displayName = item.bundlePath 
+        const displayName = item.bundlePath
             ? `${item.bundlePath}/${fileName.split("/").pop()}`
             : fileName;
 
@@ -9582,6 +9599,18 @@ async function onClickSessionLoad(fileName, options = {}) {
         }
 
         const manifestEntry = getOpfsManifest()[normalizedFileName] ?? null;
+
+        // Apply generation config defaults if this is the first load for this model
+        if (manifestEntry) {
+            await maybeApplyGenerationDefaultsFromModel({
+                modelId: manifestEntry.modelId,
+                revision: manifestEntry.revision,
+                modelSourcePathHint: manifestEntry.modelSourcePathHint || manifestEntry.fileUrl,
+            }).catch((err) => {
+                console.warn("[Config] Failed to apply model defaults:", err);
+            });
+        }
+
         if (manifestEntry && isValidModelId(manifestEntry.modelId)) {
             applySelectedModel(manifestEntry.modelId, {
                 task: manifestEntry.task ?? "-",
@@ -10677,7 +10706,7 @@ async function getOrCreateTransformersPipeline(task, modelId, options = {}) {
     const resolvedDevice = ["webgpu", "wasm"].includes(requestedDevice)
         ? requestedDevice
         : (fallbackDeviceChain[0] ?? "wasm");
-    
+
     let resolvedDtype = "auto";
     if (options.dtype === null) {
         resolvedDtype = null;
@@ -11465,6 +11494,10 @@ function renderModelStatusHeader() {
         text = t("status.model.loading", { model: modelName });
     } else if (status === "loaded") {
         text = t("status.model.loaded", { model: modelName });
+        if (sessionStore && sessionStore.activeSession && sessionStore.activeSession.device) {
+            const deviceLabel = String(sessionStore.activeSession.device).toLowerCase() === "webgpu" ? "WebGPU" : "WASM";
+            text = `${text} (${deviceLabel})`;
+        }
     } else if (status === "failed") {
         text = t("status.model.failed", { model: modelName });
     }
@@ -11638,7 +11671,7 @@ function createAssistantStreamRenderer(options = {}) {
 
     message.content.classList.add("llm-stream-cursor");
 
-    let text = "";
+    let fullRawText = "";
     let buffered = "";
     let totalTokens = 0;
     let startedAt = Number(options.startTime) || 0;
@@ -11671,18 +11704,57 @@ function createAssistantStreamRenderer(options = {}) {
 
         if (buffered) {
             if (force) {
-                text += buffered;
+                fullRawText += buffered;
                 buffered = "";
             } else {
                 const drainCount = computeStreamDrainCount(buffered.length);
                 const chunk = buffered.slice(0, drainCount);
-                text += chunk;
+                fullRawText += chunk;
                 buffered = buffered.slice(drainCount);
             }
         }
 
+        let currentReasoning = "";
+        let currentAnswer = "";
+        let isThinking = false;
+
+        const thinkStartMatch = /<\|?think\|?>/i.exec(fullRawText);
+        if (thinkStartMatch) {
+            const startIndex = thinkStartMatch.index + thinkStartMatch[0].length;
+            const sub = fullRawText.substring(startIndex);
+            const thinkEndMatch = /<\|?\/think\|?>/i.exec(sub);
+            if (thinkEndMatch) {
+                currentReasoning = sub.substring(0, thinkEndMatch.index);
+                currentAnswer = fullRawText.substring(0, thinkStartMatch.index) + sub.substring(thinkEndMatch.index + thinkEndMatch[0].length);
+                isThinking = false;
+            } else {
+                currentReasoning = sub;
+                currentAnswer = fullRawText.substring(0, thinkStartMatch.index);
+                isThinking = true;
+            }
+        } else {
+            currentAnswer = fullRawText;
+            isThinking = false;
+        }
+
+        if (message.thinkingContent && message.thinkingContainer) {
+            if (currentReasoning) {
+                message.thinkingContainer.classList.remove("hidden");
+                message.thinkingContent.textContent = currentReasoning.trim() || "...";
+                if (isThinking) {
+                    if (!message.thinkingContainer.open) message.thinkingContainer.open = true;
+                    message.thinkingContainer.classList.add("bg-slate-800/80");
+                } else {
+                    message.thinkingContainer.open = false;
+                    message.thinkingContainer.classList.remove("bg-slate-800/80");
+                }
+            } else {
+                message.thinkingContainer.classList.add("hidden");
+            }
+        }
+
         if (message.content) {
-            message.content.textContent = text;
+            message.content.textContent = currentAnswer;
         }
 
         const tps = getTps();
@@ -11694,7 +11766,8 @@ function createAssistantStreamRenderer(options = {}) {
         }
 
         updateMessageEntryById(message.id, {
-            text,
+            text: currentAnswer,
+            reasoning: currentReasoning,
             tokenCount: totalTokens > 0 ? totalTokens : null,
             tokenPerSecond: Number.isFinite(tps) && tps > 0 ? tps : null,
             tokenSpeedSamples: [...tpsSamples],
@@ -11754,7 +11827,7 @@ function createAssistantStreamRenderer(options = {}) {
 
     const reset = () => {
         if (closed) return;
-        text = "";
+        fullRawText = "";
         buffered = "";
         totalTokens = 0;
         startedAt = 0;
@@ -11766,11 +11839,19 @@ function createAssistantStreamRenderer(options = {}) {
             message.content.textContent = "";
             message.content.classList.add("llm-stream-cursor");
         }
+        if (message.thinkingContainer) {
+            message.thinkingContainer.classList.add("hidden");
+            message.thinkingContainer.open = false;
+        }
+        if (message.thinkingContent) {
+            message.thinkingContent.textContent = "";
+        }
         if (message.tokenBadge) {
             message.tokenBadge.textContent = "0.00 tok/s";
         }
         updateMessageEntryById(message.id, {
             text: "",
+            reasoning: null,
             tokenCount: null,
             tokenPerSecond: null,
             tokenSpeedSamples: [],
@@ -11785,7 +11866,7 @@ function createAssistantStreamRenderer(options = {}) {
         const resolvedFinalText = String(finalText ?? "");
 
         if (resolvedFinalText) {
-            text = resolvedFinalText;
+            fullRawText = resolvedFinalText;
             buffered = "";
             if (!skipMetrics) {
                 totalTokens = Math.max(totalTokens, Math.max(1, countApproxTokens(resolvedFinalText)));
@@ -11810,21 +11891,44 @@ function createAssistantStreamRenderer(options = {}) {
             if (!skipMetrics && Number.isFinite(forceTokenCount) && forceTokenCount > 0) {
                 totalTokens = Math.max(totalTokens, Math.trunc(forceTokenCount));
             }
-            if (!skipMetrics && !startedAt && text) {
+            if (!skipMetrics && !startedAt && fullRawText) {
                 startedAt = getNow();
             }
 
             if (message.content) {
-                message.content.textContent = text;
+                // The actual text is already set in flush(), we just remove the cursor.
                 message.content.classList.remove("llm-stream-cursor");
+            }
+            if (message.thinkingContainer) {
+                message.thinkingContainer.open = false;
+                message.thinkingContainer.classList.remove("bg-slate-800/80");
             }
 
             const finalTps = skipMetrics ? 0 : getTps();
             if (message.tokenBadge) {
                 message.tokenBadge.textContent = finalTps > 0 ? `${finalTps.toFixed(2)} tok/s` : "0.00 tok/s";
             }
+            let finalReasoning = "";
+            let finalAnswer = "";
+            const thinkStartMatch = /<\|?think\|?>/i.exec(fullRawText);
+            if (thinkStartMatch) {
+                const startIndex = thinkStartMatch.index + thinkStartMatch[0].length;
+                const sub = fullRawText.substring(startIndex);
+                const thinkEndMatch = /<\|?\/think\|?>/i.exec(sub);
+                if (thinkEndMatch) {
+                    finalReasoning = sub.substring(0, thinkEndMatch.index);
+                    finalAnswer = fullRawText.substring(0, thinkStartMatch.index) + sub.substring(thinkEndMatch.index + thinkEndMatch[0].length);
+                } else {
+                    finalReasoning = sub;
+                    finalAnswer = fullRawText.substring(0, thinkStartMatch.index);
+                }
+            } else {
+                finalAnswer = fullRawText;
+            }
+
             updateMessageEntryById(message.id, {
-                text,
+                text: finalAnswer,
+                reasoning: finalReasoning,
                 tokenCount: !skipMetrics && totalTokens > 0 ? totalTokens : null,
                 tokenPerSecond: !skipMetrics && Number.isFinite(finalTps) && finalTps > 0 ? finalTps : null,
                 tokenSpeedSamples: !skipMetrics ? [...tpsSamples] : [],
@@ -11976,15 +12080,15 @@ async function sendMessage(userText) {
  */
 function abortGeneration() {
     if (!state.isSendingChat) return;
-    
+
     console.info("[CHAT] Abort requested — terminating worker");
-    
+
     transformersWorker.abort();
 
     // Worker가 terminate되었으므로 파이프라인 캐시 무효화
     // → 다음 요청 시 getWorker()로 새 Worker 생성 + init() 재호출
     transformersStore.pipelines.clear();
-    
+
     showToast(t("chat.generation_aborted") ?? "생성이 중단되었습니다.", "info", 2000);
 }
 
@@ -12124,7 +12228,7 @@ async function requestLocalSessionCompletion(userText, options = {}) {
         });
         const cleaned = cleanupLocalAssistantText(generated, userText);
         if (isMeaningfulAssistantReply(cleaned, userText)) {
-            return cleaned;
+            return generated;
         }
         throw createLocalEmptyOutputError(session, userText, {
             attempts: 1,
@@ -12168,7 +12272,11 @@ async function requestLocalSessionCompletion(userText, options = {}) {
                     });
                     const cleaned = cleanupLocalAssistantText(generated, userText);
                     if (isMeaningfulAssistantReply(cleaned, userText)) {
-                        return cleaned;
+                        state.inference.preferredDevice = recoveryDevice;
+                        setStoredInferenceDevice(recoveryDevice);
+                        renderInferenceDeviceToggle();
+                        renderModelStatusHeader();
+                        return generated;
                     }
                     throw createLocalEmptyOutputError(session, userText, {
                         attempts: 1,
@@ -12851,6 +12959,29 @@ function appendMessageBubble(entry, options = {}) {
 
     header.appendChild(headerLeading);
 
+    let thinkingContainer = null;
+    let thinkingContent = null;
+    if (role === "assistant") {
+        thinkingContainer = document.createElement("details");
+        thinkingContainer.className = "hidden mb-3 md:mb-4 rounded-[14px] bg-slate-900/40 border border-slate-700/50 text-[13px] text-slate-300 overflow-hidden shadow-sm transition-all duration-300 ease-in-out";
+
+        const summary = document.createElement("summary");
+        summary.className = "cursor-pointer px-3 py-2 hover:bg-slate-800/50 select-none flex items-center gap-2 font-medium transition-colors outline-none";
+        summary.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="opacity-70"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></svg> 추론 과정';
+
+        thinkingContent = document.createElement("div");
+        thinkingContent.className = "p-4 pt-1 whitespace-pre-wrap break-words italic opacity-75 border-t border-slate-700/50 leading-relaxed font-menu";
+
+        thinkingContainer.appendChild(summary);
+        thinkingContainer.appendChild(thinkingContent);
+
+        if (typeof entry.reasoning === "string" && entry.reasoning.trim()) {
+            thinkingContainer.classList.remove("hidden");
+            thinkingContent.textContent = entry.reasoning;
+            thinkingContainer.open = false;
+        }
+    }
+
     const content = document.createElement("div");
     content.className = "whitespace-pre-wrap break-words leading-relaxed";
     content.textContent = String(entry.text ?? "");
@@ -12864,6 +12995,9 @@ function appendMessageBubble(entry, options = {}) {
     }
 
     bubble.appendChild(header);
+    if (thinkingContainer) {
+        bubble.appendChild(thinkingContainer);
+    }
     bubble.appendChild(content);
     row.appendChild(bubble);
     els.chatMessages.appendChild(row);
@@ -12871,6 +13005,8 @@ function appendMessageBubble(entry, options = {}) {
     return {
         bubble,
         content,
+        thinkingContainer,
+        thinkingContent,
         tokenBadge,
     };
 }
@@ -12885,6 +13021,7 @@ function addMessage(role, text, options = {}) {
         id: messageId,
         role: role === "user" ? "user" : "assistant",
         text: String(text ?? ""),
+        reasoning: null,
         at: new Date().toISOString(),
         tokenPerSecond: Number.isFinite(Number(options.tokenPerSecond)) ? Number(options.tokenPerSecond) : null,
         tokenCount: Number.isFinite(Number(options.tokenCount)) ? Number(options.tokenCount) : null,
@@ -12909,6 +13046,8 @@ function addMessage(role, text, options = {}) {
         entry,
         bubble: rendered?.bubble ?? null,
         content: rendered?.content ?? null,
+        thinkingContainer: rendered?.thinkingContainer ?? null,
+        thinkingContent: rendered?.thinkingContent ?? null,
         tokenBadge: rendered?.tokenBadge ?? null,
     };
 }
@@ -13090,6 +13229,112 @@ function setLocalGenerationSettings(next = {}) {
         els.llmPresencePenaltyInput.value = String(normalized.presencePenalty);
     }
     return normalized;
+}
+
+function buildGenerationConfigCandidatePaths(modelSourcePathHint) {
+    if (!modelSourcePathHint) return [];
+
+    const candidates = [];
+    // Normalize path separators
+    const segments = String(modelSourcePathHint).split(/[\\\/]/);
+
+    // 1. Same directory as the model file
+    if (segments.length > 1) {
+        const dir = segments.slice(0, -1).join("/");
+        candidates.push(`${dir}/generation_config.json`);
+    }
+
+    // 2. Parent directory of the model file (if model is in a subfolder like 'onnx')
+    if (segments.length > 2) {
+        const parentDir = segments.slice(0, -2).join("/");
+        candidates.push(`${parentDir}/generation_config.json`);
+    }
+
+    return [...new Set(candidates)];
+}
+
+async function maybeApplyGenerationDefaultsFromModel({ modelId, revision, modelSourcePathHint }) {
+    if (!modelId) return;
+
+    const bootstrapKey = buildGenerationBootstrapKey(modelId, revision);
+    if (!bootstrapKey) return;
+
+    const bootstrapMap = getGenerationConfigBootstrapMap();
+    if (bootstrapMap[bootstrapKey]) {
+        console.log(`[Config] Model ${bootstrapKey} already bootstrapped, skipping.`);
+        return;
+    }
+
+    const candidates = buildGenerationConfigCandidatePaths(modelSourcePathHint);
+    let configData = null;
+    let successfulPath = "";
+
+    for (const path of candidates) {
+        try {
+            const file = await readOpfsModelFileByRelativePath(path);
+            if (file) {
+                const text = await file.text();
+                configData = JSON.parse(text);
+                successfulPath = path;
+                break;
+            }
+        } catch (e) {
+            // Ignore and try next
+        }
+    }
+
+    if (!configData) {
+        console.warn(`[Config] No generation_config.json found for ${modelId} at candidates:`, candidates);
+        // Mark as attempted to avoid repeated overhead
+        bootstrapMap[bootstrapKey] = {
+            appliedAt: new Date().toISOString(),
+            source: "none"
+        };
+        setGenerationConfigBootstrapMap(bootstrapMap);
+        return;
+    }
+
+    console.log(`[Config] Loading defaults from ${successfulPath}`, configData);
+
+    const current = getLocalGenerationSettings();
+    const next = { ...current };
+    let changed = false;
+
+    if (typeof configData.temperature === "number") {
+        next.temperature = clampGenerationTemperature(configData.temperature);
+        changed = true;
+    }
+    if (typeof configData.top_p === "number") {
+        next.topP = clampGenerationTopP(configData.top_p);
+        changed = true;
+    }
+    if (typeof configData.repetition_penalty === "number") {
+        // presencePenalty = repetition_penalty - 1.0 (based on mapPresencePenaltyToRepetitionPenalty)
+        next.presencePenalty = clampGenerationPresencePenalty(configData.repetition_penalty - 1.0);
+        changed = true;
+    }
+
+    if (typeof configData.max_length === "number") {
+        next.maxLength = clampGenerationMaxLength(configData.max_length);
+        changed = true;
+    } else if (typeof configData.max_new_tokens === "number") {
+        next.maxLength = clampGenerationMaxLength(configData.max_new_tokens);
+        changed = true;
+    }
+
+    if (changed) {
+        setLocalGenerationSettings(next);
+        if (state.settings.open) {
+            renderLlmDraftStatus();
+        }
+        showToast(t(I18N_KEYS.TOAST_MODEL_DEFAULTS_APPLIED, { model: modelId }), "info", 3000);
+    }
+
+    bootstrapMap[bootstrapKey] = {
+        appliedAt: new Date().toISOString(),
+        source: successfulPath
+    };
+    setGenerationConfigBootstrapMap(bootstrapMap);
 }
 
 function getOpfsManifest() {

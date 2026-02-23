@@ -7,6 +7,8 @@
 | [willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX/Q4](https://huggingface.co/willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX) | Q4 | Verified | Pass |
 | [onnx-community/Qwen2.5-0.5B-Instruct](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct) | Q4,INT8,UINT8,BNB4,Q4F16 | Verified | Pass |
 | [onnx-community/Phi-4-mini-instruct-ONNX](https://huggingface.co/onnx-community/Phi-4-mini-instruct-ONNX) | Q4 | Verified | Pass |
+| [onnx-community/Apertus-8B-Instruct-2509-ONNX](https://huggingface.co/onnx-community/Apertus-8B-Instruct-2509-ONNX) | Q4 | Verified | Pass |
+| [onnx-community/Qwen3-4B-Thinking-2507-ONNX](https://huggingface.co/onnx-community/Qwen3-4B-Thinking-2507-ONNX) | Q4 | Verified | Pass |
 
 ## Sanity QA checks
 
@@ -24,3 +26,17 @@ Pass criteria
 Notes
 - Keep answers concise and factually correct; overly vague or incorrect answers should be marked as `Fail`.
 - If you want, I can run these checks against the models listed and update the table with `Pass/Fail` results — tell me which models to test.
+ 
+## Generation Config Bootstrap
+ 
+LucidLLM automatically reads `generation_config.json` (if available in OPFS) when a model is loaded for the first time.
+ 
+- **Trigger**: First-time load of a unique `modelId @ revision` combination.
+- **Priority**: Values in `generation_config.json` overwrite current local app settings once.
+- **Fields Mapped**:
+  - `temperature` -> `temperature`
+  - `top_p` -> `top_p`
+  - `repetition_penalty` -> `presence_penalty` (converted via `val - 1.0`)
+  - `max_length` / `max_new_tokens` -> `max_length`
+- **Persistence**: Subsequent loads of the same model will maintain the user's current settings instead of re-applying defaults.
+- **Safety**: If the file is missing or corrupt, existing settings are preserved.
