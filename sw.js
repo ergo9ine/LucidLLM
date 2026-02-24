@@ -10,10 +10,22 @@ const PRECACHE_ASSETS = [
 
 // 외부 호스트 목록 (이들은 항상 네트워크로만 요청)
 const NETWORK_ONLY_HOSTNAMES = [
-    "huggingface.co", "cdn.jsdelivr.net", "unpkg.com",
+    "huggingface.co",
+    // "cdn.jsdelivr.net", // WASM/MJS 캐싱 허용을 위해 제외
+    "unpkg.com",
     "accounts.google.com", "fonts.googleapis.com", "fonts.gstatic.com",
     "www.googleapis.com", "cdn.tailwindcss.com", "api.github.com",
 ];
+
+// WASM 캐시 전용 이름 (앱 업데이트와 독립적 수명 관리)
+const WASM_CACHE_NAME = "lucidllm-wasm-v1";
+
+// WASM/ORT 관련 리소스 판별
+function isOrtWasmResource(url) {
+    return url.hostname === "cdn.jsdelivr.net"
+        && url.pathname.includes("onnxruntime-web")
+        && /\.(wasm|mjs)$/.test(url.pathname);
+}
 
 // 1. Install Event: 자산 사전캐시 (skipWaiting 없음 -> waiting 상태 유지)
 self.addEventListener("install", (event) => {
@@ -42,7 +54,7 @@ self.addEventListener("activate", (event) => {
             .then((cacheNames) =>
                 Promise.all(
                     cacheNames
-                        .filter((cacheName) => cacheName !== CACHE_NAME)
+                        .filter((cacheName) => cacheName !== CACHE_NAME && cacheName !== WASM_CACHE_NAME)
                         .map((cacheName) => {
                             console.log(`[SW] Deleting old cache: ${cacheName}`);
                             return caches.delete(cacheName);
@@ -63,13 +75,27 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
     const url = new URL(event.request.url);
 
+    // ── ONNX Runtime WASM: CDN에서 가져온 뒤 영구 캐싱 ──
+    if (isOrtWasmResource(url)) {
+        event.respondWith(
+            caches.match(event.request).then((cached) => {
+                if (cached) return cached;
+                return fetch(event.request).then((response) => {
+                    if (response.ok) {
+                        const clone = response.clone();
+                        caches.open(WASM_CACHE_NAME).then((cache) => cache.put(event.request, clone));
+                    }
+                    return response;
+                });
+            })
+        );
+        return;
+    }
+
     // 외부 호스트는 항상 네트워크로
     if (NETWORK_ONLY_HOSTNAMES.some(host => url.hostname === host || url.hostname.endsWith("." + host))) {
         return;
     }
-
-    // 개발 모드 (localhost) 에서 캐시 문제 방지 (선택 사항)
-    // if (url.hostname === "localhost") return;
 
     event.respondWith(
         caches.match(event.request).then((response) => {

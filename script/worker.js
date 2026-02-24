@@ -29,7 +29,7 @@ async function ensureGpuProbeComplete() {
                 // GPU available — patch requestAdapter to suppress 'powerPreference' warning
                 // See https://crbug.com/369219127
                 const originalRequestAdapter = navigator.gpu.requestAdapter;
-                navigator.gpu.requestAdapter = function(options) {
+                navigator.gpu.requestAdapter = function (options) {
                     const newOptions = { ...options };
                     if (newOptions && Object.hasOwn(newOptions, 'powerPreference')) {
                         delete newOptions.powerPreference;
@@ -298,21 +298,8 @@ async function loadTransformersModule() {
                 // and causes "Failed to execute 'put' on 'Cache'" errors.
                 env.useBrowserCache = false;
                 if (typeof env.useCache !== "undefined") env.useCache = false;
-
-                // ── ONNX Runtime WASM paths ───────────────────────────────
-                // Point ONNX Runtime to our self-hosted WASM files so it can
-                // find the .wasm and worker .mjs files at the correct path.
-                // Use absolute path from site root to avoid Worker cwd issues.
-                if (env.backends?.onnx?.wasm) {
-                    env.backends.onnx.wasm.wasmPaths = "/vendor/transformers/";
-                }
             }
 
-            // Also configure via ONNX Runtime's own env if available
-            const ort = mod.ort || mod.default?.ort;
-            if (ort?.env?.wasm) {
-                ort.env.wasm.wasmPaths = "/vendor/transformers/";
-            }
             return mod;
         } catch (e) {
             lastError = e;
@@ -543,7 +530,7 @@ async function handleGenerate(id, data) {
  */
 async function handleAbort(id, data) {
     console.log("[Worker] Abort requested for generation", id);
-    
+
     if (currentGenerationAbortController) {
         currentGenerationAbortController.aborted = true;
         self.postMessage({
