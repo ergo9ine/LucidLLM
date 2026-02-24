@@ -1,5 +1,5 @@
 // App Version - managed centrally in main.js
-const APP_VERSION = "0.0.6"; //Pre-Alpha Test
+const APP_VERSION = "0.0.7"; //Pre-Alpha Test
 
 import {
     calculateExponentialBackoffDelay,
@@ -504,6 +504,7 @@ async function bootstrapApplication() {
     } finally {
         setExplorerLoading(false);
         setModelSessionLoading(false);
+        renderRecommendedModels();
     }
 
     renderLocalizedStaticText();
@@ -5387,6 +5388,10 @@ function setSettingsTab(tabId) {
             panel.classList.toggle("hidden", !isActive);
         }
     }
+
+    if (next === "model") {
+        renderRecommendedModels();
+    }
 }
 
 function getSettingsFocusableElements() {
@@ -7272,8 +7277,10 @@ async function runDownloadFlow({ resume = false } = {}) {
 
         await refreshModelSessionList({ silent: true });
         await refreshOpfsExplorer({ silent: true });
+        renderRecommendedModels();
 
         showToast(`모델 번들 다운로드 완료 (${queue.length}개 파일)`, "success", 3200);
+
     } catch (error) {
         state.download.inProgress = false;
         state.download.abortController = null;
@@ -9232,6 +9239,245 @@ async function onClickSessionModelCard(fileName) {
         } else {
             showToast(`모델 카드 API 조회 실패: ${getErrorMessage(error)} (로컬 정보 표시)`, "info", 3400);
         }
+    }
+}
+
+/* ─── Recommended Models ─── */
+const RECOMMENDED_MODELS = Object.freeze([
+    {
+        modelId: "HuggingFaceTB/SmolLM2-135M-Instruct",
+        name: "SmolLM2 135M Instruct",
+        quantizations: [
+            { key: "q4", label: "Q4", sizeBytes: 83886080 },
+            { key: "bnb4", label: "BNB4", sizeBytes: 88080384 },
+            { key: "fp32", label: "FP32", sizeBytes: 541065216 },
+        ],
+        defaultQuant: "q4",
+        description: "Ultra-light 135M model, fast on any device",
+        tags: ["tiny", "fast"],
+    },
+    {
+        modelId: "onnx-community/Qwen2.5-0.5B-Instruct",
+        name: "Qwen2.5 0.5B Instruct",
+        quantizations: [
+            { key: "q4", label: "Q4", sizeBytes: 314572800 },
+            { key: "q4f16", label: "Q4F16", sizeBytes: 335544320 },
+            { key: "int8", label: "INT8", sizeBytes: 528482304 },
+            { key: "uint8", label: "UINT8", sizeBytes: 528482304 },
+            { key: "bnb4", label: "BNB4", sizeBytes: 293601280 },
+        ],
+        defaultQuant: "q4",
+        description: "Compact 0.5B model with multiple quant options",
+        tags: ["compact", "multilingual"],
+    },
+    {
+        modelId: "vicgalle/gpt2-alpaca-gpt4",
+        name: "GPT-2 Alpaca GPT4",
+        quantizations: [
+            { key: "default", label: "Default", sizeBytes: 524288000 },
+        ],
+        defaultQuant: "default",
+        description: "GPT-2 fine-tuned on Alpaca GPT4 data",
+        tags: ["classic"],
+    },
+    {
+        modelId: "onnx-community/Phi-4-mini-instruct-ONNX",
+        name: "Phi-4 Mini Instruct",
+        quantizations: [
+            { key: "q4", label: "Q4", sizeBytes: 2362232012 },
+        ],
+        defaultQuant: "q4",
+        description: "Microsoft Phi-4 mini, strong reasoning",
+        tags: ["reasoning"],
+    },
+    {
+        modelId: "willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX",
+        name: "GPT-5 Distill Qwen3 4B",
+        quantizations: [
+            { key: "q4", label: "Q4", sizeBytes: 2684354560 },
+        ],
+        defaultQuant: "q4",
+        description: "Qwen3 4B distilled, Q4 quantized ONNX",
+        tags: ["4B", "distilled"],
+    },
+    {
+        modelId: "onnx-community/Apertus-8B-Instruct-2509-ONNX",
+        name: "Apertus 8B Instruct",
+        quantizations: [
+            { key: "q4", label: "Q4", sizeBytes: 4831838208 },
+        ],
+        defaultQuant: "q4",
+        description: "8B instruction-following model",
+        tags: ["8B", "powerful"],
+    },
+    {
+        modelId: "onnx-community/Qwen3-4B-Thinking-2507-ONNX",
+        name: "Qwen3 4B Thinking",
+        quantizations: [
+            { key: "q4", label: "Q4", sizeBytes: 2684354560 },
+        ],
+        defaultQuant: "q4",
+        description: "Qwen3 4B with thinking/reasoning capability",
+        tags: ["4B", "thinking"],
+    },
+]);
+
+/**
+ * Checks whether any ONNX file belonging to the given modelId is already
+ * present in the OPFS manifest or session file list.
+ * @param {string} modelId
+ * @returns {boolean}
+ */
+function isRecommendedModelDownloaded(modelId) {
+    const normalized = normalizeModelId(modelId).toLowerCase();
+    if (!normalized) return false;
+
+    // Check manifest entries
+    const manifest = getOpfsManifest();
+    for (const entry of Object.values(manifest)) {
+        const entryModelId = normalizeModelId(entry?.modelId ?? "").toLowerCase();
+        if (entryModelId === normalized && entry?.downloadStatus === "downloaded") {
+            return true;
+        }
+    }
+
+    // Fallback: check opfs.files by bundle path
+    for (const file of state.opfs.files) {
+        const segments = (file.bundlePath ?? "").split("/").filter(Boolean);
+        if (segments.length >= 2) {
+            const pathModelId = `${segments[0]}/${segments[1]}`.toLowerCase();
+            if (pathModelId === normalized) return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Renders recommended model cards into #recommended-models-list.
+ * Call whenever the model settings tab becomes active or after a download completes.
+ */
+function renderRecommendedModels() {
+    const container = document.getElementById("recommended-models-list");
+    if (!container) return;
+
+    const downloadLabel = t(I18N_KEYS.MODEL_RECOMMENDED_DOWNLOAD, {}, "Download");
+    const downloadedLabel = t(I18N_KEYS.MODEL_RECOMMENDED_DOWNLOADED, {}, "Downloaded");
+    const sizeLabel = t(I18N_KEYS.MODEL_RECOMMENDED_SIZE_LABEL, {}, "Size");
+
+    container.innerHTML = RECOMMENDED_MODELS.map((model) => {
+        const downloaded = isRecommendedModelDownloaded(model.modelId);
+        const defaultQ = model.quantizations.find((q) => q.key === model.defaultQuant) || model.quantizations[0];
+        
+        const quantOptions = model.quantizations.map((q) => 
+            `<option value="${escapeHtml(q.key)}"${q.key === model.defaultQuant ? " selected" : ""} data-size="${q.sizeBytes}">${escapeHtml(q.label)}</option>`
+        ).join("");
+        
+        const hasQuant = model.quantizations.length > 0;
+        const tagHtml = model.tags.map((tag) => `<span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-700/60 text-slate-300 oled:bg-[#222] oled:text-[#aaa]">${escapeHtml(tag)}</span>`).join(" ");
+        const initialSize = defaultQ ? formatBytes(defaultQ.sizeBytes) : "-";
+
+        return `
+        <div class="recommended-model-card rounded-lg border border-slate-700/50 bg-slate-900/40 oled:bg-[#0d0d0d] oled:border-[#222] p-3 space-y-2 hover:border-cyan-400/30 transition-colors" data-model-id="${escapeHtml(model.modelId)}">
+            <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-1">
+                        <p class="text-xs font-semibold text-slate-100 oled:text-[#eee] truncate" title="${escapeHtml(model.name)}">${escapeHtml(model.name)}</p>
+                        <a href="https://huggingface.co/${encodeURI(model.modelId)}"
+                           target="_blank" rel="noopener noreferrer"
+                           class="shrink-0 text-slate-400 hover:text-cyan-400 transition-colors"
+                           title="${escapeHtml(t(I18N_KEYS.HUGGINGFACE_OPEN_TITLE, {}, "View on HuggingFace"))}">
+                            <i data-lucide="external-link" class="w-3 h-3"></i>
+                        </a>
+                    </div>
+                    <p class="text-[10px] text-slate-400 oled:text-[#888] mt-0.5 line-clamp-2">${escapeHtml(model.description)}</p>
+                </div>
+                ${downloaded ? `<span class="shrink-0 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-400/25"><i data-lucide="check" class="w-2.5 h-2.5"></i>${escapeHtml(downloadedLabel)}</span>` : ""}
+            </div>
+            <div class="flex items-center gap-1 flex-wrap">${tagHtml}</div>
+            <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400 oled:text-[#888]">
+                <span><span class="text-slate-500">${escapeHtml(sizeLabel)}: </span><span class="rec-size-display">${escapeHtml(initialSize)}</span></span>
+            </div>
+            <div class="flex items-center gap-2">
+                ${hasQuant ? `<select class="rec-quant-select bg-slate-950/70 oled:bg-[#111] border border-slate-700 oled:border-[#333] rounded px-1.5 py-1 text-[10px] outline-none focus:border-cyan-400 flex-shrink-0" aria-label="Quantization">${quantOptions}</select>` : ""}
+                <button type="button" class="rec-download-btn inline-flex items-center gap-1 text-[10px] px-3 py-1.5 rounded border ${downloaded ? "border-emerald-400/30 text-emerald-400 bg-emerald-500/10 opacity-70 cursor-default" : "border-cyan-300/35 hover:bg-cyan-500/15 text-slate-200"} transition-colors flex-1 justify-center" ${downloaded ? "disabled" : ""}>
+                    <i data-lucide="${downloaded ? "check" : "download"}" class="w-3 h-3"></i>
+                    ${escapeHtml(downloaded ? downloadedLabel : downloadLabel)}
+                </button>
+            </div>
+        </div>`;
+    }).join("");
+
+    // Bind events
+    for (const card of container.querySelectorAll(".recommended-model-card")) {
+        const modelId = String(card.dataset.modelId ?? "").trim();
+        if (!modelId) continue;
+        
+        // Download button
+        const btn = card.querySelector(".rec-download-btn");
+        if (btn && !btn.disabled) {
+            btn.addEventListener("click", async () => {
+                const quantSelect = card.querySelector(".rec-quant-select");
+                const chosenQuant = quantSelect ? String(quantSelect.value ?? "").trim() : "";
+                await triggerRecommendedModelDownload(modelId, chosenQuant);
+            });
+        }
+
+        // Quantization select (real-time size update)
+        const qSelect = card.querySelector(".rec-quant-select");
+        const sizeDisplay = card.querySelector(".rec-size-display");
+        if (qSelect && sizeDisplay) {
+            qSelect.addEventListener("change", () => {
+                const opt = qSelect.selectedOptions[0];
+                const bytes = Number(opt?.dataset.size ?? 0);
+                sizeDisplay.textContent = bytes > 0 ? formatBytes(bytes) : "-";
+            });
+        }
+    }
+
+    // Refresh Lucide icons for newly rendered elements
+    if (window.lucide?.createIcons) {
+        window.lucide.createIcons({ nodes: [container] });
+    }
+}
+
+/**
+ * Triggers the existing model fetch + download flow for a recommended model.
+ * @param {string} modelId
+ * @param {string} preferredQuant  e.g. "q4"
+ */
+async function triggerRecommendedModelDownload(modelId, preferredQuant) {
+    if (!modelId) return;
+
+    // Scroll the model sessions article into view / ensure visible
+    const article = document.getElementById("model-sessions-article");
+    if (article) article.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    // Populate the model ID input
+    if (els.modelIdInput) {
+        els.modelIdInput.value = modelId;
+        els.modelIdInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    // Run the model lookup (fills download panel)
+    const result = await handleModelLookup(modelId, { throwOnError: false, origin: "recommended" });
+    if (!result.ok) return;
+
+    // After lookup, try to select the preferred quantization
+    if (preferredQuant && els.downloadQuantizationSelect) {
+        const options = [...els.downloadQuantizationSelect.options];
+        const match = options.find((opt) =>
+            String(opt.value ?? "").toLowerCase().includes(preferredQuant.toLowerCase())
+        );
+        if (match) {
+            els.downloadQuantizationSelect.value = match.value;
+            els.downloadQuantizationSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+    }
+
+    // Scroll down to download panel
+    if (els.downloadMenuPanel) {
+        els.downloadMenuPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
 }
 

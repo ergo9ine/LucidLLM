@@ -9,7 +9,7 @@
 
 **LucidLLM** is a browser-based local Large Language Model (LLM) chat application that runs AI models entirely within your browser using [Transformers.js](https://huggingface.co/docs/transformers.js) and WebGPU technology. With zero-build architecture and complete privacy, it delivers powerful AI capabilities without sending any data to external servers.
 
-> **Key Highlights:** 18,200+ lines of code • 4 languages • WebGPU/WASM inference • 60 FPS Token Streaming • OPFS File Explorer • AES-256 encrypted backups • OPFS model caching
+> **Key Highlights:** 18,200+ lines of code • 4 languages • Recommended Models • WebGPU/WASM inference • 60 FPS Token Streaming • OPFS File Explorer • AES-256 encrypted backups • OPFS model caching
 
 ## ✨ Key Features
 
@@ -23,6 +23,7 @@
 | **OPFS Fetch Interceptor**| Supports **Range Requests** for efficient model loading |
 | **HF Token Support** | Access private/gated models with your Hugging Face token |
 | **Model Download Manager** | Supports pause/resume, retry with exponential backoff, quantization selection |
+| **Recommended Models** | Pre-configured verified models with one-click download from the Model tab |
 | **Model Audit & Update** | Verify model integrity and check for latest versions on HF |
 | **Bootstrap Config** | Automatically applies `generation_config.json` upon first model load |
 | **Pipeline Cache** | Memory cache for up to **4 active pipelines** for instant switching |
@@ -95,6 +96,7 @@ These models have been tested and verified to work correctly in LucidLLM:
 | [HuggingFaceTB/SmolLM2-135M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct) | FP32, BNB4, Q4 | Verified | Pass |
 | [vicgalle/gpt2-alpaca-gpt4](https://huggingface.co/vicgalle/gpt2-alpaca-gpt4) | Unknown | Verified | Pass |
 | [onnx-community/Qwen2.5-0.5B-Instruct](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct) | Q4, INT8, BNB4 | Verified | Pass |
+| [willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX](https://huggingface.co/willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX) | Q4 | Verified | Pass |
 | [onnx-community/Phi-4-mini-instruct-ONNX](https://huggingface.co/onnx-community/Phi-4-mini-instruct-ONNX) | Q4 | Verified | Pass |
 | [onnx-community/Apertus-8B-Instruct-2509-ONNX](https://huggingface.co/onnx-community/Apertus-8B-Instruct-2509-ONNX) | Q4 | Verified | Pass |
 | [onnx-community/Qwen3-4B-Thinking-2507-ONNX](https://huggingface.co/onnx-community/Qwen3-4B-Thinking-2507-ONNX) | Q4 | Verified | Pass |
@@ -126,6 +128,8 @@ Try the GitHub Pages demo (no install required):
 
 👉 **https://ergo9ine.github.io/LucidLLM/**
 
+> **Tip**: Deploy to Cloudflare Pages for multi-threaded WASM inference via COOP/COEP headers.
+
 ### Local — static, zero‑build
 
 1. Clone the repo and serve the folder (HTTPS or localhost recommended for OPFS):
@@ -139,6 +143,20 @@ npm run serve    # serves site at http://localhost:3000
 (Alternatives: `python -m http.server 8000` or `npx serve .`)
 
 Open the app in Chrome/Edge and go to Settings → Model Management to fetch and activate a model.
+
+## 📖 User Guide
+
+### 1. Model Loading
+Go to **Settings (Ctrl+,) → Model Management**. Enter a Hugging Face model ID (e.g., `HuggingFaceTB/SmolLM2-135M-Instruct`) or select one from the **Recommended Models** list. Click "Fetch" or the download icon to prepare the bundle.
+
+### 2. Starting Chat
+Once a model is downloaded to OPFS, click the **"Activate"** button in the session table. Wait for the state lamp to turn green (Loaded), then type your message in the chat input.
+
+### 3. LLM Configuration
+Adjust generation parameters like **Temperature**, **Top-P**, and **Max Tokens** in the LLM tab. You can also define a **System Prompt** to control the assistant's behavior.
+
+### 4. Google Drive Backup
+Connect your Google account in the **Backup** tab to securely sync your settings and chat history. Data is encrypted client-side with your chosen nickname as part of the key derivation.
 
 ### Development & tests
 
@@ -176,6 +194,8 @@ Open the app in Chrome/Edge and go to Settings → Model Management to fetch and
 LucidLLM/
 ├── index.html                  # Main HTML entry point
 ├── sw.js                       # Service Worker (PWA cache)
+├── _headers                    # Cloudflare Pages COOP/COEP headers
+├── serve.json                  # Local dev server CORS config
 ├── script/
 │   ├── bootstrap.js            # App initialization & early i18n
 │   ├── main.js                 # Core logic, state, UI rendering
@@ -183,6 +203,8 @@ LucidLLM/
 │   ├── shared-utils.js         # Shared utilities & global API
 │   ├── worker.js               # Web Worker for inference
 │   └── drive-backup.js         # Encrypted Google Drive backup
+├── vendor/
+│   └── transformers/           # Self-hosted Transformers.js bundle + ONNX Runtime WASM
 ├── docs/                       # Documentation & localized READMEs
 │   ├── README.ko.md
 │   ├── README.ja.md
@@ -211,6 +233,10 @@ LucidLLM/
 | **Encryption** | Web Crypto API (PBKDF2, AES-GCM-256) |
 | **CDN** | jsDelivr, unpkg |
 | **Testing** | Vitest (unit), Playwright (e2e) |
+
+## 🤝 Contributing
+- For major changes, please open an Issue first to discuss.
+- PR flow: fork → branch → PR (with description, screenshots, and tests).
 
 ## 📄 License
 

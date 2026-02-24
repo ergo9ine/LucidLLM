@@ -9,7 +9,7 @@
 
 **LucidLLM** 是一款基于 [Transformers.js](https://huggingface.co/docs/transformers.js) 和 WebGPU 技术的聊天应用程序，能够在浏览器内完全本地运行 AI 模型。它采用无需构建（Zero-build）的架构，提供全面的隐私保护，无需将数据发送到外部服务器即可提供强大的 AI 功能。
 
-> **主要特点:** 18,200+ 行代码 • 支持 4 种语言 • WebGPU/WASM 推理加速 • 60 FPS 实时流式传输 • OPFS 文件浏览器 • AES-256 加密备份 • OPFS 模型缓存
+> **主要特点:** 18,200+ 行代码 • 支持 4 种语言 • 推荐模型 • WebGPU/WASM 推理加速 • 60 FPS 实时流式传输 • OPFS 文件浏览器 • AES-256 加密备份 • OPFS 模型缓存
 
 ## ✨ 核心功能
 
@@ -23,6 +23,7 @@
 | **OPFS Fetch 拦截器**| 支持 **Range Requests**，实现高效的模型加载。 |
 | **HF Token 支持** | 可输入 Hugging Face Token 以访问私有或受限模型。 |
 | **智能下载** | 支持断点续传、指数退避重试和量化（Quantization）选择。 |
+| **推荐模型** | 在模型标签页中一键下载经过验证的推荐模型。 |
 | **模型审计与更新** | 验证模型完整性并检查 Hugging Face 上的最新版本。 |
 | **引导配置** | 首次加载模型时自动应用 `generation_config.json` 设置。 |
 | **流水线缓存** | 内存支持同时缓存多达 **4 个活跃流水线**，实现瞬间切换。 |
@@ -95,6 +96,7 @@
 | [HuggingFaceTB/SmolLM2-135M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct) | FP32, BNB4, Q4 | 已验证 | 通过 |
 | [vicgalle/gpt2-alpaca-gpt4](https://huggingface.co/vicgalle/gpt2-alpaca-gpt4) | Unknown | 已验证 | 通过 |
 | [onnx-community/Qwen2.5-0.5B-Instruct](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct) | Q4, INT8, BNB4 | 已验证 | 通过 |
+| [willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX](https://huggingface.co/willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX) | Q4 | 已验证 | 通过 |
 | [onnx-community/Phi-4-mini-instruct-ONNX](https://huggingface.co/onnx-community/Phi-4-mini-instruct-ONNX) | Q4 | 已验证 | 通过 |
 | [onnx-community/Apertus-8B-Instruct-2509-ONNX](https://huggingface.co/onnx-community/Apertus-8B-Instruct-2509-ONNX) | Q4 | 已验证 | 通过 |
 | [onnx-community/Qwen3-4B-Thinking-2507-ONNX](https://huggingface.co/onnx-community/Qwen3-4B-Thinking-2507-ONNX) | Q4 | 已验证 | 通过 |
@@ -126,6 +128,8 @@
 
 👉 **https://ergo9ine.github.io/LucidLLM/**
 
+> **提示**: 部署到 Cloudflare Pages 可通过 COOP/COEP 头启用多线程 WASM 推理。
+
 ### 本地（零构建）
 
 1. 克隆代码库并在本地运行服务器：
@@ -139,6 +143,20 @@ npm run serve    # 在 http://localhost:3000 运行
 （可选：`python -m http.server 8000` 或 `npx serve .`）
 
 在浏览器中打开后，前往 Settings → Model Management 下载并激活模型。
+
+## 📖 使用指南
+
+### 1. 模型加载
+前往 **设置 (Ctrl+,) → 模型管理**。输入 Hugging Face 模型 ID（例如 `HuggingFaceTB/SmolLM2-135M-Instruct`）或从 **推荐模型** 列表中选择。点击 "Fetch" 或下载图标以准备模型包。
+
+### 2. 开始聊天
+模型下载到 OPFS 后，点击会话表中的 **"激活 (Activate)"** 按钮。等待状态灯变为绿色（Loaded），然后在聊天输入框中输入消息。
+
+### 3. LLM 配置
+在 LLM 标签页中调整 **温度 (Temperature)**、**Top-P** 和 **最大 Token** 等生成参数。您还可以定义 **系统提示词** 来控制助手的行为。
+
+### 4. Google Drive 备份
+在 **备份** 标签页中连接您的 Google 账号，安全地同步您的设置和聊天记录。所有数据在客户端根据您的昵称派生密钥进行加密，确保隐私安全。
 
 ### 开发与测试
 
@@ -176,6 +194,8 @@ npm run serve    # 在 http://localhost:3000 运行
 LucidLLM/
 ├── index.html                  # 主 HTML 入口点
 ├── sw.js                       # Service Worker (PWA 缓存)
+├── _headers                    # Cloudflare Pages COOP/COEP 响应头
+├── serve.json                  # 本地开发服务器 CORS 配置
 ├── script/
 │   ├── bootstrap.js            # 应用初始化与初期 i18n
 │   ├── main.js                 # 核心逻辑、状态、UI 渲染
@@ -183,6 +203,8 @@ LucidLLM/
 │   ├── shared-utils.js         # 通用工具与全局 API
 │   ├── worker.js               # 专用推理 Web Worker
 │   └── drive-backup.js         # 加密 Google Drive 备份
+├── vendor/
+│   └── transformers/           # 自托管 Transformers.js 包 + ONNX Runtime WASM
 ├── docs/                       # 文档与多语言 README
 │   ├── README.ko.md
 │   ├── README.ja.md
@@ -211,6 +233,10 @@ LucidLLM/
 | **加密** | Web Crypto API (PBKDF2, AES-GCM-256) |
 | **CDN** | jsDelivr, unpkg |
 | **测试** | Vitest (单元), Playwright (E2E) |
+
+## 🤝 贡献
+- 重大变更请先通过 Issue 进行讨论。
+- PR 流程: fork → branch → PR (附说明、截图和测试)
 
 ## 📄 许可证
 

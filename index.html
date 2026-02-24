@@ -427,6 +427,165 @@
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> <span
                                     data-i18n="settings.reset_tab"></span> </button>
                         </div>
+                        <article id="model-sessions-article"
+                            class="rounded-xl border border-slate-700/70 bg-slate-950/45 light:bg-white light:border-slate-200 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] p-4 space-y-3">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <h2 class="text-sm font-semibold text-cyan-100 light:text-sky-700 oled:text-[#eee]"
+                                    data-i18n="model.session.title"></h2>
+                                <p id="session-summary"
+                                    class="text-[11px] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                                    data-i18n="model.session.scanning"></p>
+                            </div>
+                            <form id="model-select-form"
+                                class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-center"> <input
+                                    id="model-id-input"
+                                    class="w-full bg-slate-950/70 light:bg-white light:border-slate-300 light:text-slate-900 oled:bg-[#111] oled:border-[#333] border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400"
+                                    data-i18n-placeholder="model.input_placeholder" autocomplete="off"> <button
+                                    id="model-fetch-btn"
+                                    class="inline-flex items-center justify-center gap-2 bg-cyan-500/20 border border-cyan-300/40 hover:bg-cyan-500/35 rounded-xl px-5 py-3 text-sm font-semibold">
+                                    <i data-lucide="search-check" class="w-4 h-4"></i> <span id="model-fetch-btn-label"
+                                        data-i18n="model.fetch_btn"></span> </button> </form>
+
+                            <details id="recommended-models-section" class="group/rec">
+                                <summary
+                                    class="flex items-center justify-between cursor-pointer list-none rounded-lg border border-slate-700/50 bg-slate-900/30 p-3 hover:bg-slate-800/40 transition-colors">
+                                    <div class="flex items-center gap-3">
+                                        <div
+                                            class="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400">
+                                            <i data-lucide="sparkles" class="w-4 h-4"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-xs font-semibold text-cyan-100 oled:text-[#eee]"
+                                                data-i18n="model.recommended.title"></h3>
+                                            <p class="text-[10px] text-slate-400 oled:text-[#888]"
+                                                data-i18n="model.recommended.subtitle"></p>
+                                        </div>
+                                    </div>
+                                    <i data-lucide="chevron-down"
+                                        class="w-4 h-4 text-slate-500 transition-transform group-open/rec:rotate-180"></i>
+                                </summary>
+                                <div id="recommended-models-list"
+                                    class="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    <!-- Recommended Models Rendered Here -->
+                                </div>
+                            </details>
+
+                            <div id="model-loading-row"
+                                class="hidden mt-1 text-xs text-cyan-200 light:text-sky-600 oled:text-[#ddd] items-center gap-2">
+                                <i data-lucide="loader-circle" class="w-4 h-4 animate-spin"></i> <span
+                                    data-i18n="model.loading_info"></span>
+                            </div>
+                            <article id="download-menu-panel"
+                                class="rounded-xl border border-slate-700/70 bg-slate-950/45 light:bg-white light:border-slate-200 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] p-4 space-y-3 opacity-60">
+                                <div class="flex items-center justify-between gap-3">
+                                    <h2 class="text-sm font-semibold text-cyan-100 light:text-sky-700 oled:text-[#eee]"
+                                        data-i18n="model.download.title">
+                                    </h2> <span id="download-status-chip"
+                                        class="text-[11px] px-2 py-1 rounded-full border border-slate-600 text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                        data-i18n="model.download.status_idle"></span>
+                                </div>
+                                <div class="text-xs text-slate-300 light:text-slate-600 oled:text-[#aaa]">
+                                    <div><span data-i18n="model.download.target_model"></span> <span
+                                            id="download-model-id"
+                                            class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">-</span></div>
+                                    <div class="mt-1"><span data-i18n="model.download.target_file"></span> <span
+                                            id="download-file-name"
+                                            class="text-cyan-100 light:text-sky-700 oled:text-[#eee] break-all">-</span>
+                                    </div>
+                                </div>
+                                <div class="space-y-1"> <label id="download-quantization-label"
+                                        for="download-quantization-select"
+                                        class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                        data-i18n="model.download.quant_label"></label> <select
+                                        id="download-quantization-select"
+                                        class="w-full bg-slate-950/70 light:bg-white light:border-slate-300 light:text-slate-900 oled:bg-[#111] oled:border-[#333] border border-slate-700 rounded-lg px-2 py-2 text-xs outline-none focus:border-cyan-400"
+                                        data-i18n-aria-label="model.download.quant_label" disabled="disabled">
+                                        <option value="" data-i18n="model.download.quant_none"></option>
+                                    </select> </div>
+                                <div class="flex flex-wrap gap-2"> <button id="download-start-btn"
+                                        class="inline-flex items-center gap-2 border border-cyan-300/35 hover:bg-cyan-500/15 rounded-lg px-3 py-2 text-xs disabled:opacity-50"
+                                        disabled="disabled"> <i data-lucide="download" class="w-4 h-4"></i> <span
+                                            id="download-start-btn-label" data-i18n="common.download"></span> </button>
+                                    <button id="download-pause-btn" type="button"
+                                        class="inline-flex items-center gap-2 border border-amber-300/40 hover:bg-amber-500/15 rounded-lg px-3 py-2 text-xs disabled:opacity-50"
+                                        disabled="disabled"> <i data-lucide="pause" class="w-4 h-4"></i> <span
+                                            id="download-pause-btn-label" data-i18n="model.download.btn_pause"></span>
+                                    </button> <button id="download-resume-btn" type="button"
+                                        class="inline-flex items-center gap-2 border border-emerald-300/40 hover:bg-emerald-500/15 rounded-lg px-3 py-2 text-xs disabled:opacity-50"
+                                        disabled="disabled"> <i data-lucide="play" class="w-4 h-4"></i> <span
+                                            id="download-resume-btn-label" data-i18n="model.download.btn_resume"></span>
+                                    </button>
+                                </div>
+                                <div class="space-y-2">
+                                    <div
+                                        class="w-full h-2 rounded-full bg-slate-800/90 overflow-hidden border border-slate-700/70">
+                                        <div id="download-progress-bar"
+                                            class="h-full w-0 bg-cyan-400 transition-[width] duration-200"></div>
+                                    </div>
+                                    <div
+                                        class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]">
+                                        <div><span data-i18n="model.download.progress"></span> <span
+                                                id="download-percent-text"
+                                                class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">0%</span>
+                                        </div>
+                                        <div><span data-i18n="model.download.speed"></span> <span
+                                                id="download-speed-text"
+                                                class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">-</span></div>
+                                        <div><span data-i18n="model.download.eta"></span> <span id="download-eta-text"
+                                                class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">-</span></div>
+                                        <div><span data-i18n="model.download.retry"></span> <span
+                                                id="download-attempt-text"
+                                                class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">0</span></div>
+                                    </div>
+                                    <div class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"><span
+                                            data-i18n="model.download.bytes"></span> <span id="download-bytes-text"
+                                            class="text-cyan-100 light:text-sky-700 oled:text-[#eee]"
+                                            data-i18n="model.download.bytes_default"></span></div>
+                                    <div id="download-status-text"
+                                        class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                        data-i18n="model.download.status_text"></div>
+                                </div>
+                            </article>
+                            <div class="flex justify-end"> <button id="session-refresh-btn" type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-cyan-300/35 hover:bg-cyan-500/15 px-3 py-2 text-xs">
+                                    <i data-lucide="refresh-cw" class="w-3 h-3"></i> <span
+                                        data-i18n="model.btn_refresh"></span> </button> </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-xs table-fixed">
+                                    <thead>
+                                        <tr
+                                            class="text-slate-400 light:text-slate-500 oled:text-[#888] text-[11px] uppercase tracking-[0.12em] border-b border-slate-700/70">
+                                            <th class="text-left py-2 pr-2 w-[40%] md:w-auto"
+                                                data-i18n="model.th_filename"></th>
+                                            <th class="text-left py-2 px-2 hidden md:table-cell"
+                                                data-i18n="model.th_model_id"></th>
+                                            <th class="text-left py-2 px-2 hidden sm:table-cell"
+                                                data-i18n="model.th_quant"></th>
+                                            <th class="text-left py-2 px-2 hidden lg:table-cell"
+                                                data-i18n="model.th_version"></th>
+                                            <th class="text-left py-2 px-2 hidden sm:table-cell"
+                                                data-i18n="model.th_size"></th>
+                                            <th class="text-left py-2 px-2 hidden xl:table-cell"
+                                                data-i18n="model.th_modified"></th>
+                                            <th class="text-left py-2 px-2 hidden lg:table-cell"
+                                                data-i18n="common.download"></th>
+                                            <th class="text-center py-2 px-2 w-[40px]" data-i18n="model.th_activate">
+                                            </th>
+                                            <th class="text-right py-2 pl-2 w-[120px] md:w-auto"
+                                                data-i18n="model.th_actions"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="session-table-body">
+                                        <tr>
+                                            <td colspan="9"
+                                                class="py-4 text-slate-400 light:text-slate-500 oled:text-[#888]"
+                                                data-i18n="model.table_loading">
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
                         <article
                             class="rounded-xl border border-slate-700/70 bg-slate-950/45 light:bg-white light:border-slate-200 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] p-4 space-y-3">
                             <div class="flex flex-wrap items-center justify-between gap-2">
@@ -545,140 +704,6 @@
                                 <button data-action="opfs-context-delete" type="button"
                                     class="w-full text-left px-2 py-1.5 text-xs rounded text-rose-200 hover:bg-rose-500/20"
                                     data-i18n="common.delete"></button>
-                            </div>
-                        </article>
-                        <article
-                            class="rounded-xl border border-slate-700/70 bg-slate-950/45 light:bg-white light:border-slate-200 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] p-4 space-y-3">
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <h2 class="text-sm font-semibold text-cyan-100 light:text-sky-700 oled:text-[#eee]"
-                                    data-i18n="model.session.title"></h2>
-                                <p id="session-summary"
-                                    class="text-[11px] text-slate-400 light:text-slate-500 oled:text-[#888]"
-                                    data-i18n="model.session.scanning"></p>
-                            </div>
-                            <form id="model-select-form"
-                                class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-center"> <input
-                                    id="model-id-input"
-                                    class="w-full bg-slate-950/70 light:bg-white light:border-slate-300 light:text-slate-900 oled:bg-[#111] oled:border-[#333] border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400"
-                                    data-i18n-placeholder="model.input_placeholder" autocomplete="off"> <button
-                                    id="model-fetch-btn"
-                                    class="inline-flex items-center justify-center gap-2 bg-cyan-500/20 border border-cyan-300/40 hover:bg-cyan-500/35 rounded-xl px-5 py-3 text-sm font-semibold">
-                                    <i data-lucide="search-check" class="w-4 h-4"></i> <span id="model-fetch-btn-label"
-                                        data-i18n="model.fetch_btn"></span> </button> </form>
-                            <div id="model-loading-row"
-                                class="hidden mt-1 text-xs text-cyan-200 light:text-sky-600 oled:text-[#ddd] items-center gap-2">
-                                <i data-lucide="loader-circle" class="w-4 h-4 animate-spin"></i> <span
-                                    data-i18n="model.loading_info"></span>
-                            </div>
-                            <article id="download-menu-panel"
-                                class="rounded-xl border border-slate-700/70 bg-slate-950/45 light:bg-white light:border-slate-200 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] p-4 space-y-3 opacity-60">
-                                <div class="flex items-center justify-between gap-3">
-                                    <h2 class="text-sm font-semibold text-cyan-100 light:text-sky-700 oled:text-[#eee]"
-                                        data-i18n="model.download.title">
-                                    </h2> <span id="download-status-chip"
-                                        class="text-[11px] px-2 py-1 rounded-full border border-slate-600 text-slate-300 light:text-slate-600 oled:text-[#aaa]"
-                                        data-i18n="model.download.status_idle"></span>
-                                </div>
-                                <div class="text-xs text-slate-300 light:text-slate-600 oled:text-[#aaa]">
-                                    <div><span data-i18n="model.download.target_model"></span> <span
-                                            id="download-model-id"
-                                            class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">-</span></div>
-                                    <div class="mt-1"><span data-i18n="model.download.target_file"></span> <span
-                                            id="download-file-name"
-                                            class="text-cyan-100 light:text-sky-700 oled:text-[#eee] break-all">-</span>
-                                    </div>
-                                </div>
-                                <div class="space-y-1"> <label id="download-quantization-label"
-                                        for="download-quantization-select"
-                                        class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
-                                        data-i18n="model.download.quant_label"></label> <select
-                                        id="download-quantization-select"
-                                        class="w-full bg-slate-950/70 light:bg-white light:border-slate-300 light:text-slate-900 oled:bg-[#111] oled:border-[#333] border border-slate-700 rounded-lg px-2 py-2 text-xs outline-none focus:border-cyan-400"
-                                        data-i18n-aria-label="model.download.quant_label" disabled="disabled">
-                                        <option value="" data-i18n="model.download.quant_none"></option>
-                                    </select> </div>
-                                <div class="flex flex-wrap gap-2"> <button id="download-start-btn"
-                                        class="inline-flex items-center gap-2 border border-cyan-300/35 hover:bg-cyan-500/15 rounded-lg px-3 py-2 text-xs disabled:opacity-50"
-                                        disabled="disabled"> <i data-lucide="download" class="w-4 h-4"></i> <span
-                                            id="download-start-btn-label" data-i18n="common.download"></span> </button>
-                                    <button id="download-pause-btn" type="button"
-                                        class="inline-flex items-center gap-2 border border-amber-300/40 hover:bg-amber-500/15 rounded-lg px-3 py-2 text-xs disabled:opacity-50"
-                                        disabled="disabled"> <i data-lucide="pause" class="w-4 h-4"></i> <span
-                                            id="download-pause-btn-label" data-i18n="model.download.btn_pause"></span>
-                                    </button> <button id="download-resume-btn" type="button"
-                                        class="inline-flex items-center gap-2 border border-emerald-300/40 hover:bg-emerald-500/15 rounded-lg px-3 py-2 text-xs disabled:opacity-50"
-                                        disabled="disabled"> <i data-lucide="play" class="w-4 h-4"></i> <span
-                                            id="download-resume-btn-label" data-i18n="model.download.btn_resume"></span>
-                                    </button>
-                                </div>
-                                <div class="space-y-2">
-                                    <div
-                                        class="w-full h-2 rounded-full bg-slate-800/90 overflow-hidden border border-slate-700/70">
-                                        <div id="download-progress-bar"
-                                            class="h-full w-0 bg-cyan-400 transition-[width] duration-200"></div>
-                                    </div>
-                                    <div
-                                        class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]">
-                                        <div><span data-i18n="model.download.progress"></span> <span
-                                                id="download-percent-text"
-                                                class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">0%</span>
-                                        </div>
-                                        <div><span data-i18n="model.download.speed"></span> <span
-                                                id="download-speed-text"
-                                                class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">-</span></div>
-                                        <div><span data-i18n="model.download.eta"></span> <span id="download-eta-text"
-                                                class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">-</span></div>
-                                        <div><span data-i18n="model.download.retry"></span> <span
-                                                id="download-attempt-text"
-                                                class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">0</span></div>
-                                    </div>
-                                    <div class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"><span
-                                            data-i18n="model.download.bytes"></span> <span id="download-bytes-text"
-                                            class="text-cyan-100 light:text-sky-700 oled:text-[#eee]"
-                                            data-i18n="model.download.bytes_default"></span></div>
-                                    <div id="download-status-text"
-                                        class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
-                                        data-i18n="model.download.status_text"></div>
-                                </div>
-                            </article>
-                            <div class="flex justify-end"> <button id="session-refresh-btn" type="button"
-                                    class="inline-flex items-center gap-1 rounded-lg border border-cyan-300/35 hover:bg-cyan-500/15 px-3 py-2 text-xs">
-                                    <i data-lucide="refresh-cw" class="w-3 h-3"></i> <span
-                                        data-i18n="model.btn_refresh"></span> </button> </div>
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-xs table-fixed">
-                                    <thead>
-                                        <tr
-                                            class="text-slate-400 light:text-slate-500 oled:text-[#888] text-[11px] uppercase tracking-[0.12em] border-b border-slate-700/70">
-                                            <th class="text-left py-2 pr-2 w-[40%] md:w-auto"
-                                                data-i18n="model.th_filename"></th>
-                                            <th class="text-left py-2 px-2 hidden md:table-cell"
-                                                data-i18n="model.th_model_id"></th>
-                                            <th class="text-left py-2 px-2 hidden sm:table-cell"
-                                                data-i18n="model.th_quant"></th>
-                                            <th class="text-left py-2 px-2 hidden lg:table-cell"
-                                                data-i18n="model.th_version"></th>
-                                            <th class="text-left py-2 px-2 hidden sm:table-cell"
-                                                data-i18n="model.th_size"></th>
-                                            <th class="text-left py-2 px-2 hidden xl:table-cell"
-                                                data-i18n="model.th_modified"></th>
-                                            <th class="text-left py-2 px-2 hidden lg:table-cell"
-                                                data-i18n="common.download"></th>
-                                            <th class="text-center py-2 px-2 w-[40px]" data-i18n="model.th_activate">
-                                            </th>
-                                            <th class="text-right py-2 pl-2 w-[120px] md:w-auto"
-                                                data-i18n="model.th_actions"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="session-table-body">
-                                        <tr>
-                                            <td colspan="9"
-                                                class="py-4 text-slate-400 light:text-slate-500 oled:text-[#888]"
-                                                data-i18n="model.table_loading">
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
                             </div>
                         </article>
                     </section>

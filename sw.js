@@ -1,4 +1,4 @@
-const CACHE_VERSION = "1.0.0";
+const CACHE_VERSION = "1.1.0";
 const CACHE_NAME = `lucidllm-app-v${CACHE_VERSION}`;
 
 const PRECACHE_ASSETS = [
@@ -6,6 +6,8 @@ const PRECACHE_ASSETS = [
     "/script/main.js", "/script/bootstrap.js", "/script/i18n.js",
     "/script/shared-utils.js", "/script/worker.js", "/script/drive-backup.js",
     "/favicon.svg",
+    // Transformers.js bundle (same-origin mandatory for multi-threaded WASM on Cloudflare Pages)
+    "/vendor/transformers/transformers.bundle.min.mjs",
 ];
 
 // 외부 호스트 목록 (이들은 항상 네트워크로만 요청)
@@ -22,9 +24,19 @@ const WASM_CACHE_NAME = "lucidllm-wasm-v1";
 
 // WASM/ORT 관련 리소스 판별
 function isOrtWasmResource(url) {
-    return url.hostname === "cdn.jsdelivr.net"
+    // CDN (jsdelivr)
+    if (url.hostname === "cdn.jsdelivr.net"
         && url.pathname.includes("onnxruntime-web")
-        && /\.(wasm|mjs)$/.test(url.pathname);
+        && /\.(wasm|mjs)$/.test(url.pathname)) {
+        return true;
+    }
+    // Local vendor
+    if (url.origin === self.location.origin
+        && url.pathname.startsWith("/vendor/transformers/ort-wasm")
+        && /\.(wasm|mjs)$/.test(url.pathname)) {
+        return true;
+    }
+    return false;
 }
 
 // 1. Install Event: 자산 사전캐시 (skipWaiting 없음 -> waiting 상태 유지)

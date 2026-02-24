@@ -9,7 +9,7 @@
 
 **LucidLLM**은 [Transformers.js](https://huggingface.co/docs/transformers.js)와 WebGPU 기술을 사용하여 AI 모델을 브라우저 내에서 완전히 로컬로 실행하는 채팅 애플리케이션입니다. 빌드 과정이 필요 없는(Zero-build) 아키텍처와 완벽한 개인정보 보호를 제공하며, 외부 서버로 데이터를 전송하지 않고도 강력한 AI 기능을 제공합니다.
 
-> **주요 특징:** 18,200줄 이상의 코드 • 4개 국어 지원 • WebGPU/WASM 추론 가속 • 60 FPS 실시간 스트리밍 • OPFS 파일 탐색기 • AES-256 암호화 백업 • OPFS 모델 캐싱
+> **주요 특징:** 18,200줄 이상의 코드 • 4개 국어 지원 • 추천 모델 • WebGPU/WASM 추론 가속 • 60 FPS 실시간 스트리밍 • OPFS 파일 탐색기 • AES-256 암호화 백업 • OPFS 모델 캐싱
 
 ## ✨ 핵심 기능
 
@@ -23,6 +23,7 @@
 | **OPFS Fetch 인터셉터**| 효율적인 모델 로딩을 위해 **Range Request**를 지원합니다. |
 | **HF 토큰 지원** | Hugging Face 토큰을 입력하여 비공개 또는 접근 제한된 모델을 사용할 수 있습니다. |
 | **스마트 다운로드** | 이어받기, 지수 백오프 기반 재시도, 양자화 선택을 지원합니다. |
+| **추천 모델** | 모델 탭에서 검증된 추천 모델을 원클릭으로 다운로드할 수 있습니다. |
 | **모델 감사 및 업데이트** | 모델의 무결성을 검증하고 HF의 최신 버전 여부를 확인합니다. |
 | **부트스트랩 설정** | 모델 최초 로드 시 자동으로 `generation_config.json`을 적용합니다. |
 | **파이프라인 캐시** | 최대 **4개의 활성 파이프라인**을 메모리에 캐시하여 즉각적인 모델 전환이 가능합니다. |
@@ -95,6 +96,7 @@ LucidLLM에서 정상 작동이 확인된 모델 목록입니다:
 | [HuggingFaceTB/SmolLM2-135M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct) | FP32, BNB4, Q4 | 검증됨 | 통과 |
 | [vicgalle/gpt2-alpaca-gpt4](https://huggingface.co/vicgalle/gpt2-alpaca-gpt4) | Unknown | 검증됨 | 통과 |
 | [onnx-community/Qwen2.5-0.5B-Instruct](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct) | Q4, INT8, BNB4 | 검증됨 | 통과 |
+| [willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX](https://huggingface.co/willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX) | Q4 | 검증됨 | 통과 |
 | [onnx-community/Phi-4-mini-instruct-ONNX](https://huggingface.co/onnx-community/Phi-4-mini-instruct-ONNX) | Q4 | 검증됨 | 통과 |
 | [onnx-community/Apertus-8B-Instruct-2509-ONNX](https://huggingface.co/onnx-community/Apertus-8B-Instruct-2509-ONNX) | Q4 | 검증됨 | 통과 |
 | [onnx-community/Qwen3-4B-Thinking-2507-ONNX](https://huggingface.co/onnx-community/Qwen3-4B-Thinking-2507-ONNX) | Q4 | 검증됨 | 통과 |
@@ -126,6 +128,8 @@ GitHub Pages에서 제공하는 데모를 즉시 사용해보세요 (설치 불�
 
 👉 **https://ergo9ine.github.io/LucidLLM/**
 
+> **팁**: Cloudflare Pages에 배포하면 COOP/COEP 헤더를 통해 멀티스레드 WASM 추론이 가능합니다.
+
 ### 로컬 (제로-빌드)
 
 1. 저장소를 클론하고 해당 폴더를 서버로 실행합니다:
@@ -139,6 +143,20 @@ npm run serve    # http://localhost:3000 에서 실행
 (대안: `python -m http.server 8000` 또는 `npx serve .`)
 
 브라우저에서 열고 Settings → Model Management에서 모델을 다운로드·활성화합니다.
+
+## 📖 사용 가이드
+
+### 1. 모델 로딩
+**설정 (Ctrl+,) → 모델 관리** 탭으로 이동합니다. Hugging Face 모델 ID(예: `HuggingFaceTB/SmolLM2-135M-Instruct`)를 직접 입력하거나, **추천 모델** 목록에서 하나를 선택하세요. "Fetch" 버튼 또는 다운로드 아이콘을 클릭하여 모델 번들을 준비합니다.
+
+### 2. 채팅 시작
+모델이 OPFS에 다운로드되면 세션 테이블의 **"활성화(Activate)"** 버튼을 클릭합니다. 상태 램프가 초록색(Loaded)으로 변할 때까지 기다린 후, 채팅 입력창에 메시지를 입력하세요.
+
+### 3. LLM 설정
+LLM 탭에서 **온도(Temperature)**, **Top-P**, **최대 토큰** 등 생성 파라미터를 조절할 수 있습니다. 또한 **시스템 프롬프트**를 수정하여 AI의 답변 스타일을 정의할 수 있습니다.
+
+### 4. 구글 드라이브 백업
+**백업** 탭에서 구글 계정을 연결하여 설정과 채팅 기록을 안전하게 동기화하세요. 모든 데이터는 클라이언트 측에서 사용자의 닉네임을 기반으로 암호화되어 안전하게 보관됩니다.
 
 ### 개발 및 테스트
 
@@ -176,6 +194,8 @@ npm run serve    # http://localhost:3000 에서 실행
 LucidLLM/
 ├── index.html                  # 메인 HTML 엔트리 포인트
 ├── sw.js                       # 서비스 워커 (PWA 캐시)
+├── _headers                    # Cloudflare Pages COOP/COEP 헤더
+├── serve.json                  # 로컬 개발 서버 CORS 설정
 ├── script/
 │   ├── bootstrap.js            # 앱 초기화 및 초기 i18n
 │   ├── main.js                 # 핵심 로직, 상태, UI 렌더링
@@ -183,6 +203,8 @@ LucidLLM/
 │   ├── shared-utils.js         # 공용 유틸리티 및 글로벌 API
 │   ├── worker.js               # 추론 전용 웹 워커
 │   └── drive-backup.js         # 암호화된 구글 드라이브 백업
+├── vendor/
+│   └── transformers/           # 자체 호스팅 Transformers.js 번들 + ONNX Runtime WASM
 ├── docs/                       # 문서 및 다국어 README
 │   ├── README.ko.md
 │   ├── README.ja.md
@@ -211,6 +233,10 @@ LucidLLM/
 | **암호화** | Web Crypto API (PBKDF2, AES-GCM-256) |
 | **CDN** | jsDelivr, unpkg |
 | **테스트** | Vitest (단위), Playwright (E2E) |
+
+## 🤝 기여하기
+- 큰 변경 사항은 사전에 Issue를 통해 상의해 주세요.
+- PR 플로우: fork → branch → PR (설명, 스크린샷, 테스트 포함)
 
 ## 📄 라이선스
 

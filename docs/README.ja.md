@@ -9,7 +9,7 @@
 
 **LucidLLM**は、[Transformers.js](https://huggingface.co/docs/transformers.js)とWebGPU技術を使用して、AIモデルをブラウザ内で完全にローカルで実行するチャットアプリケーションです。ビルド不要（Zero-build）のアーキテクチャと完全なプライバシー保護を提供し、外部サーバーにデータを送信することなく強力なAI機能を実現します。
 
-> **主な特徴:** 18,200行以上のコード • 4ヶ国語対応 • WebGPU/WASM推論アクセラレーション • 60 FPS リアルタイムストリーミング • OPFS ファイル探索器 • AES-256暗号化バックアップ • OPFSモデルキャッシュ
+> **主な特徴:** 18,200行以上のコード • 4ヶ国語対応 • おすすめモデル • WebGPU/WASM推論アクセラレーション • 60 FPS リアルタイムストリーミング • OPFS ファイル探索器 • AES-256暗号化バックアップ • OPFSモデルキャッシュ
 
 ## ✨ 主な機能
 
@@ -23,6 +23,7 @@
 | **OPFS Fetch インターセプター**| 効率的なモデル読み込みのために **Range Request** をサポートします。 |
 | **HFトークン対応** | Hugging Faceトークンを入力して、プライベートまたはアクセス制限のあるモデルを使用できます。 |
 | **スマートダウンロード** | ダウンロードの一時停止/再開、指数バックオフ（Exponential Backoff）リトライ、量子化選択をサポートします。 |
+| **おすすめモデル** | モデルタブから検証済みのおすすめモデルをワンクリックでダウンロードできます。 |
 | **モデル監査と更新** | モデルの整合性を検証し、HFの最新バージョンがあるか確認します。 |
 | **ブートストラップ設定** | モデルの初回読み込み時に自動的に `generation_config.json` を適用します。 |
 | **パイプラインキャッシュ** | 最大 **4つのアクティブなパイプライン** をメモリにキャッシュし、瞬時にモデルを切り替えられます。 |
@@ -95,6 +96,7 @@ LucidLLMで正常に動作することが確認されたモデルの一覧です
 | [HuggingFaceTB/SmolLM2-135M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct) | FP32, BNB4, Q4 | 検証済み | 合格 |
 | [vicgalle/gpt2-alpaca-gpt4](https://huggingface.co/vicgalle/gpt2-alpaca-gpt4) | Unknown | 検証済み | 合格 |
 | [onnx-community/Qwen2.5-0.5B-Instruct](https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct) | Q4, INT8, BNB4 | 検証済み | 合格 |
+| [willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX](https://huggingface.co/willopcbeta/GPT-5-Distill-Qwen3-4B-Instruct-Heretic-ONNX) | Q4 | 検証済み | 合格 |
 | [onnx-community/Phi-4-mini-instruct-ONNX](https://huggingface.co/onnx-community/Phi-4-mini-instruct-ONNX) | Q4 | 検証済み | 合格 |
 | [onnx-community/Apertus-8B-Instruct-2509-ONNX](https://huggingface.co/onnx-community/Apertus-8B-Instruct-2509-ONNX) | Q4 | 検証済み | 合格 |
 | [onnx-community/Qwen3-4B-Thinking-2507-ONNX](https://huggingface.co/onnx-community/Qwen3-4B-Thinking-2507-ONNX) | Q4 | 検証済み | 合格 |
@@ -125,6 +127,8 @@ LucidLLMで正常に動作することが確認されたモデルの一覧です
 GitHub Pagesのホスト版をすぐに試せます（インストール不要）：
 
 👉 **https://ergo9ine.github.io/LucidLLM/**
+
+> **ヒント**: Cloudflare Pagesにデプロイすると、COOP/COEPヘッダーによりマルチスレッドWASM推論が利用可能になります。
 
 ### ローカル（ゼロビルド）
 
@@ -222,6 +226,8 @@ npm run serve    # http://localhost:3000 で起動
 LucidLLM/
 ├── index.html                  # メインHTMLエントリーポイント
 ├── sw.js                       # サービスワーカー (PWAキャッシュ)
+├── _headers                    # Cloudflare Pages COOP/COEP ヘッダー
+├── serve.json                  # ローカル開発サーバー CORS 設定
 ├── script/
 │   ├── bootstrap.js            # アプリ初期化と初期 i18n
 │   ├── main.js                 # コアロジック、状態、UIレンダリング
@@ -229,6 +235,8 @@ LucidLLM/
 │   ├── shared-utils.js         # 共通ユーティリティとグローバルAPI
 │   ├── worker.js               # 推論用Web Worker
 │   └── drive-backup.js         # 暗号化されたGoogleドライブバックアップ
+├── vendor/
+│   └── transformers/           # セルフホスト版 Transformers.js バンドル + ONNX Runtime WASM
 ├── docs/                       # ドキュメントと多言語README
 │   ├── README.ko.md
 │   ├── README.ja.md
@@ -255,6 +263,7 @@ LucidLLM/
 | **フォント** | Space Grotesk (Google Fonts) |
 | **認証** | Google Identity Services (OAuth 2.0) |
 | **暗号化** | Web Crypto API (PBKDF2, AES-GCM-256) |
+| **CDN** | jsDelivr, unpkg |
 | **テスト** | Vitest（ユニット）、Playwright（E2E） |
 
 ## 📄 ライセンス
