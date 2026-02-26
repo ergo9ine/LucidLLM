@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 
 <head>
@@ -56,6 +56,11 @@
         :root {
             --panel: rgba(10, 16, 34, 0.8);
             --border: rgba(133, 167, 218, 0.24);
+            --font-scale: 1;
+        }
+
+        html {
+            font-size: calc(16px * var(--font-scale));
         }
 
         :root[data-theme="light"] {
@@ -248,7 +253,7 @@
                     <div class="flex flex-col min-w-0">
                         <span id="profile-chip-name"
                             class="text-sm font-medium text-slate-200 truncate light:text-slate-800"></span>
-                        <span id="profile-chip-version" class="text-[10px] text-slate-500 truncate"
+                        <span id="profile-chip-version" class="text-[0.625rem] text-slate-500 truncate"
                             data-i18n="profile.version_label">v0.0.4</span>
                     </div>
                 </div>
@@ -288,11 +293,11 @@
             <div class="flex items-center gap-3">
                 <div class="hidden md:flex items-center gap-2">
                     <div id="token-speed-stats"
-                        class="rounded-lg border border-slate-700/50 bg-slate-900/50 px-3 py-1.5 text-[10px] font-mono text-cyan-100 light:text-sky-700 oled:text-[#eee]/80">
+                        class="rounded-lg border border-slate-700/50 bg-slate-900/50 px-3 py-1.5 text-[0.625rem] font-mono text-cyan-100 light:text-sky-700 oled:text-[#eee]/80">
                     </div>
                 </div>
                 <div id="update-badge"
-                    class="hidden items-center gap-1.5 px-2 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-medium text-cyan-300 cursor-pointer hover:bg-cyan-500/20 transition-colors mr-2 light:bg-sky-50 light:border-sky-200 light:text-sky-700 light:hover:bg-sky-100 oled:bg-cyan-900/30 oled:border-cyan-800 oled:text-cyan-200"
+                    class="hidden items-center gap-1.5 px-2 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-[0.625rem] font-medium text-cyan-300 cursor-pointer hover:bg-cyan-500/20 transition-colors mr-2 light:bg-sky-50 light:border-sky-200 light:text-sky-700 light:hover:bg-sky-100 oled:bg-cyan-900/30 oled:border-cyan-800 oled:text-cyan-200"
                     role="button" tabindex="0">
                     <span class="relative flex h-2 w-2">
                         <span
@@ -352,7 +357,7 @@
                         </button>
                     </div>
                 </form>
-                <div class="text-center mt-2 text-[10px] text-slate-500 select-none" data-i18n="chat.disclaimer">
+                <div class="text-center mt-2 text-[0.625rem] text-slate-500 select-none" data-i18n="chat.disclaimer">
                     LucidLLM can make mistakes. Check important info.
                 </div>
             </div>
@@ -423,7 +428,7 @@
                         data-i18n-aria-label="settings.panel.model_label">
                         <div class="flex justify-end"> <button type="button" data-action="reset-settings-tab"
                                 data-tab="model"
-                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[11px]">
+                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[0.6875rem]">
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> <span
                                     data-i18n="settings.reset_tab"></span> </button>
                         </div>
@@ -433,7 +438,7 @@
                                 <h2 class="text-sm font-semibold text-cyan-100 light:text-sky-700 oled:text-[#eee]"
                                     data-i18n="model.session.title"></h2>
                                 <p id="session-summary"
-                                    class="text-[11px] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                                    class="text-[0.6875rem] text-slate-400 light:text-slate-500 oled:text-[#888]"
                                     data-i18n="model.session.scanning"></p>
                             </div>
                             <form id="model-select-form"
@@ -457,7 +462,7 @@
                                         <div>
                                             <h3 class="text-xs font-semibold text-cyan-100 oled:text-[#eee]"
                                                 data-i18n="model.recommended.title"></h3>
-                                            <p class="text-[10px] text-slate-400 oled:text-[#888]"
+                                            <p class="text-[0.625rem] text-slate-400 oled:text-[#888]"
                                                 data-i18n="model.recommended.subtitle"></p>
                                         </div>
                                     </div>
@@ -481,7 +486,7 @@
                                     <h2 class="text-sm font-semibold text-cyan-100 light:text-sky-700 oled:text-[#eee]"
                                         data-i18n="model.download.title">
                                     </h2> <span id="download-status-chip"
-                                        class="text-[11px] px-2 py-1 rounded-full border border-slate-600 text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                        class="text-[0.6875rem] px-2 py-1 rounded-full border border-slate-600 text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                         data-i18n="model.download.status_idle"></span>
                                 </div>
                                 <div class="text-xs text-slate-300 light:text-slate-600 oled:text-[#aaa]">
@@ -495,7 +500,7 @@
                                 </div>
                                 <div class="space-y-1"> <label id="download-quantization-label"
                                         for="download-quantization-select"
-                                        class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                        class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                         data-i18n="model.download.quant_label"></label> <select
                                         id="download-quantization-select"
                                         class="w-full bg-slate-950/70 light:bg-white light:border-slate-300 light:text-slate-900 oled:bg-[#111] oled:border-[#333] border border-slate-700 rounded-lg px-2 py-2 text-xs outline-none focus:border-cyan-400"
@@ -523,7 +528,7 @@
                                             class="h-full w-0 bg-cyan-400 transition-[width] duration-200"></div>
                                     </div>
                                     <div
-                                        class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]">
+                                        class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]">
                                         <div><span data-i18n="model.download.progress"></span> <span
                                                 id="download-percent-text"
                                                 class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">0%</span>
@@ -537,12 +542,12 @@
                                                 id="download-attempt-text"
                                                 class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">0</span></div>
                                     </div>
-                                    <div class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"><span
+                                    <div class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"><span
                                             data-i18n="model.download.bytes"></span> <span id="download-bytes-text"
                                             class="text-cyan-100 light:text-sky-700 oled:text-[#eee]"
                                             data-i18n="model.download.bytes_default"></span></div>
                                     <div id="download-status-text"
-                                        class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                        class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                         data-i18n="model.download.status_text"></div>
                                 </div>
                             </article>
@@ -554,7 +559,7 @@
                                 <table class="w-full text-xs table-fixed">
                                     <thead>
                                         <tr
-                                            class="text-slate-400 light:text-slate-500 oled:text-[#888] text-[11px] uppercase tracking-[0.12em] border-b border-slate-700/70">
+                                            class="text-slate-400 light:text-slate-500 oled:text-[#888] text-[0.6875rem] uppercase tracking-[0.12em] border-b border-slate-700/70">
                                             <th class="text-left py-2 pr-2 w-[40%] md:w-auto"
                                                 data-i18n="model.th_filename"></th>
                                             <th class="text-left py-2 px-2 hidden md:table-cell"
@@ -593,34 +598,34 @@
                                     <h2 class="text-sm font-semibold text-cyan-100 light:text-sky-700 oled:text-[#eee]"
                                         data-i18n="opfs.title"></h2>
                                     <p id="opfs-usage-text"
-                                        class="text-[11px] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                                        class="text-[0.6875rem] text-slate-400 light:text-slate-500 oled:text-[#888]"
                                         data-i18n="opfs.usage_loading"></p>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-2">
                                     <div id="opfs-path-text"
-                                        class="rounded-lg border border-slate-700 px-2 py-1 text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]">
+                                        class="rounded-lg border border-slate-700 px-2 py-1 text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]">
                                         /</div> <button id="opfs-up-btn" type="button"
-                                        class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-2.5 py-1.5 text-[11px]">
+                                        class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-2.5 py-1.5 text-[0.6875rem]">
                                         <i data-lucide="arrow-up" class="w-3 h-3"></i> <span
                                             data-i18n="opfs.btn_up"></span> </button> <button id="opfs-go-models-btn"
                                         type="button"
-                                        class="inline-flex items-center gap-1 rounded-lg border border-cyan-300/35 hover:bg-cyan-500/15 px-2.5 py-1.5 text-[11px]">
+                                        class="inline-flex items-center gap-1 rounded-lg border border-cyan-300/35 hover:bg-cyan-500/15 px-2.5 py-1.5 text-[0.6875rem]">
                                         <i data-lucide="box" class="w-3 h-3"></i> <span
                                             data-i18n="opfs.btn_models"></span> </button> <button id="opfs-refresh-btn"
                                         type="button"
-                                        class="inline-flex items-center gap-1 rounded-lg border border-cyan-300/35 hover:bg-cyan-500/15 px-2.5 py-1.5 text-[11px]">
+                                        class="inline-flex items-center gap-1 rounded-lg border border-cyan-300/35 hover:bg-cyan-500/15 px-2.5 py-1.5 text-[0.6875rem]">
                                         <i data-lucide="refresh-cw" class="w-3 h-3"></i> <span
                                             data-i18n="opfs.btn_refresh"></span> </button>
                                 </div>
                             </div>
                             <div id="opfs-breadcrumb"
-                                class="flex flex-wrap items-center gap-1 text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]">
+                                class="flex flex-wrap items-center gap-1 text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]">
                             </div>
                             <div class="grid grid-cols-1 xl:grid-cols-[260px_minmax(0,1fr)] gap-3">
                                 <aside
                                     class="rounded-xl border border-slate-700/70 bg-slate-900/35 light:bg-slate-50 light:border-slate-300 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] overflow-hidden">
                                     <div
-                                        class="px-3 py-2 border-b border-slate-700/70 text-[11px] uppercase tracking-[0.12em] text-slate-400 light:text-slate-500 oled:text-[#888]">
+                                        class="px-3 py-2 border-b border-slate-700/70 text-[0.6875rem] uppercase tracking-[0.12em] text-slate-400 light:text-slate-500 oled:text-[#888]">
                                         <span data-i18n="opfs.folder_tree"></span>
                                     </div>
                                     <div id="opfs-tree-body" class="max-h-[460px] overflow-auto p-2 space-y-1">
@@ -631,7 +636,7 @@
                                 <section id="opfs-dropzone"
                                     class="rounded-xl border border-slate-700/70 bg-slate-900/35 light:bg-slate-50 light:border-slate-300 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] overflow-hidden flex flex-col">
                                     <div
-                                        class="px-3 py-2 border-b border-slate-700/70 text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa] flex items-center justify-between gap-2">
+                                        class="px-3 py-2 border-b border-slate-700/70 text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa] flex items-center justify-between gap-2">
                                         <span data-i18n="opfs.file_list"></span> <span id="opfs-upload-status"
                                             class="text-cyan-200 light:text-sky-600 oled:text-[#ddd]"
                                             data-i18n="opfs.upload_status_idle"></span>
@@ -640,7 +645,7 @@
                                         <table class="w-full text-xs table-fixed">
                                             <thead>
                                                 <tr
-                                                    class="text-slate-400 light:text-slate-500 oled:text-[#888] text-[11px] uppercase tracking-[0.12em] border-b border-slate-700/70 bg-slate-900/45">
+                                                    class="text-slate-400 light:text-slate-500 oled:text-[#888] text-[0.6875rem] uppercase tracking-[0.12em] border-b border-slate-700/70 bg-slate-900/45">
                                                     <th class="text-left py-2 px-2 w-[60%] md:w-auto"
                                                         data-i18n="opfs.th_name"></th>
                                                     <th class="text-left py-2 px-2 hidden sm:table-cell"
@@ -661,7 +666,7 @@
                                         </table>
                                     </div>
                                     <div
-                                        class="px-3 py-2 border-t border-slate-700/70 text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa] flex flex-wrap items-center gap-x-4 gap-y-1">
+                                        class="px-3 py-2 border-t border-slate-700/70 text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa] flex flex-wrap items-center gap-x-4 gap-y-1">
                                         <span id="opfs-status-selection" data-i18n="opfs.status_selection"></span> <span
                                             id="opfs-status-size" data-i18n="opfs.status_size"></span> <span
                                             id="opfs-status-total" data-i18n="opfs.status_total"></span>
@@ -684,7 +689,7 @@
                             <div id="opfs-context-menu"
                                 class="hidden fixed z-[95] min-w-[200px] rounded-xl border border-slate-600 bg-slate-900/95 shadow-2xl p-1">
                                 <div id="opfs-context-target"
-                                    class="px-2 py-1.5 text-[11px] text-slate-400 light:text-slate-500 oled:text-[#888] border-b border-slate-700/80 mb-1"
+                                    class="px-2 py-1.5 text-[0.6875rem] text-slate-400 light:text-slate-500 oled:text-[#888] border-b border-slate-700/80 mb-1"
                                     data-i18n="opfs.ctx_path"></div> <button data-action="opfs-context-create-dir"
                                     type="button"
                                     class="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-slate-700/70"
@@ -712,7 +717,7 @@
                         data-i18n-aria-label="common.llm_settings">
                         <div class="flex justify-end"> <button type="button" data-action="reset-settings-tab"
                                 data-tab="llm"
-                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[11px]">
+                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[0.6875rem]">
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> <span
                                     data-i18n="settings.reset_tab"></span> </button>
                         </div>
@@ -724,7 +729,7 @@
                                 class="w-full resize-y bg-slate-950/70 light:bg-white light:border-slate-300 light:text-slate-900 oled:bg-[#111] oled:border-[#333] border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400"
                                 data-i18n-placeholder="llm.system_prompt_placeholder"></textarea>
                             <p id="system-prompt-line-count"
-                                class="text-[11px] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                                class="text-[0.6875rem] text-slate-400 light:text-slate-500 oled:text-[#888]"
                                 data-i18n="llm.line_count"></p>
                         </article>
                         <article
@@ -762,7 +767,7 @@
                                     data-i18n="llm.btn_clear_token"></button> </div>
                         </article>
                         <article class="rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-4 space-y-3">
-                            <p id="llm-settings-validation" class="text-[12px] text-slate-200"
+                            <p id="llm-settings-validation" class="text-[0.75rem] text-slate-200"
                                 data-i18n="llm.validation_hint"></p>
                         </article>
                     </section>
@@ -771,7 +776,7 @@
                         data-i18n-aria-label="settings.panel.profile_label">
                         <div class="flex justify-end"> <button type="button" data-action="reset-settings-tab"
                                 data-tab="profile"
-                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[11px]">
+                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[0.6875rem]">
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> <span
                                     data-i18n="settings.reset_tab"></span> </button>
                         </div>
@@ -799,7 +804,7 @@
                                     class="w-full bg-slate-950/70 light:bg-white light:border-slate-300 light:text-slate-900 oled:bg-[#111] oled:border-[#333] border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400"
                                     data-i18n-placeholder="profile.nickname_placeholder">
                                 <p id="profile-nickname-status"
-                                    class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                    class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                     data-i18n="profile.realtime_hint"></p>
                             </div>
                         </article>
@@ -809,7 +814,7 @@
                         data-i18n-aria-label="settings.panel.theme_label">
                         <div class="flex justify-end"> <button type="button" data-action="reset-settings-tab"
                                 data-tab="theme"
-                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[11px]">
+                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[0.6875rem]">
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> <span
                                     data-i18n="settings.reset_tab"></span> </button>
                         </div>
@@ -835,8 +840,27 @@
                                         id="theme-high-contrast-label" data-i18n="theme.high_contrast"></span> </label>
                             </div>
                             <p id="theme-status-text"
-                                class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                 data-i18n="theme.hint"></p>
+                        </article>
+                        <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 light:bg-white light:border-slate-200 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] p-4 space-y-3">
+                            <h2 id="font-scale-title"
+                                class="text-sm font-semibold text-cyan-100 light:text-sky-700 oled:text-[#eee]"
+                                data-i18n="settings.font_scale_title">폰트 크기</h2>
+                            <div class="space-y-2">
+                                <div class="flex items-center justify-between gap-2 text-xs">
+                                    <label for="font-scale-input"
+                                        class="text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                        data-i18n="settings.font_scale_label">UI 폰트 크기</label>
+                                    <span id="font-scale-value"
+                                        class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">100%</span>
+                                </div>
+                                <input id="font-scale-input" type="range"
+                                    min="0.75" max="1.5" step="0.05" value="1"
+                                    class="w-full">
+                                <p class="text-[0.6875rem] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                                    data-i18n="settings.font_scale_hint">75% ~ 150% 범위에서 조절 가능합니다.</p>
+                            </div>
                         </article>
                     </section>
                     <section id="settings-panel-language" data-settings-panel="language"
@@ -844,7 +868,7 @@
                         data-i18n-aria-label="settings.panel.language_label">
                         <div class="flex justify-end"> <button type="button" data-action="reset-settings-tab"
                                 data-tab="language"
-                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[11px]">
+                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[0.6875rem]">
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> <span
                                     data-i18n="settings.reset_tab"></span> </button>
                         </div>
@@ -865,7 +889,7 @@
                                 </select>
                             </div>
                             <p id="language-status-text"
-                                class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                 data-i18n="language.hint"></p>
                         </article>
                     </section>
@@ -874,7 +898,7 @@
                         data-i18n-aria-label="common.backup_and_restore">
                         <div class="flex justify-end"> <button type="button" data-action="reset-settings-tab"
                                 data-tab="backup"
-                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[11px]">
+                                class="inline-flex items-center gap-1 rounded-lg border border-slate-600 hover:bg-slate-800/70 px-3 py-1.5 text-[0.6875rem]">
                                 <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> <span
                                     data-i18n="settings.reset_tab"></span> </button>
                         </div>
@@ -901,10 +925,10 @@
                                     <i data-lucide="unlink-2" class="w-4 h-4"></i> <span
                                         data-i18n="backup.gdrive.btn_disconnect"></span> </button> </div>
                             <div id="drive-auth-status"
-                                class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                 data-i18n="backup.gdrive.status_disconnected"></div>
                             <div id="drive-last-sync-text"
-                                class="text-[11px] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                                class="text-[0.6875rem] text-slate-400 light:text-slate-500 oled:text-[#888]"
                                 data-i18n="backup.gdrive.last_sync"></div> <label
                                 class="inline-flex items-center gap-2 text-xs text-slate-200"> <input
                                     id="drive-auto-backup-toggle" type="checkbox" class="accent-cyan-400"> <span
@@ -923,13 +947,13 @@
                                     <div id="drive-progress-bar"
                                         class="h-full w-0 bg-cyan-400 transition-[width] duration-200"></div>
                                 </div>
-                                <div class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"> <span
+                                <div class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"> <span
                                         data-i18n="backup.gdrive.progress"></span>
                                     <span id="drive-progress-percent"
                                         class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">0%</span>
                                 </div>
                                 <div id="drive-progress-status"
-                                    class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                    class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                     data-i18n="backup.gdrive.progress_status"></div>
                             </div>
                         </article>
@@ -950,7 +974,7 @@
                                 data-i18n="backup.restore.btn_restore">
                                 <i data-lucide="download-cloud" class="w-4 h-4"></i></button>
                             <div id="drive-file-list-meta"
-                                class="text-[11px] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                 data-i18n="backup.restore.file_count"></div>
                         </article>
                     </section>
@@ -971,49 +995,49 @@
             </div>
             <div class="p-4 md:p-5 space-y-4 overflow-y-auto text-sm" style="max-height:calc(100vh - 10rem)">
                 <div class="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-4">
-                    <div class="text-[11px] uppercase tracking-[0.2em] text-emerald-200/90"
+                    <div class="text-[0.6875rem] uppercase tracking-[0.2em] text-emerald-200/90"
                         data-i18n="model_card.selected"></div>
                     <div id="model-card-name" class="mt-1 text-base font-semibold text-emerald-100">-</div>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                        <div class="text-[0.6875rem] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
                             data-i18n="model_card.uploader"></div>
                         <div id="model-card-uploader" class="mt-1 text-slate-100">-</div>
                     </div>
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                        <div class="text-[0.6875rem] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
                             data-i18n="model_card.task"></div>
                         <div id="model-card-task" class="mt-1 text-slate-100">-</div>
                     </div>
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                        <div class="text-[0.6875rem] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
                             data-i18n="model_card.downloads"></div>
                         <div id="model-card-downloads" class="mt-1 text-slate-100">-</div>
                     </div>
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                        <div class="text-[0.6875rem] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
                             data-i18n="model_card.license"></div>
                         <div id="model-card-license" class="mt-1 text-slate-100">-</div>
                     </div>
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                        <div class="text-[0.6875rem] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
                             data-i18n="model_card.likes"></div>
                         <div id="model-card-likes" class="mt-1 text-slate-100">-</div>
                     </div>
                     <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                        <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                        <div class="text-[0.6875rem] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
                             data-i18n="model_card.updated"></div>
                         <div id="model-card-updated" class="mt-1 text-slate-100">-</div>
                     </div>
                 </div>
                 <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                    <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                    <div class="text-[0.6875rem] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
                         data-i18n="model_card.tags"></div>
                     <div id="model-card-tags" class="mt-1 text-slate-100 break-words">-</div>
                 </div>
                 <div class="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
-                    <div class="text-[11px] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                    <div class="text-[0.6875rem] uppercase tracking-[0.15em] text-slate-400 light:text-slate-500 oled:text-[#888]"
                         data-i18n="model_card.description"></div>
                     <div id="model-card-summary" class="mt-1 text-slate-100 whitespace-pre-wrap break-words">-</div>
                 </div>

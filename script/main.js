@@ -133,6 +133,7 @@ const STORAGE_KEYS = {
     updateLatestRelease: "lucid_update_latest_release",
     updateDismissedVersion: "lucid_update_dismissed_version",
     generationConfigBootstrapByModel: "lucid_generation_config_bootstrap_by_model",
+    fontScale: "lucid_font_scale",
 };
 
 const SUPPORTED_THEMES = ["dark", "light", "oled", "high-contrast"];
@@ -448,7 +449,7 @@ function ensureDriveBackupControls() {
         row.className = "grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2 items-center";
         row.innerHTML = `
             <input id="drive-backup-limit-mb-input" type="number" min="${DRIVE_BACKUP_MIN_LIMIT_MB}" max="${DRIVE_BACKUP_MAX_LIMIT_MB}" step="1" class="w-full bg-slate-950/70 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-cyan-400" placeholder="${escapeHtml(t(I18N_KEYS.SETTINGS_PLACEHOLDER_LIMIT))}">
-            <div id="drive-backup-size-text" class="text-[11px] text-slate-300">${escapeHtml(t(I18N_KEYS.BACKUP_SIZE_ESTIMATE, { size: "0 B", limit: DRIVE_BACKUP_DEFAULT_LIMIT_MB }))}</div>
+            <div id="drive-backup-size-text" class="text-[0.6875rem] text-slate-300">${escapeHtml(t(I18N_KEYS.BACKUP_SIZE_ESTIMATE, { size: "0 B", limit: DRIVE_BACKUP_DEFAULT_LIMIT_MB }))}</div>
         `;
         const progressWrap = firstCard.querySelector("#drive-progress-status")?.closest(".space-y-2");
         if (progressWrap?.parentElement) {
@@ -473,6 +474,7 @@ async function bootstrapApplication() {
     hydrateInferenceDevicePreference();
     applyTheme(getProfileTheme(), { silent: true });
     applyLanguage(getProfileLanguage(), { silent: true });
+    applyFontScale(getProfileFontScale(), { save: false });
     bindEvents();
     hydrateSettings();
     hydrateDriveBackupSettings();
@@ -1515,6 +1517,9 @@ function cacheElements() {
         themeOledLabel: document.getElementById("theme-oled-label"),
         themeHighContrastLabel: document.getElementById("theme-high-contrast-label"),
         themeStatusText: document.getElementById("theme-status-text"),
+        fontScaleTitle: document.getElementById("font-scale-title"),
+        fontScaleInput: document.getElementById("font-scale-input"),
+        fontScaleValue: document.getElementById("font-scale-value"),
         languageTitle: document.getElementById("language-title"),
         languageSelectLabel: document.getElementById("language-select-label"),
         languageSelect: document.getElementById("language-select"),
@@ -2087,6 +2092,19 @@ function bindEvents() {
 
     if (els.themeOptionHighContrast) {
         els.themeOptionHighContrast.addEventListener("change", handleThemeOptionHighContrastChange);
+    }
+
+    if (els.fontScaleInput) {
+        els.fontScaleInput.addEventListener("input", (e) => {
+            const val = e.target.value;
+            if (els.fontScaleValue) {
+                els.fontScaleValue.textContent = `${Math.round(val * 100)}%`;
+            }
+            document.documentElement.style.setProperty("--font-scale", val.toString());
+        });
+        els.fontScaleInput.addEventListener("change", (e) => {
+            applyFontScale(e.target.value, { showToast: true });
+        });
     }
 
     if (els.languageSelect) {
@@ -2833,6 +2851,10 @@ function getProfileTheme() {
     return normalizeTheme(state.theme ?? "dark");
 }
 
+function getProfileFontScale() {
+    return localStorage.getItem(STORAGE_KEYS.fontScale) || "1";
+}
+
 function getProfileNickname() {
     const nickname = String(state.profile?.nickname ?? "").trim();
     return nickname ?? "YOU";
@@ -2870,8 +2892,8 @@ function setProfileStatus(message, kind = "info") {
     const text = String(message ?? "");
     els.profileNicknameStatus.textContent = text;
     els.profileNicknameStatus.className = kind === "error"
-        ? "text-[11px] text-rose-200"
-        : (kind === "success" ? "text-[11px] text-emerald-200" : "text-[11px] text-slate-300");
+        ? "text-[0.6875rem] text-rose-200"
+        : (kind === "success" ? "text-[0.6875rem] text-emerald-200" : "text-[0.6875rem] text-slate-300");
 }
 
 function renderProfileIdentityChip() {
@@ -2992,6 +3014,28 @@ function applyTheme(theme, options = {}) {
 
     if (!options.silent) {
         showToast(t("theme.applied"), "success", 1500);
+    }
+}
+
+function applyFontScale(scale, options = {}) {
+    const { save = true, showToast = false } = options;
+    const clampedScale = Math.min(Math.max(parseFloat(scale) || 1, 0.75), 1.5);
+
+    if (save) {
+        localStorage.setItem(STORAGE_KEYS.fontScale, clampedScale.toString());
+    }
+
+    document.documentElement.style.setProperty("--font-scale", clampedScale.toString());
+
+    if (els.fontScaleInput) {
+        els.fontScaleInput.value = clampedScale.toString();
+    }
+    if (els.fontScaleValue) {
+        els.fontScaleValue.textContent = `${Math.round(clampedScale * 100)}%`;
+    }
+
+    if (showToast) {
+        showToastMessage(t(I18N_KEYS.SETTINGS_FONT_SCALE_APPLIED, { scale: Math.round(clampedScale * 100) }));
     }
 }
 
@@ -3266,8 +3310,8 @@ function renderDriveBackupUi() {
             : "미연결";
         els.driveAuthStatus.textContent = text;
         els.driveAuthStatus.className = state.driveBackup.connected
-            ? "text-[11px] text-emerald-300"
-            : "text-[11px] text-slate-300";
+            ? "text-[0.6875rem] text-emerald-300"
+            : "text-[0.6875rem] text-slate-300";
     }
 
     if (els.driveLastSyncText) {
@@ -3321,8 +3365,8 @@ function renderDriveBackupUi() {
         const exceeded = estimatedBytes > limitBytes;
         els.driveBackupSizeText.textContent = t(I18N_KEYS.BACKUP_SIZE_ESTIMATE, { size: formatBytes(estimatedBytes), limit: limitMb });
         els.driveBackupSizeText.className = exceeded
-            ? "text-[11px] text-rose-200"
-            : "text-[11px] text-slate-300";
+            ? "text-[0.6875rem] text-rose-200"
+            : "text-[0.6875rem] text-slate-300";
     }
 
     renderDriveBackupFileOptions();
@@ -3729,6 +3773,7 @@ function buildBackupPayload() {
             generationMaxLength: Number(getLocalGenerationSettings().maxLength),
             theme: getProfileTheme(),
             language: getProfileLanguage(),
+            fontScale: getProfileFontScale(),
             inferenceDevice: normalizeInferenceDevice(state.inference.preferredDevice),
 
             hfTokenConfigured: !!String(getToken() ?? "").trim(),
@@ -4043,6 +4088,9 @@ function applyBackupPayload(payload, { overwrite = true } = {}) {
         }
         if (typeof settings.language === "string") {
             applyLanguage(settings.language, { silent: true });
+        }
+        if (typeof settings.fontScale === "string") {
+            applyFontScale(settings.fontScale, { save: true });
         }
         if (typeof settings.inferenceDevice === "string") {
             const nextDevice = normalizeInferenceDevice(settings.inferenceDevice);
@@ -4362,13 +4410,13 @@ function renderLlmDraftStatus() {
     if (els.systemPromptLineCount) {
         const lineCount = Math.max(0, Number(validated.lineCount ?? 0));
         const maxLines = SYSTEM_PROMPT_MAX_LINES;
-        let counterClass = "text-[11px] text-slate-400";
+        let counterClass = "text-[0.6875rem] text-slate-400";
         let suffix = "";
         if (lineCount > maxLines) {
-            counterClass = "text-[11px] text-rose-200";
+            counterClass = "text-[0.6875rem] text-rose-200";
             suffix = " (초과)";
         } else if (lineCount === maxLines) {
-            counterClass = "text-[11px] text-amber-200";
+            counterClass = "text-[0.6875rem] text-amber-200";
             suffix = " (최대)";
         }
         els.systemPromptLineCount.textContent = t(I18N_KEYS.LLM_LINE_COUNT, { count: lineCount, max: maxLines, suffix });
@@ -4383,8 +4431,8 @@ function renderLlmDraftStatus() {
             ? `유효성 검사 통과. 모든 항목은 입력 즉시 자동으로 저장됩니다.${limitHint}`
             : validated.errors.join(" ");
         els.llmSettingsValidation.className = validated.valid
-            ? "text-[12px] text-emerald-200"
-            : "text-[12px] text-rose-200";
+            ? "text-[0.75rem] text-emerald-200"
+            : "text-[0.75rem] text-rose-200";
     }
 }
 
@@ -4725,6 +4773,7 @@ function restoreProfileTabFromSnapshot(snapshot) {
 
 function resetThemeTabDefaults() {
     applyTheme("dark", { silent: true });
+    applyFontScale(1, { silent: true });
 }
 
 function restoreThemeTabFromSnapshot(snapshot) {
@@ -6864,23 +6913,23 @@ function renderDownloadPanel() {
 
     if (els.downloadStatusChip) {
         let text = "대기";
-        let className = "text-[11px] px-2 py-1 rounded-full border border-slate-600 text-slate-300";
+        let className = "text-[0.6875rem] px-2 py-1 rounded-full border border-slate-600 text-slate-300";
 
         if (isFailure) {
             text = "실패";
-            className = "text-[11px] px-2 py-1 rounded-full border border-rose-400/60 text-rose-200 bg-rose-500/15";
+            className = "text-[0.6875rem] px-2 py-1 rounded-full border border-rose-400/60 text-rose-200 bg-rose-500/15";
         } else if (isPaused) {
             text = "일시중지";
-            className = "text-[11px] px-2 py-1 rounded-full border border-amber-400/60 text-amber-200 bg-amber-500/15";
+            className = "text-[0.6875rem] px-2 py-1 rounded-full border border-amber-400/60 text-amber-200 bg-amber-500/15";
         } else if (isComplete) {
             text = "완료";
-            className = "text-[11px] px-2 py-1 rounded-full border border-emerald-400/60 text-emerald-200 bg-emerald-500/15";
+            className = "text-[0.6875rem] px-2 py-1 rounded-full border border-emerald-400/60 text-emerald-200 bg-emerald-500/15";
         } else if (isInProgress) {
             text = "진행 중";
-            className = "text-[11px] px-2 py-1 rounded-full border border-cyan-400/60 text-cyan-200 bg-cyan-500/15";
+            className = "text-[0.6875rem] px-2 py-1 rounded-full border border-cyan-400/60 text-cyan-200 bg-cyan-500/15";
         } else if (isEnabled) {
             text = "준비";
-            className = "text-[11px] px-2 py-1 rounded-full border border-cyan-300/45 text-cyan-200";
+            className = "text-[0.6875rem] px-2 py-1 rounded-full border border-cyan-300/45 text-cyan-200";
         }
 
         els.downloadStatusChip.className = className;
@@ -9374,7 +9423,7 @@ function renderRecommendedModels() {
         ).join("");
         
         const hasQuant = model.quantizations.length > 0;
-        const tagHtml = model.tags.map((tag) => `<span class="px-1.5 py-0.5 rounded text-[9px] font-medium bg-slate-700/60 text-slate-300 oled:bg-[#222] oled:text-[#aaa]">${escapeHtml(tag)}</span>`).join(" ");
+        const tagHtml = model.tags.map((tag) => `<span class="px-1.5 py-0.5 rounded text-[0.5625rem] font-medium bg-slate-700/60 text-slate-300 oled:bg-[#222] oled:text-[#aaa]">${escapeHtml(tag)}</span>`).join(" ");
         const initialSize = defaultQ ? formatBytes(defaultQ.sizeBytes) : "-";
 
         return `
@@ -9390,17 +9439,17 @@ function renderRecommendedModels() {
                             <i data-lucide="external-link" class="w-3 h-3"></i>
                         </a>
                     </div>
-                    <p class="text-[10px] text-slate-400 oled:text-[#888] mt-0.5 line-clamp-2">${escapeHtml(model.description)}</p>
+                    <p class="text-[0.625rem] text-slate-400 oled:text-[#888] mt-0.5 line-clamp-2">${escapeHtml(model.description)}</p>
                 </div>
-                ${downloaded ? `<span class="shrink-0 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-400/25"><i data-lucide="check" class="w-2.5 h-2.5"></i>${escapeHtml(downloadedLabel)}</span>` : ""}
+                ${downloaded ? `<span class="shrink-0 inline-flex items-center gap-1 text-[0.625rem] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-400/25"><i data-lucide="check" class="w-2.5 h-2.5"></i>${escapeHtml(downloadedLabel)}</span>` : ""}
             </div>
             <div class="flex items-center gap-1 flex-wrap">${tagHtml}</div>
-            <div class="flex items-center justify-between gap-2 text-[10px] text-slate-400 oled:text-[#888]">
+            <div class="flex items-center justify-between gap-2 text-[0.625rem] text-slate-400 oled:text-[#888]">
                 <span><span class="text-slate-500">${escapeHtml(sizeLabel)}: </span><span class="rec-size-display">${escapeHtml(initialSize)}</span></span>
             </div>
             <div class="flex items-center gap-2">
-                ${hasQuant ? `<select class="rec-quant-select bg-slate-950/70 oled:bg-[#111] border border-slate-700 oled:border-[#333] rounded px-1.5 py-1 text-[10px] outline-none focus:border-cyan-400 flex-shrink-0" aria-label="Quantization">${quantOptions}</select>` : ""}
-                <button type="button" class="rec-download-btn inline-flex items-center gap-1 text-[10px] px-3 py-1.5 rounded border ${downloaded ? "border-emerald-400/30 text-emerald-400 bg-emerald-500/10 opacity-70 cursor-default" : "border-cyan-300/35 hover:bg-cyan-500/15 text-slate-200"} transition-colors flex-1 justify-center" ${downloaded ? "disabled" : ""}>
+                ${hasQuant ? `<select class="rec-quant-select bg-slate-950/70 oled:bg-[#111] border border-slate-700 oled:border-[#333] rounded px-1.5 py-1 text-[0.625rem] outline-none focus:border-cyan-400 flex-shrink-0" aria-label="Quantization">${quantOptions}</select>` : ""}
+                <button type="button" class="rec-download-btn inline-flex items-center gap-1 text-[0.625rem] px-3 py-1.5 rounded border ${downloaded ? "border-emerald-400/30 text-emerald-400 bg-emerald-500/10 opacity-70 cursor-default" : "border-cyan-300/35 hover:bg-cyan-500/15 text-slate-200"} transition-colors flex-1 justify-center" ${downloaded ? "disabled" : ""}>
                     <i data-lucide="${downloaded ? "check" : "download"}" class="w-3 h-3"></i>
                     ${escapeHtml(downloaded ? downloadedLabel : downloadLabel)}
                 </button>
@@ -10715,7 +10764,6 @@ function splitModelFileNameAndDtype(modelFileName) {
         "q4f16", "q4f32", "q8f16", "q8f32",
         "q4", "q8", "fp16", "fp32",
         "int4", "int8", "uint8", "bnb4",
-        "quantized",
     ];
     const lower = String(modelFileName ?? "").toLowerCase();
     for (const suffix of DTYPE_SUFFIXES) {
@@ -11556,14 +11604,14 @@ function renderShortcutHelpContent() {
 
     let html = "";
     for (const cat of categories) {
-        html += `<div class="mb-1"><div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2 light:text-slate-500 oled:text-[#888]">${escapeHtml(cat.label)}</div>`;
+        html += `<div class="mb-1"><div class="text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-400 mb-2 light:text-slate-500 oled:text-[#888]">${escapeHtml(cat.label)}</div>`;
         html += `<div class="space-y-1.5">`;
         for (const item of cat.items) {
             html += `<div class="flex items-center justify-between py-1 px-1">`;
             html += `<span class="text-slate-300 light:text-slate-700 oled:text-[#bbb]">${escapeHtml(item.desc)}</span>`;
             html += `<span class="shrink-0 ml-4">`;
             const keys = item.keys.split("+");
-            html += keys.map(k => `<kbd class="inline-block min-w-[22px] text-center px-1.5 py-0.5 text-[11px] rounded border border-slate-600 bg-slate-800/60 text-slate-300 font-mono light:border-slate-300 light:bg-slate-100 light:text-slate-700 oled:border-[#444] oled:bg-[#1a1a1a] oled:text-[#bbb]">${escapeHtml(k)}</kbd>`).join(`<span class="text-slate-500 text-[10px] mx-0.5">+</span>`);
+            html += keys.map(k => `<kbd class="inline-block min-w-[22px] text-center px-1.5 py-0.5 text-[0.6875rem] rounded border border-slate-600 bg-slate-800/60 text-slate-300 font-mono light:border-slate-300 light:bg-slate-100 light:text-slate-700 oled:border-[#444] oled:bg-[#1a1a1a] oled:text-[#bbb]">${escapeHtml(k)}</kbd>`).join(`<span class="text-slate-500 text-[0.625rem] mx-0.5">+</span>`);
             html += `</span></div>`;
         }
         html += `</div></div>`;
@@ -13176,7 +13224,7 @@ function appendMessageBubble(entry, options = {}) {
     const shouldShowTokenBadge = role === "assistant" && (options.showTokenBadge || hasStoredMetric);
     if (shouldShowTokenBadge) {
         tokenBadge = document.createElement("span");
-        tokenBadge.className = "rounded-full border border-cyan-400/35 bg-cyan-500/10 px-2 py-[2px] text-[10px] text-cyan-100";
+        tokenBadge.className = "rounded-full border border-cyan-400/35 bg-cyan-500/10 px-2 py-[2px] text-[0.625rem] text-cyan-100";
         if (typeof options.tokenBadgeText === "string" && options.tokenBadgeText.trim()) {
             tokenBadge.textContent = options.tokenBadgeText.trim();
         } else if (hasStoredMetric) {
@@ -13193,7 +13241,7 @@ function appendMessageBubble(entry, options = {}) {
     let thinkingContent = null;
     if (role === "assistant") {
         thinkingContainer = document.createElement("details");
-        thinkingContainer.className = "hidden mb-3 md:mb-4 rounded-[14px] bg-slate-900/40 border border-slate-700/50 text-[13px] text-slate-300 overflow-hidden shadow-sm transition-all duration-300 ease-in-out";
+        thinkingContainer.className = "hidden mb-3 md:mb-4 rounded-[14px] bg-slate-900/40 border border-slate-700/50 text-[0.8125rem] text-slate-300 overflow-hidden shadow-sm transition-all duration-300 ease-in-out";
 
         const summary = document.createElement("summary");
         summary.className = "cursor-pointer px-3 py-2 hover:bg-slate-800/50 select-none flex items-center gap-2 font-medium transition-colors outline-none";
@@ -13641,7 +13689,7 @@ function showToast(message, kind = "info", duration = 3000, options = {}) {
         els.toast.innerHTML = `
             <div class="flex items-center gap-2">
                 <span class="flex-1 min-w-0">${escapeHtml(String(message ?? ""))}</span>
-                <button type="button" data-action="toast-action" class="shrink-0 rounded-md border border-current/45 px-2 py-1 text-[11px] font-medium hover:bg-white/10">
+                <button type="button" data-action="toast-action" class="shrink-0 rounded-md border border-current/45 px-2 py-1 text-[0.6875rem] font-medium hover:bg-white/10">
                     ${escapeHtml(actionLabel)}
                 </button>
             </div>
