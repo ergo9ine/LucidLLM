@@ -513,7 +513,6 @@ async function bootstrapApplication() {
 
     state.ui.storageEstimateTimer = window.setInterval(() => {
         refreshStorageEstimate().catch((err) => {
-            console.warn("[Storage] Estimate refresh failed:", getErrorMessage(err));
         });
     }, 5000);
 
@@ -527,7 +526,6 @@ function scheduleBootstrapApplication() {
     const run = () => {
         initMobileSidebar();
         bootstrapApplication().catch((error) => {
-            console.error("[BOOT] Application bootstrap failed", error);
         });
     };
 
@@ -1298,9 +1296,6 @@ async function tryResolveHfFileFromOpfs(input, init = {}) {
     const isLocalModelPathRequest = !!localModelRequest;
     if (!resolvedRequest) {
         if (localSessionLoadOpfsOnlyMode && isHfRequest && !shouldBypassOpfsInterceptorForDownload(url) && !isHuggingFaceApiRequest(url)) {
-            console.warn("[LOCAL] blocked remote HF request during OPFS-only session load", {
-                request_url: url,
-            });
             return new Response("Blocked remote request during local OPFS session load.", {
                 status: 404,
                 headers: {
@@ -1318,34 +1313,11 @@ async function tryResolveHfFileFromOpfs(input, init = {}) {
         if (!file) continue;
         const range = parseSingleByteRangeHeader(rangeHeader, Number(file?.size ?? 0));
         if (rangeHeader && !range) {
-            console.warn("[LOCAL] invalid range request for OPFS cached file", {
-                request_url: resolvedRequest.url,
-                opfs_path: candidatePath,
-                range: String(rangeHeader ?? ""),
-            });
             return createInvalidRangeResponse(Number(file?.size ?? 0));
         }
-        console.info("[LOCAL] served model request from OPFS cache", {
-            request_url: resolvedRequest.url,
-            model_id: resolvedRequest.modelId,
-            revision: resolvedRequest.revision,
-            source_path: resolvedRequest.filePath,
-            request_type: isLocalModelPathRequest ? "local_models_path" : "hf_resolve",
-            opfs_path: candidatePath,
-            bytes: Number(file.size ?? 0),
-            range: range ? `${range.start}-${range.end}` : "",
-        });
         return createOpfsFileResponse(file, candidatePath, method, { range });
     }
     if (localSessionLoadOpfsOnlyMode) {
-        console.warn("[LOCAL] blocked model request because OPFS cache miss", {
-            request_url: resolvedRequest.url,
-            model_id: resolvedRequest.modelId,
-            revision: resolvedRequest.revision,
-            source_path: resolvedRequest.filePath,
-            request_type: isLocalModelPathRequest ? "local_models_path" : "hf_resolve",
-            attempted_paths: candidatePaths,
-        });
         return new Response("OPFS cache miss during local session load.", {
             status: 404,
             headers: {
@@ -1386,9 +1358,7 @@ function logNetworkTrace(stage, context = {}) {
     };
     recordNetworkEvent(payload);
     if (stage === "error") {
-        console.warn("[NET] request failed", payload);
     } else {
-        console.info("[NET] request", payload);
     }
 }
 
@@ -1915,7 +1885,6 @@ async function checkForAppUpdate() {
         maybeShowUpdateBadge(latest.tag_name);
 
     } catch (error) {
-        console.warn("[Update] Check failed:", error);
     } finally {
         state.update.isChecking = false;
     }
@@ -2350,6 +2319,7 @@ function bindEvents() {
             els.llmTemperatureInput.value = String(value);
             state.settings.pendingResetUndo = null;
             renderLlmDraftStatus();
+            setLocalGenerationSettings({ temperature: value });
         };
         els.llmTemperatureInput.addEventListener("input", onTemperatureChange);
         els.llmTemperatureInput.addEventListener("change", onTemperatureChange);
@@ -2361,6 +2331,7 @@ function bindEvents() {
             els.llmTopPInput.value = String(value);
             state.settings.pendingResetUndo = null;
             renderLlmDraftStatus();
+            setLocalGenerationSettings({ topP: value });
         };
         els.llmTopPInput.addEventListener("input", onTopPChange);
         els.llmTopPInput.addEventListener("change", onTopPChange);
@@ -2372,6 +2343,7 @@ function bindEvents() {
             els.llmPresencePenaltyInput.value = String(value);
             state.settings.pendingResetUndo = null;
             renderLlmDraftStatus();
+            setLocalGenerationSettings({ presencePenalty: value });
         };
         els.llmPresencePenaltyInput.addEventListener("input", onPresencePenaltyChange);
         els.llmPresencePenaltyInput.addEventListener("change", onPresencePenaltyChange);
@@ -2717,6 +2689,36 @@ function bindEvents() {
     }
 
     if (els.chatMessages) {
+        els.chatMessages.addEventListener("click", (e) => {
+            const editBtn = e.target.closest("[data-action='edit-message']");
+            if (editBtn) {
+                const messageId = Number(editBtn.dataset.messageId);
+                startMessageEdit(messageId);
+                return;
+            }
+
+            const regenBtn = e.target.closest("[data-action='regenerate-message']");
+            if (regenBtn) {
+                const messageId = Number(regenBtn.dataset.messageId);
+                regenerateFromMessage(messageId);
+                return;
+            }
+
+            const saveBtn = e.target.closest("[data-action='save-edit']");
+            if (saveBtn) {
+                const messageId = Number(saveBtn.dataset.messageId);
+                commitMessageEdit(messageId);
+                return;
+            }
+
+            const cancelBtn = e.target.closest("[data-action='cancel-edit']");
+            if (cancelBtn) {
+                const messageId = Number(cancelBtn.dataset.messageId);
+                cancelMessageEdit(messageId);
+                return;
+            }
+        });
+
         // toggle visibility of "scroll to bottom" button and keep auto-scroll state in sync
         els.chatMessages.addEventListener("scroll", () => {
             const near = isChatNearBottom();
@@ -2740,9 +2742,18 @@ function bindEvents() {
     }
 }
 
+// Esc key for cancel edit
+document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const textarea = e.target.closest(".message-edit-textarea");
+    if (!textarea) return;
 
+    const bubble = textarea.closest("article[data-message-id]");
+    if (!bubble) return;
 
-
+    const messageId = Number(bubble.dataset.messageId);
+    if (typeof cancelMessageEdit === "function") cancelMessageEdit(messageId);
+});
 
 function normalizeTheme(value) {
     const candidate = String(value ?? "").trim().toLowerCase();
@@ -3188,13 +3199,6 @@ async function reloadActiveSessionForInferenceDevice(preferredDevice) {
             "error",
             3600,
         );
-        console.warn("[WARN] inference backend session reload failed", {
-            file_name: activeFile,
-            preferred_device: targetDevice,
-            code: classified.code,
-            message: classified.message,
-            raw_error: getErrorMessage(error),
-        });
     } finally {
         syncSessionRuntimeState();
         renderModelSessionList();
@@ -3592,7 +3596,6 @@ function startDriveFileListPolling() {
     if (!state.driveBackup.connected) return;
     state.driveBackup.pollTimer = window.setInterval(() => {
         refreshDriveBackupFileList({ silent: true, interactiveAuth: false }).catch((err) => {
-            console.warn("[Drive] Silent poll failed:", getErrorMessage(err));
         });
     }, DRIVE_FILE_LIST_POLL_MS);
 }
@@ -3811,7 +3814,6 @@ async function uploadResumableBlobWithProgress(uploadUrl, blob, progressRange = 
         try {
             resolve(JSON.parse(xhr.responseText ?? "{}"));
         } catch {
-            console.warn("[Drive] Failed to parse upload response");
             resolve({});
         }
     };
@@ -4171,10 +4173,6 @@ function scheduleAutoBackup(reason = "change") {
     state.driveBackup.autoTimer = window.setTimeout(() => {
         state.driveBackup.autoTimer = null;
         backupChatsToGoogleDrive({ manual: false }).catch((error) => {
-            console.warn("[WARN] auto backup failed", {
-                reason,
-                message: getErrorMessage(error),
-            });
         });
     }, DRIVE_AUTO_BACKUP_DEBOUNCE_MS);
 }
@@ -5068,7 +5066,7 @@ function createEmptyChatSession() {
 }
 
 function buildNextChatSessionTitle() {
-    const prefix = getProfileLanguage() === "ko" ? "대화" : "Chat";
+    const prefix = t(I18N_KEYS.CHAT_DEFAULT_TITLE);
     const used = new Set(
         state.chatSessions
             .map((session) => {
@@ -5086,7 +5084,7 @@ function buildNextChatSessionTitle() {
 }
 
 function getDefaultChatTitle() {
-    return getProfileLanguage() === "ko" ? "대화" : "Chat";
+    return t(I18N_KEYS.CHAT_DEFAULT_TITLE);
 }
 
 function getActiveChatSession() {
@@ -5148,6 +5146,7 @@ function persistActiveSessionMessages() {
 
     persistChatSessions();
     renderChatTabs();
+    updateRegenerateButtonVisibility();
 }
 
 function renderChatTabs() {
@@ -5160,7 +5159,7 @@ function renderChatTabs() {
 
     els.chatTabsList.innerHTML = state.chatSessions.map((session) => {
         const active = session.id === state.activeChatSessionId;
-        const openLabel = getProfileLanguage() === "ko" ? "대화 열기" : "Open chat";
+        const openLabel = t(I18N_KEYS.CHAT_OPEN);
         const deleteLabel = t(I18N_KEYS.SIDEBAR_ACTION_DELETE_CHAT);
 
         // Base classes for the list item
@@ -5277,6 +5276,7 @@ function renderActiveChatMessages() {
     }
     scrollChatToBottom(true); // on full render, force-scroll to bottom
     lucide.createIcons();
+    updateRegenerateButtonVisibility();
 }
 
 function getStoredChatSessions() {
@@ -5950,19 +5950,9 @@ async function enrichModelMetadataWithSiblingSizeMap(metadata, modelId = "") {
         base.siblings = patched;
 
         if (patchedCount > 0) {
-            console.info("[INFO] enriched sibling size metadata via HF tree API", {
-                model_id: modelId ?? base.id ?? "",
-                patched_count: patchedCount,
-                requested_count: missingFileNames.length,
-            });
         }
     } catch (error) {
         base.siblings = siblings;
-        console.warn("[WARN] failed to enrich sibling size metadata via HF tree API", {
-            model_id: modelId ?? base.id ?? "",
-            missing_count: missingFileNames.length,
-            message: getErrorMessage(error),
-        });
     }
 
     return base;
@@ -6232,20 +6222,6 @@ function prepareDownloadForModel(metadata, modelId) {
             ? `다운로드 준비 완료: ${target.primary.sourceFileName} + 필수 파일 ${target.files.length - 1}개`
             : "다운로드 준비가 완료되었습니다. 다운로드 버튼을 클릭하세요.";
     }
-    console.info("[INFO] prepared model bundle download", {
-        model_id: modelId,
-        primary_source: target.primary.sourceFileName,
-        quantization_options: state.download.quantizationOptions.map((option) => ({
-            key: option.key,
-            label: option.label,
-            source: option.sourceFileName,
-        })),
-        selected_quantization: state.download.selectedQuantizationKey,
-        total_files: target.files.length,
-        asset_files: target.files
-            .filter((item) => item.kind === "asset")
-            .map((item) => item.sourceFileName),
-    });
     renderDownloadPanel();
     showToast("모델 다운로드 메뉴가 활성화되었습니다.", "info", 2200);
 }
@@ -7014,7 +6990,6 @@ async function onClickDownloadStart() {
             }
         }
     } catch (quotaCheckErr) {
-        console.warn("[WARN] Pre-download quota check failed:", quotaCheckErr);
     }
 
     try {
@@ -7083,7 +7058,6 @@ async function attemptAutoFreeOpfsSpace(requiredBytes = 0, { keepPrefix = null }
                 await modelsDir.removeEntry(c.name, { recursive: true });
                 removeOpfsManifestEntry(c.name);
             } catch (e) {
-                console.warn('[WARN] failed to remove OPFS entry', c.name, e);
             }
             const est = await getStorageEstimate();
             const availNow = est.quota - est.usage;
@@ -7100,7 +7074,6 @@ async function attemptAutoFreeOpfsSpace(requiredBytes = 0, { keepPrefix = null }
         await refreshStorageEstimate();
         return false;
     } catch (err) {
-        console.warn('[WARN] attemptAutoFreeOpfsSpace failed', err);
         return false;
     }
 }
@@ -7126,16 +7099,6 @@ async function runDownloadFlow({ resume = false } = {}) {
             throw new Error(t(I18N_KEYS.ERROR_HTTPS_REQUIRED, { url: fileUrl ?? "-" }));
         }
     }
-    console.info("[INFO] start model bundle download", {
-        model_id: state.download.modelId,
-        file_count: queue.length,
-        resume: !!resume,
-        queue: queue.map((item) => ({
-            kind: item.kind ?? "asset",
-            source: item.sourceFileName || item.fileName,
-            target: item.fileName,
-        })),
-    });
 
     const primaryItem = queue.find((item) => item.kind === "onnx") || queue[0];
     if (!primaryItem) return;
@@ -7212,7 +7175,6 @@ async function runDownloadFlow({ resume = false } = {}) {
                     if (expectedSize !== null && expectedSize > 0) {
                         if (existingSize !== expectedSize) {
                             isValid = false;
-                            console.warn(`[WARN] File size mismatch for ${displaySourceName}: expected ${expectedSize}, got ${existingSize}. Re-downloading.`);
                         }
                     }
 
@@ -7428,7 +7390,6 @@ async function runDownloadFlow({ resume = false } = {}) {
                             await refreshStorageEstimate();
                         }
                     } catch (err) {
-                        console.warn('[WARN] inline reclaim failed', err);
                         reclaimed = false;
                     }
                 }
@@ -7439,7 +7400,6 @@ async function runDownloadFlow({ resume = false } = {}) {
                     return runDownloadFlow({ resume: true });
                 }
             } catch (reclaimErr) {
-                console.warn('[WARN] automatic reclaim attempt failed', reclaimErr);
             }
         }
 
@@ -7776,7 +7736,6 @@ async function initOpfs() {
         if (navigator.storage?.persist) {
             const persisted = await navigator.storage.persist();
             if (persisted) {
-                console.info("[INFO] Persistent storage granted — OPFS quota increased.");
             }
         }
     } catch { /* best-effort */ }
@@ -8481,9 +8440,6 @@ async function refreshOpfsExplorer({ silent = false } = {}) {
         try {
             treeRows = await scanExplorerDirectoryTreeRows();
         } catch (treeError) {
-            console.warn("[WARN] OPFS tree scan failed", {
-                message: getErrorMessage(treeError),
-            });
             treeRows = [];
         }
         state.opfs.explorer.entries = entries;
@@ -9100,7 +9056,6 @@ async function scanOpfsModelFiles() {
                 folderGroups[folderPath].common.push(fileInfo);
             }
         } catch (e) {
-            console.warn("Failed to get file info:", item.relativePath, e);
         }
     }
 
@@ -9884,9 +9839,8 @@ async function onClickSessionLoad(fileName, options = {}) {
             await maybeApplyGenerationDefaultsFromModel({
                 modelId: manifestEntry.modelId,
                 revision: manifestEntry.revision,
-                modelSourcePathHint: manifestEntry.modelSourcePathHint || manifestEntry.fileUrl,
+                modelSourcePathHint: normalizedFileName,
             }).catch((err) => {
-                console.warn("[Config] Failed to apply model defaults:", err);
             });
         }
 
@@ -9939,12 +9893,6 @@ async function onClickSessionLoad(fileName, options = {}) {
             }
         }
 
-        console.warn("[WARN] OPFS session load failed", {
-            file_name: normalizedFileName,
-            code: classified.code,
-            message: classified.message,
-            raw_error: getErrorMessage(error),
-        });
     } finally {
         syncSessionRuntimeState();
         renderModelSessionList();
@@ -10177,17 +10125,6 @@ async function onClickSessionUpdate(fileName) {
                         return;
                     }
 
-                    console.warn("[WARN] local model integrity check failed, forcing update", {
-                        model_id: targetModelId,
-                        file_name: targetFileName,
-                        missing_count: integrityCheck.missingCount,
-                        size_mismatch_count: integrityCheck.mismatchCount,
-                        missing_bundle_count: integrityCheck.missingBundleCount,
-                        missing_data_count: integrityCheck.missingDataCount,
-                        size_mismatch_bundle_count: integrityCheck.mismatchBundleCount,
-                        size_mismatch_data_count: integrityCheck.mismatchDataCount,
-                        checks: integrityCheck.checks,
-                    });
 
                     const failureParts = [
                         integrityCheck.missingBundleCount > 0 ? `번들 누락 ${integrityCheck.missingBundleCount}개` : "",
@@ -10422,18 +10359,8 @@ async function loadCachedSession(fileName, options = {}) {
         relatedFileCount = await countRelatedOpfsModelFiles(modelId, normalizedFileName);
         externalDataChunkCount = await countExternalDataChunksForOnnxFile(normalizedFileName);
         if (externalDataChunkCount > 0) {
-            console.info("[INFO] external data chunks detected", {
-                file: normalizedFileName,
-                count: externalDataChunkCount
-            });
         }
         if (relatedFileCount <= 1) {
-            console.warn("[WARN] OPFS model bundle looks incomplete for transformers.js", {
-                model_id: modelId,
-                active_file: normalizedFileName,
-                related_file_count: relatedFileCount,
-                note: "Only ONNX file may exist in OPFS. Tokenizer/config assets may still be resolved from transformers cache/network.",
-            });
         }
 
         logSessionCreateAttempt("start", {
@@ -10472,21 +10399,10 @@ async function loadCachedSession(fileName, options = {}) {
                     });
                     createSessionError = null;
                     if (candidateDevice !== preferredDevice) {
-                        console.info("[INFO] fallback device selected for cached session load", {
-                            file_name: normalizedFileName,
-                            preferred_device: preferredDevice,
-                            fallback_device: candidateDevice,
-                        });
                     }
                     break;
                 } catch (attemptError) {
                     createSessionError = attemptError;
-                    console.info("[INFO] cached session load attempt failed on device (will try fallback)", {
-                        file_name: normalizedFileName,
-                        model_id: modelId,
-                        device: candidateDevice,
-                        message: getErrorMessage(attemptError),
-                    });
                 }
             }
         } finally {
@@ -10861,7 +10777,6 @@ class TransformersWorkerManager {
                     if (resolve) resolve();
                     this.pending.delete(id);
                 } else if (type === 'token_error') {
-                    console.warn("[Worker] Token decode error:", e.data.error);
                 } else if (type === 'abort_ack') {
                     // Acknowledged — no action needed
                 }
@@ -10870,7 +10785,6 @@ class TransformersWorkerManager {
                 const errorDetail = e?.message || e?.error?.message || e?.filename
                     ? `${e?.message ?? ""} at ${e?.filename ?? ""}:${e?.lineno ?? ""}:${e?.colno ?? ""}`
                     : "unknown error (Worker crashed without detail)";
-                console.error("[Worker] Unhandled error:", errorDetail, e);
                 const errorMsg = `Worker crashed: ${errorDetail}`;
                 for (const [, { reject }] of this.pending) {
                     reject(new Error(errorMsg));
@@ -11012,13 +10926,6 @@ async function getOrCreateTransformersPipeline(task, modelId, options = {}) {
     }
 
     if (rawModelFileName && rawModelFileName !== modelFileName) {
-        console.info("[INFO] normalized transformers model_file_name hint", {
-            raw: rawModelFileName,
-            normalized: modelFileName,
-            effective: effectiveModelFileName,
-            effective_dtype: effectiveDtype,
-            model_id: normalizedModel,
-        });
     }
     const key = getTransformersPipelineKey(
         normalizedTask,
@@ -11313,11 +11220,9 @@ function logSessionCreateAttempt(stage, payload) {
     };
 
     if (stage === "failure") {
-        console.warn("[WARN] OPFS session create diagnostics", data);
         return;
     }
 
-    console.info("[INFO] OPFS session create diagnostics", data);
 }
 
 function extractNumericRuntimeErrorCode(error) {
@@ -11740,12 +11645,6 @@ async function onConfirmDeleteModel() {
         }
     } catch (error) {
         if (error instanceof DOMException) {
-            console.error("[ERROR] OPFS delete DOMException", {
-                file_name: mode === "model" ? fileName : targetPath,
-                code: Number.isFinite(Number(error.code)) ? Number(error.code) : null,
-                name: error.name ?? "",
-                message: error.message ?? "",
-            });
             openErrorDialog(t(I18N_KEYS.DIALOG_ERROR_MESSAGE));
         } else {
             showToast(t("delete.failed", { message: getErrorMessage(error) }), "error", 3200);
@@ -11765,7 +11664,7 @@ function renderModelStatusHeader() {
 
     const status = state.selectedModelLoad.status ?? "idle";
     const modelId = normalizeModelId(state.selectedModelLoad.modelId ?? selectedModel ?? state.selectedModelMeta?.id ?? state.activeSessionFile ?? "");
-    const modelName = modelId || (getProfileLanguage() === "ko" ? "모델" : "Model");
+    const modelName = modelId || t(I18N_KEYS.MODEL_FALLBACK_NAME);
 
     let text = t("status.model.waiting");
     if (status === "loading") {
@@ -12293,27 +12192,28 @@ async function sendMessage(userText) {
     }
 
     if (!canUseLocalSessionForChat()) {
-        showToast("로컬 ONNX 모델을 먼저 로드하세요.", "error", 3200);
+        showToast(t(I18N_KEYS.CHAT_ERROR_LOCAL_SESSION_NOT_READY) ?? "로컬 ONNX 모델을 먼저 로드하세요.", "error", 3200);
         return;
     }
 
-    console.info("[CHAT] submit route", {
-        local_mode: true,
-        active_file: state.activeSessionFile ?? "",
-        selected_model: selectedModel ?? "",
-        local_loaded: true,
-        inference: state.inference.enabled,
-    });
 
     addMessage("user", normalizedUserText);
     els.chatInput.value = "";
 
+    await executeAndStreamResponse(normalizedUserText);
+}
+
+/**
+ * 추론 실행 + 스트리밍 렌더링 + 에러 처리 공통 로직
+ * @param {string} userText - 프롬프트로 사용할 사용자 텍스트
+ */
+async function executeAndStreamResponse(userText) {
     state.isSendingChat = true;
     setChatSendingState(true);
     const streamRenderer = createAssistantStreamRenderer({ startTime: performance.now() });
 
     try {
-        const reply = await requestChatCompletion(normalizedUserText, {
+        const reply = await requestChatCompletion(userText, {
             inferenceEnabled: state.inference.enabled,
             onToken: (chunk, meta) => {
                 streamRenderer.pushChunk(chunk, meta);
@@ -12325,7 +12225,6 @@ async function sendMessage(userText) {
         streamRenderer.finalize(reply ?? "응답이 비어 있습니다.");
         state.monitoring.chatSuccessCount += 1;
     } catch (error) {
-        // Check if this is an abort error
         if (error?.message?.includes("aborted") || error?.code === "generation_aborted") {
             streamRenderer.finalize("[사용자에 의해 중단됨]", { skipMetrics: true });
             showToast("생성이 중단되었습니다.", "info", 2000);
@@ -12334,17 +12233,12 @@ async function sendMessage(userText) {
 
         const errorId = createChatErrorId();
         const diagnostics = await collectChatFailureDiagnostics(error, {
-            userText: normalizedUserText,
+            userText,
             errorId,
         });
         recordChatErrorEvent(errorId, error, diagnostics);
 
         const uiMessage = formatChatFailureMessage(error, diagnostics, errorId);
-        console.error("[ERROR] sendMessage failed", {
-            error_id: errorId,
-            error,
-            diagnostics,
-        });
         streamRenderer.finalize(uiMessage.assistantText, { skipMetrics: true });
         showToast(uiMessage.toastText, "error", 4200);
     } finally {
@@ -12353,13 +12247,214 @@ async function sendMessage(userText) {
     }
 }
 
+function startMessageEdit(messageId) {
+    if (state.isSendingChat) {
+        showToast(t("toast.cannot_change_session_during_response") ?? "세션 응답 중에는 변경할 수 없습니다.", "error", 2200);
+        return;
+    }
+
+    const entry = state.messages.find(m => m.id === messageId);
+    if (!entry || entry.role !== "user") return;
+
+    const bubble = els.chatMessages.querySelector(`article[data-message-id="${messageId}"]`);
+    if (!bubble) return;
+
+    if (bubble.querySelector(".message-edit-textarea")) return;
+
+    const contentDiv = bubble.querySelector(".whitespace-pre-wrap");
+    if (!contentDiv) return;
+
+    const originalText = entry.text;
+
+    const textarea = document.createElement("textarea");
+    textarea.className =
+        "message-edit-textarea w-full min-h-[60px] p-2 rounded-lg "
+        + "bg-slate-900/60 border border-cyan-400/30 text-sm text-cyan-50 "
+        + "resize-y outline-none focus:border-cyan-400/60 "
+        + "light:bg-white light:border-slate-300 light:text-slate-800 "
+        + "light:focus:border-sky-400";
+    textarea.value = originalText;
+    textarea.dataset.originalText = originalText;
+
+    textarea.addEventListener("input", () => {
+        textarea.style.height = "auto";
+        textarea.style.height = textarea.scrollHeight + "px";
+    });
+
+    contentDiv.replaceWith(textarea);
+
+    textarea.style.height = "auto";
+    textarea.style.height = textarea.scrollHeight + "px";
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+    const actionsContainer = bubble.querySelector(".message-actions");
+    if (actionsContainer) {
+        actionsContainer.innerHTML = "";
+        actionsContainer.classList.remove("opacity-0", "group-hover:opacity-100");
+        actionsContainer.classList.add("opacity-100");
+
+        const saveBtn = document.createElement("button");
+        saveBtn.type = "button";
+        saveBtn.className =
+            "px-3 py-1 rounded-lg text-xs font-medium "
+            + "bg-cyan-500/20 border border-cyan-400/40 text-cyan-200 "
+            + "hover:bg-cyan-500/30 hover:border-cyan-400/60 "
+            + "light:bg-sky-500 light:text-white light:border-none light:hover:bg-sky-600 "
+            + "transition-colors";
+        saveBtn.dataset.action = "save-edit";
+        saveBtn.dataset.messageId = String(messageId);
+        saveBtn.textContent = t("chat.save_and_regenerate") ?? "Save & Regenerate";
+        actionsContainer.appendChild(saveBtn);
+
+        const cancelBtn = document.createElement("button");
+        cancelBtn.type = "button";
+        cancelBtn.className =
+            "px-3 py-1 rounded-lg text-xs font-medium "
+            + "text-slate-400 hover:text-slate-200 "
+            + "light:text-slate-500 light:hover:text-slate-700 "
+            + "transition-colors";
+        cancelBtn.dataset.action = "cancel-edit";
+        cancelBtn.dataset.messageId = String(messageId);
+        cancelBtn.textContent = t("chat.cancel_edit") ?? "Cancel";
+        actionsContainer.appendChild(cancelBtn);
+    }
+}
+
+async function commitMessageEdit(messageId) {
+    if (state.isSendingChat) return;
+
+    const bubble = els.chatMessages.querySelector(`article[data-message-id="${messageId}"]`);
+    if (!bubble) return;
+
+    const textarea = bubble.querySelector(".message-edit-textarea");
+    if (!textarea) return;
+
+    const newText = textarea.value.trim();
+    if (!newText) {
+        showToast(t("chat.edit_empty_warning") ?? "빈 메시지는 저장할 수 없습니다.", "error", 2200);
+        return;
+    }
+
+    if (!canUseLocalSessionForChat()) {
+        showToast(t(I18N_KEYS.CHAT_ERROR_LOCAL_SESSION_NOT_READY) ?? "로컬 세션이 준비되지 않았습니다.", "error", 3200);
+        return;
+    }
+
+    const entry = state.messages.find(m => m.id === messageId);
+    if (!entry) return;
+    entry.text = newText;
+    entry.at = new Date().toISOString();
+
+    const entryIndex = state.messages.indexOf(entry);
+    state.messages = state.messages.slice(0, entryIndex + 1);
+
+    renderActiveChatMessages();
+    persistActiveSessionMessages();
+
+    await executeAndStreamResponse(newText);
+}
+
+function cancelMessageEdit(messageId) {
+    const bubble = els.chatMessages.querySelector(`article[data-message-id="${messageId}"]`);
+    if (!bubble) return;
+
+    const textarea = bubble.querySelector(".message-edit-textarea");
+    if (!textarea) return;
+
+    const originalText = textarea.dataset.originalText ?? "";
+
+    const contentDiv = document.createElement("div");
+    contentDiv.className = "whitespace-pre-wrap break-words leading-relaxed";
+    contentDiv.textContent = originalText;
+    textarea.replaceWith(contentDiv);
+
+    const actionsContainer = bubble.querySelector(".message-actions");
+    if (actionsContainer) {
+        actionsContainer.innerHTML = "";
+        actionsContainer.classList.add("opacity-0", "group-hover:opacity-100");
+        actionsContainer.classList.remove("opacity-100");
+
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className =
+            "msg-action-btn p-1 rounded-md text-slate-500 "
+            + "hover:bg-slate-700/50 hover:text-cyan-300 "
+            + "light:text-slate-400 light:hover:bg-slate-100 light:hover:text-sky-600 "
+            + "transition-colors";
+        editBtn.dataset.action = "edit-message";
+        editBtn.dataset.messageId = String(messageId);
+        editBtn.title = t("chat.edit_message") ?? "Edit message";
+        editBtn.innerHTML = '<i data-lucide="pencil" class="w-3.5 h-3.5"></i>';
+        actionsContainer.appendChild(editBtn);
+        if (window.lucide?.createIcons) {
+            window.lucide.createIcons();
+        }
+    }
+}
+
+async function regenerateFromMessage(messageId) {
+    if (state.isSendingChat) {
+        showToast(t("toast.cannot_change_session_during_response") ?? "세션 응답 중에는 변경할 수 없습니다.", "error", 2200);
+        return;
+    }
+
+    const entry = state.messages.find(m => m.id === messageId);
+    if (!entry || entry.role !== "assistant") return;
+
+    if (!canUseLocalSessionForChat()) {
+        showToast(t(I18N_KEYS.CHAT_ERROR_LOCAL_SESSION_NOT_READY) ?? "로컬 세션이 준비되지 않았습니다.", "error", 3200);
+        return;
+    }
+
+    const entryIndex = state.messages.indexOf(entry);
+    let precedingUserText = null;
+    for (let i = entryIndex - 1; i >= 0; i--) {
+        if (state.messages[i].role === "user") {
+            precedingUserText = state.messages[i].text;
+            break;
+        }
+    }
+
+    if (!precedingUserText) {
+        showToast(t("chat.regenerate_no_user_message") ?? "재생성할 사용자 메시지를 찾을 수 없습니다.", "error", 2200);
+        return;
+    }
+
+    state.messages = state.messages.slice(0, entryIndex);
+
+    renderActiveChatMessages();
+    persistActiveSessionMessages();
+
+    await executeAndStreamResponse(precedingUserText);
+}
+
+function updateRegenerateButtonVisibility() {
+    if (!els.chatMessages) return;
+    const allRegenBtns = els.chatMessages.querySelectorAll("[data-action='regenerate-message']");
+    allRegenBtns.forEach(btn => {
+        btn.closest(".message-actions")?.classList.add("hidden");
+    });
+
+    const lastAssistant = [...state.messages].reverse().find(m => m.role === "assistant");
+    if (lastAssistant) {
+        const lastRow = els.chatMessages.querySelector(
+            `article[data-message-id="${lastAssistant.id}"]`
+        )?.closest(".message-row");
+        const lastActions = lastRow?.querySelector(".message-actions");
+        if (lastActions) {
+            lastActions.classList.remove("hidden");
+        }
+    }
+}
+
+
 /**
  * 현재 진행 중인 생성을 중단합니다.
  */
 function abortGeneration() {
     if (!state.isSendingChat) return;
 
-    console.info("[CHAT] Abort requested — terminating worker");
 
     transformersWorker.abort();
 
@@ -12467,17 +12562,11 @@ function setChatSendingState(isSending) {
 
 async function requestChatCompletion(userText, options = {}) {
     if (!canUseLocalSessionForChat()) {
-        const error = new Error(getProfileLanguage() === "ko"
-            ? "로컬 세션이 준비되지 않았습니다."
-            : "Local session is not ready.");
+        const error = new Error(t(I18N_KEYS.CHAT_ERROR_LOCAL_SESSION_NOT_READY));
         error.code = "local_session_not_ready";
         throw error;
     }
 
-    console.info("[LOCAL] chat request routed to local session", {
-        active_file: state.activeSessionFile,
-        model_id: selectedModel ?? "",
-    });
     return await requestLocalSessionCompletion(userText, options);
 }
 
@@ -12490,9 +12579,7 @@ async function requestLocalSessionCompletion(userText, options = {}) {
     const activeFile = String(state.activeSessionFile ?? "").trim();
     let session = sessionStore.activeSession;
     if (!activeFile || !session) {
-        const error = new Error(getProfileLanguage() === "ko"
-            ? "로컬 세션이 준비되지 않았습니다."
-            : "Local session is not ready.");
+        const error = new Error(t(I18N_KEYS.CHAT_ERROR_LOCAL_SESSION_NOT_READY));
         error.code = "local_session_not_ready";
         throw error;
     }
@@ -12522,13 +12609,6 @@ async function requestLocalSessionCompletion(userText, options = {}) {
             .filter((device) => device !== currentDevice);
         const canRetryWithFallback = code === "local_inference_run_failed" && recoveryDevices.length > 0;
         if (canRetryWithFallback) {
-            console.warn("[LOCAL] inference failed on primary device, retrying with fallback chain", {
-                active_file: activeFile,
-                current_device: currentDevice ?? "unknown",
-                code,
-                message: getErrorMessage(error),
-                recovery_devices: recoveryDevices,
-            });
             let recoveryError = null;
             for (const recoveryDevice of recoveryDevices) {
                 showToast(
@@ -12565,13 +12645,6 @@ async function requestLocalSessionCompletion(userText, options = {}) {
                 }
             }
             if (recoveryError) {
-                console.error("[LOCAL] fallback recovery inference failed", {
-                    active_file: activeFile,
-                    model_path: `/${OPFS_MODELS_DIR}/${activeFile}`,
-                    runtime: LOCAL_INFERENCE_RUNTIME.runtime,
-                    attempted_devices: recoveryDevices,
-                    error: recoveryError,
-                });
                 const wrappedRecovery = recoveryError instanceof Error
                     ? recoveryError
                     : new Error(getErrorMessage(recoveryError));
@@ -12589,12 +12662,6 @@ async function requestLocalSessionCompletion(userText, options = {}) {
             }
         }
 
-        console.error("[LOCAL] runInference failed", {
-            active_file: activeFile,
-            model_path: `/${OPFS_MODELS_DIR}/${activeFile}`,
-            runtime: LOCAL_INFERENCE_RUNTIME.runtime,
-            error,
-        });
         const wrapped = error instanceof Error ? error : new Error(getErrorMessage(error));
         if (!wrapped.code) {
             wrapped.code = "local_inference_run_failed";
@@ -12842,14 +12909,9 @@ function normalizeTransformersChatMessages(rawMessages) {
 
 function buildPromptInstructionText() {
     const systemPrompt = getSystemPrompt();
-    const languageGuard = getProfileLanguage() === "ko"
-        ? t("prompt.language_guard.ko")
-        : t("prompt.language_guard.en");
-    const roleLabelGuard = getProfileLanguage() === "ko"
-        ? "역할 라벨(User, Assistant, System)을 출력하지 말고 답변 본문만 출력하세요."
-        : "Do not output role labels (User, Assistant, System). Return answer content only.";
-    const reasoningGuard = "Do not reveal internal reasoning. Return only the final answer.";
-    return [systemPrompt, languageGuard, roleLabelGuard, reasoningGuard]
+    const roleLabelGuard = t(I18N_KEYS.PROMPT_ROLE_LABEL_GUARD);
+    const reasoningGuard = t(I18N_KEYS.PROMPT_REASONING_GUARD);
+    return [systemPrompt, roleLabelGuard, reasoningGuard]
         .map((item) => String(item ?? "").trim())
         .filter(Boolean)
         .join("\n");
@@ -12924,21 +12986,14 @@ function describeInferencePromptPayload(payload) {
 }
 
 function buildDirectPrompt(userText) {
-    const languageGuard = getProfileLanguage() === "ko"
-        ? t("prompt.language_guard.ko")
-        : t("prompt.language_guard.en");
     const trimmed = String(userText ?? "").trim();
     if (!trimmed) return "";
-    if (!languageGuard) return trimmed;
-    return `${languageGuard}\n\n${trimmed}`;
+    return trimmed;
 }
 
 function buildForcedAnswerPrompt(userText) {
     const trimmed = String(userText ?? "").trim();
     if (!trimmed) return "";
-    if (getProfileLanguage() === "ko") {
-        return `다음 요청에 대해 반드시 한 문장 이상으로 답하세요.\n요청: ${trimmed}\n답변:`;
-    }
     return `Answer the following request in at least one sentence.\nRequest: ${trimmed}\nAnswer:`;
 }
 
@@ -13003,20 +13058,6 @@ async function runInference(session, userText, options = {}) {
         });
     const outputsPreview = [];
 
-    console.info("[LOCAL] session input metadata", {
-        active_file: activeFileLabel,
-        model_id: String(session?.modelId ?? ""),
-        task: String(session?.task ?? ""),
-        device: String(session?.device ?? ""),
-        dtype: String(session?.dtype ?? ""),
-        runtime: LOCAL_INFERENCE_RUNTIME.runtime,
-        max_new_tokens: Number(config.maxNewTokens || LOCAL_INFERENCE_RUNTIME.maxNewTokens),
-        temperature: Number(generationConfig.temperature),
-        top_p: Number(generationConfig.topP),
-        presence_penalty: Number(generationConfig.presencePenalty),
-        max_length: Number(generationConfig.maxLength),
-        inference: inferenceEnabled,
-    });
 
     for (const [index, current] of prompts.entries()) {
         const currentPrompt = current.payload;
@@ -13045,16 +13086,6 @@ async function runInference(session, userText, options = {}) {
                 generated: String(generated ?? "").slice(0, 160),
                 normalized: String(normalized ?? "").slice(0, 160),
             });
-            console.info("[LOCAL] filtered non-meaningful reply", {
-                active_file: activeFileLabel,
-                attempt: index + 1,
-                prompt_label: current.label,
-                prompt_payload: describeInferencePromptPayload(currentPrompt),
-                max_new_tokens_requested: requestedMaxNewTokens,
-                max_new_tokens_effective: effectiveMaxNewTokens,
-                generated_preview: String(generated ?? "").slice(0, 120),
-                normalized_preview: String(normalized ?? "").slice(0, 120),
-            });
         } catch (error) {
             if (error?.code === "generation_aborted" || error?.message?.includes("aborted")) {
                 throw error;
@@ -13064,11 +13095,6 @@ async function runInference(session, userText, options = {}) {
                     step: index + 1,
                 });
             }
-            console.warn("[LOCAL] inference retry with alternate prompt", {
-                active_file: activeFileLabel,
-                attempt: index + 1,
-                message: getErrorMessage(error),
-            });
         }
     }
     throw createLocalEmptyOutputError(session, userText, {
@@ -13132,12 +13158,7 @@ function isLikelyPromptEchoReply(text, userText = "") {
     if (lines.length === 0) return false;
 
     const normalizedUser = normalizePromptText(String(userText ?? "")).toLowerCase();
-    const normalizedGuards = [
-        t("prompt.language_guard.ko"),
-        t("prompt.language_guard.en"),
-        "모든 답변은 한국어로 작성하세요.",
-        "Respond in English only.",
-    ]
+    const normalizedGuards = []
         .map((item) => normalizePromptText(String(item ?? "")).toLowerCase())
         .filter(Boolean);
 
@@ -13189,8 +13210,8 @@ function appendMessageBubble(entry, options = {}) {
 
     const row = document.createElement("div");
     row.className = role === "user"
-        ? "message-row message-row--user flex w-full flex-col items-end"
-        : "message-row message-row--assistant flex w-full flex-col items-start";
+        ? "message-row message-row--user flex w-full flex-col items-end group"
+        : "message-row message-row--assistant flex w-full flex-col items-start group";
 
     const roleLabel = document.createElement("div");
     roleLabel.className = role === "user"
@@ -13208,9 +13229,7 @@ function appendMessageBubble(entry, options = {}) {
     bubble.setAttribute("role", "group");
     bubble.setAttribute(
         "aria-label",
-        role === "user"
-            ? (getProfileLanguage() === "ko" ? "사용자 메시지" : "User message")
-            : (getProfileLanguage() === "ko" ? "모델 응답 메시지" : "Assistant message"),
+        role === "user" ? t(I18N_KEYS.ARIA_USER_MESSAGE) : t(I18N_KEYS.ARIA_ASSISTANT_MESSAGE),
     );
 
     const header = document.createElement("div");
@@ -13277,7 +13296,42 @@ function appendMessageBubble(entry, options = {}) {
         bubble.appendChild(thinkingContainer);
     }
     bubble.appendChild(content);
+
+    const actionsContainer = document.createElement("div");
+    actionsContainer.className =
+        "message-actions mt-1 flex items-center gap-1 "
+        + "opacity-0 group-hover:opacity-100 transition-opacity duration-200";
+
+    if (role === "user") {
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className =
+            "msg-action-btn p-1 rounded-md text-slate-500 "
+            + "hover:bg-slate-700/50 hover:text-cyan-300 "
+            + "light:text-slate-400 light:hover:bg-slate-100 light:hover:text-sky-600 "
+            + "transition-colors";
+        editBtn.dataset.action = "edit-message";
+        editBtn.dataset.messageId = String(messageId);
+        editBtn.title = t("chat.edit_message") ?? "Edit message";
+        editBtn.innerHTML = '<i data-lucide="pencil" class="w-3.5 h-3.5"></i>';
+        actionsContainer.appendChild(editBtn);
+    } else {
+        const regenBtn = document.createElement("button");
+        regenBtn.type = "button";
+        regenBtn.className =
+            "msg-action-btn p-1 rounded-md text-slate-500 "
+            + "hover:bg-slate-700/50 hover:text-cyan-300 "
+            + "light:text-slate-400 light:hover:bg-slate-100 light:hover:text-sky-600 "
+            + "transition-colors";
+        regenBtn.dataset.action = "regenerate-message";
+        regenBtn.dataset.messageId = String(messageId);
+        regenBtn.title = t("chat.regenerate") ?? "Regenerate";
+        regenBtn.innerHTML = '<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>';
+        actionsContainer.appendChild(regenBtn);
+    }
     row.appendChild(bubble);
+    row.appendChild(actionsContainer);
+
     els.chatMessages.appendChild(row);
 
     return {
@@ -13318,6 +13372,7 @@ function addMessage(role, text, options = {}) {
     }
     lucide.createIcons();
     persistActiveSessionMessages();
+    updateRegenerateButtonVisibility();
 
     return {
         id: messageId,
@@ -13500,11 +13555,20 @@ function setLocalGenerationSettings(next = {}) {
     if (els.llmTemperatureInput) {
         els.llmTemperatureInput.value = String(normalized.temperature);
     }
+    if (els.llmTemperatureValue) {
+        els.llmTemperatureValue.textContent = normalized.temperature.toFixed(2);
+    }
     if (els.llmTopPInput) {
         els.llmTopPInput.value = String(normalized.topP);
     }
+    if (els.llmTopPValue) {
+        els.llmTopPValue.textContent = normalized.topP.toFixed(2);
+    }
     if (els.llmPresencePenaltyInput) {
         els.llmPresencePenaltyInput.value = String(normalized.presencePenalty);
+    }
+    if (els.llmPresencePenaltyValue) {
+        els.llmPresencePenaltyValue.textContent = normalized.presencePenalty.toFixed(2);
     }
     return normalized;
 }
@@ -13538,10 +13602,6 @@ async function maybeApplyGenerationDefaultsFromModel({ modelId, revision, modelS
     if (!bootstrapKey) return;
 
     const bootstrapMap = getGenerationConfigBootstrapMap();
-    if (bootstrapMap[bootstrapKey]) {
-        console.log(`[Config] Model ${bootstrapKey} already bootstrapped, skipping.`);
-        return;
-    }
 
     const candidates = buildGenerationConfigCandidatePaths(modelSourcePathHint);
     let configData = null;
@@ -13562,7 +13622,6 @@ async function maybeApplyGenerationDefaultsFromModel({ modelId, revision, modelS
     }
 
     if (!configData) {
-        console.warn(`[Config] No generation_config.json found for ${modelId} at candidates:`, candidates);
         // Mark as attempted to avoid repeated overhead
         bootstrapMap[bootstrapKey] = {
             appliedAt: new Date().toISOString(),
@@ -13572,7 +13631,6 @@ async function maybeApplyGenerationDefaultsFromModel({ modelId, revision, modelS
         return;
     }
 
-    console.log(`[Config] Loading defaults from ${successfulPath}`, configData);
 
     const current = getLocalGenerationSettings();
     const next = { ...current };
@@ -13602,9 +13660,7 @@ async function maybeApplyGenerationDefaultsFromModel({ modelId, revision, modelS
 
     if (changed) {
         setLocalGenerationSettings(next);
-        if (state.settings.open) {
-            renderLlmDraftStatus();
-        }
+        renderLlmDraftStatus();
         showToast(t(I18N_KEYS.TOAST_MODEL_DEFAULTS_APPLIED, { model: modelId }), "info", 3000);
     }
 
@@ -13789,3 +13845,4 @@ function removeOpfsManifestEntriesByPrefix(prefixPath) {
     }
     return removedKeys;
 }
+

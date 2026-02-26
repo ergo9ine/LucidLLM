@@ -98,8 +98,16 @@ export const I18N_KEYS = {
     CHAT_TABS_LABEL: "chat.tabs_label",
     CHAT_DELETE_CONFIRM: "chat.delete.confirm",
     CHAT_DELETED: "chat.deleted",
+    CHAT_DEFAULT_TITLE: "chat.default_title",
+    CHAT_OPEN: "chat.open",
     CHAT_EXPORTED: "chat.exported",
     CHAT_EXPORT_EMPTY: "chat.export.empty",
+    CHAT_EDIT_MESSAGE: "chat.edit_message",
+    CHAT_REGENERATE: "chat.regenerate",
+    CHAT_SAVE_AND_REGENERATE: "chat.save_and_regenerate",
+    CHAT_CANCEL_EDIT: "chat.cancel_edit",
+    CHAT_EDIT_EMPTY_WARNING: "chat.edit_empty_warning",
+    CHAT_REGENERATE_NO_USER_MESSAGE: "chat.regenerate_no_user_message",
     // Profile
     PROFILE_CHIP_DEFAULT_NAME: "profile.chip.default_name",
     PROFILE_CHIP_AVATAR_ALT: "profile.chip.avatar_alt",
@@ -216,6 +224,7 @@ export const I18N_KEYS = {
     MODEL_RECOMMENDED_DOWNLOAD: "model.recommended.download",
     MODEL_RECOMMENDED_DOWNLOADED: "model.recommended.downloaded",
     MODEL_RECOMMENDED_SIZE_LABEL: "model.recommended.size_label",
+    MODEL_FALLBACK_NAME: "model.fallback_name",
     // LLM
     LLM_SYSTEM_PROMPT_TITLE: "llm.system_prompt.title",
     LLM_SYSTEM_PROMPT_PLACEHOLDER: "llm.system_prompt_placeholder",
@@ -363,9 +372,11 @@ export const I18N_KEYS = {
     DELETE_DONE: "delete.done",
     DELETE_FAILED: "delete.failed",
     DELETE_INVALID_PATH: "delete.invalid_path",
-    // Prompts
-    PROMPT_LANGUAGE_GUARD_KO: "prompt.language_guard.ko",
-    PROMPT_LANGUAGE_GUARD_EN: "prompt.language_guard.en",
+    PROMPT_ROLE_LABEL_GUARD: "prompt.role_label_guard",
+    PROMPT_REASONING_GUARD: "prompt.reasoning_guard",
+    // Aria
+    ARIA_USER_MESSAGE: "aria.user_message",
+    ARIA_ASSISTANT_MESSAGE: "aria.assistant_message",
     // Toast Messages
     TOAST_CANNOT_DELETE_DURING_RESPONSE: "toast.cannot_delete_during_response",
     TOAST_TOKEN_EMPTY: "toast.token_empty",
@@ -587,8 +598,6 @@ function getCommonEntries() {
         [I18N_KEYS.THEME_HIGH_CONTRAST]: "High Contrast",
         [I18N_KEYS.INFERENCE_DEVICE_WEBGPU]: "WebGPU",
         [I18N_KEYS.INFERENCE_DEVICE_WASM]: "WASM",
-        [I18N_KEYS.PROMPT_LANGUAGE_GUARD_KO]: "모든 답변은 한국어로 작성하세요.",
-        [I18N_KEYS.PROMPT_LANGUAGE_GUARD_EN]: "Respond in English only.",
         [I18N_KEYS.HTML_TITLE]: "LucidLLM Chat",
         [I18N_KEYS.LLM_TOP_K]: "top_k",
         [I18N_KEYS.LLM_REPEAT_PENALTY]: "repeat_penalty",
@@ -645,6 +654,12 @@ const KO_SPECIFIC = {
     [I18N_KEYS.CHAT_DELETED]: "현재 대화를 삭제했습니다.",
     [I18N_KEYS.CHAT_EXPORTED]: "현재 대화를 JSON 으로 내보냈습니다.",
     [I18N_KEYS.CHAT_EXPORT_EMPTY]: "내보낼 대화가 없습니다.",
+    [I18N_KEYS.CHAT_EDIT_MESSAGE]: "메시지 편집",
+    [I18N_KEYS.CHAT_REGENERATE]: "재생성",
+    [I18N_KEYS.CHAT_SAVE_AND_REGENERATE]: "저장 & 재생성",
+    [I18N_KEYS.CHAT_CANCEL_EDIT]: "취소",
+    [I18N_KEYS.CHAT_EDIT_EMPTY_WARNING]: "빈 메시지는 저장할 수 없습니다.",
+    [I18N_KEYS.CHAT_REGENERATE_NO_USER_MESSAGE]: "재생성할 사용자 메시지를 찾을 수 없습니다.",
     [I18N_KEYS.PROFILE_CHIP_AVATAR_ALT]: "프로필 아바타",
     [I18N_KEYS.SETTINGS_CLOSE]: "설정 닫기",
     [I18N_KEYS.SETTINGS_TITLE]: "설정",
@@ -1090,6 +1105,13 @@ const KO_SPECIFIC = {
     [I18N_KEYS.UPDATE_MODAL_VIEW_GITHUB]: "GitHub에서 보기 →",
     [I18N_KEYS.UPDATE_TOAST_NEW_VERSION]: "새 버전 {version}이(가) 준비되었습니다.",
     [I18N_KEYS.UPDATE_TOAST_APPLYING]: "업데이트를 적용하는 중입니다...",
+    [I18N_KEYS.PROMPT_ROLE_LABEL_GUARD]: "역할 라벨(User, Assistant, System)을 출력하지 말고 답변 본문만 출력하세요.",
+    [I18N_KEYS.CHAT_DEFAULT_TITLE]: "대화",
+    [I18N_KEYS.CHAT_OPEN]: "대화 열기",
+    [I18N_KEYS.MODEL_FALLBACK_NAME]: "모델",
+    [I18N_KEYS.ARIA_USER_MESSAGE]: "사용자 메시지",
+    [I18N_KEYS.ARIA_ASSISTANT_MESSAGE]: "모델 응답 메시지",
+    [I18N_KEYS.PROMPT_REASONING_GUARD]: "내부 추론을 드러내지 마세요. 최종 답변만 반환하세요.",
 };
 
 // 영어 전용
@@ -1131,6 +1153,12 @@ const EN_SPECIFIC = {
     [I18N_KEYS.CHAT_DELETED]: "Current chat deleted.",
     [I18N_KEYS.CHAT_EXPORTED]: "Current chat exported as JSON.",
     [I18N_KEYS.CHAT_EXPORT_EMPTY]: "No chat to export.",
+    [I18N_KEYS.CHAT_EDIT_MESSAGE]: "Edit message",
+    [I18N_KEYS.CHAT_REGENERATE]: "Regenerate",
+    [I18N_KEYS.CHAT_SAVE_AND_REGENERATE]: "Save & Regenerate",
+    [I18N_KEYS.CHAT_CANCEL_EDIT]: "Cancel",
+    [I18N_KEYS.CHAT_EDIT_EMPTY_WARNING]: "Cannot save an empty message.",
+    [I18N_KEYS.CHAT_REGENERATE_NO_USER_MESSAGE]: "No user message found to regenerate from.",
     [I18N_KEYS.PROFILE_CHIP_AVATAR_ALT]: "Profile avatar",
     [I18N_KEYS.SETTINGS_CLOSE]: "Close Settings",
     [I18N_KEYS.SETTINGS_TITLE]: "Settings",
@@ -1575,6 +1603,13 @@ const EN_SPECIFIC = {
     [I18N_KEYS.UPDATE_MODAL_VIEW_GITHUB]: "View on GitHub →",
     [I18N_KEYS.UPDATE_TOAST_NEW_VERSION]: "New version {version} is ready.",
     [I18N_KEYS.UPDATE_TOAST_APPLYING]: "Applying update...",
+    [I18N_KEYS.PROMPT_ROLE_LABEL_GUARD]: "Do not output role labels (User, Assistant, System). Return answer content only.",
+    [I18N_KEYS.CHAT_DEFAULT_TITLE]: "Chat",
+    [I18N_KEYS.CHAT_OPEN]: "Open chat",
+    [I18N_KEYS.MODEL_FALLBACK_NAME]: "Model",
+    [I18N_KEYS.ARIA_USER_MESSAGE]: "User message",
+    [I18N_KEYS.ARIA_ASSISTANT_MESSAGE]: "Assistant message",
+    [I18N_KEYS.PROMPT_REASONING_GUARD]: "Do not reveal internal reasoning. Return only the final answer.",
 };
 
 // 일본어 Overrides (영어 기반 + 차이점만)
@@ -1618,6 +1653,12 @@ const JA_OVERRIDES = {
     [I18N_KEYS.CHAT_DELETED]: "現在のチャットを削除しました。",
     [I18N_KEYS.CHAT_EXPORTED]: "現在のチャットをJSONとしてエクスポートしました。",
     [I18N_KEYS.CHAT_EXPORT_EMPTY]: "エクスポートするチャットがありません。",
+    [I18N_KEYS.CHAT_EDIT_MESSAGE]: "メッセージを編集",
+    [I18N_KEYS.CHAT_REGENERATE]: "再生成",
+    [I18N_KEYS.CHAT_SAVE_AND_REGENERATE]: "保存して再生成",
+    [I18N_KEYS.CHAT_CANCEL_EDIT]: "キャンセル",
+    [I18N_KEYS.CHAT_EDIT_EMPTY_WARNING]: "空のメッセージは保存できません。",
+    [I18N_KEYS.CHAT_REGENERATE_NO_USER_MESSAGE]: "再生成するユーザーメッセージが見つかりません。",
     // Profile
     [I18N_KEYS.PROFILE_CHIP_AVATAR_ALT]: "プロフィールアバター",
     [I18N_KEYS.PROFILE_VERSION_LABEL]: "v{appVersion}",
@@ -1978,6 +2019,13 @@ const JA_OVERRIDES = {
     [I18N_KEYS.CHAT_ERROR_TOKENIZATION_FAILED]: "ローカルトークン化に失敗しました。モデルと入力形式を確認してください。",
     [I18N_KEYS.CHAT_ERROR_EMPTY_OUTPUT]: "モデル応答が空または無意味です。プロンプト形式またはモデル/パイプラインの互換性を確認してください。",
     [I18N_KEYS.CHAT_ERROR_MODEL_INCOMPATIBLE]: "現在のモデルは Transformers.js ローカルチャット形式と互換性がありません。",
+    [I18N_KEYS.PROMPT_ROLE_LABEL_GUARD]: "ロールラベル(User, Assistant, System)を出力せず、回答本文のみを出力してください。",
+    [I18N_KEYS.CHAT_DEFAULT_TITLE]: "チャット",
+    [I18N_KEYS.CHAT_OPEN]: "チャットを開く",
+    [I18N_KEYS.MODEL_FALLBACK_NAME]: "モデル",
+    [I18N_KEYS.ARIA_USER_MESSAGE]: "ユーザーメッセージ",
+    [I18N_KEYS.ARIA_ASSISTANT_MESSAGE]: "モデル応答メッセージ",
+    [I18N_KEYS.PROMPT_REASONING_GUARD]: "内部推論を明かさないでください。最終回答のみを返してください。",
 };
 
 // 중국어 간체 Overrides (영어 기반 + 차이점만)
@@ -2021,6 +2069,12 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.CHAT_DELETED]: "当前对话已删除。",
     [I18N_KEYS.CHAT_EXPORTED]: "当前对话已导出为JSON。",
     [I18N_KEYS.CHAT_EXPORT_EMPTY]: "没有可导出的对话。",
+    [I18N_KEYS.CHAT_EDIT_MESSAGE]: "编辑消息",
+    [I18N_KEYS.CHAT_REGENERATE]: "重新生成",
+    [I18N_KEYS.CHAT_SAVE_AND_REGENERATE]: "保存并重新生成",
+    [I18N_KEYS.CHAT_CANCEL_EDIT]: "取消",
+    [I18N_KEYS.CHAT_EDIT_EMPTY_WARNING]: "无法保存空消息。",
+    [I18N_KEYS.CHAT_REGENERATE_NO_USER_MESSAGE]: "找不到可重新生成的用户消息。",
     // Profile
     [I18N_KEYS.PROFILE_CHIP_AVATAR_ALT]: "个人头像",
     // Settings
@@ -2381,6 +2435,13 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.UPDATE_MODAL_VIEW_GITHUB]: "在 GitHub 上查看 →",
     [I18N_KEYS.UPDATE_TOAST_NEW_VERSION]: "新版本 {version} 已准备就绪。",
     [I18N_KEYS.UPDATE_TOAST_APPLYING]: "正在应用更新...",
+    [I18N_KEYS.PROMPT_ROLE_LABEL_GUARD]: "不要输出角色标签 (User, Assistant, System)。仅返回回答内容。",
+    [I18N_KEYS.CHAT_DEFAULT_TITLE]: "对话",
+    [I18N_KEYS.CHAT_OPEN]: "打开对话",
+    [I18N_KEYS.MODEL_FALLBACK_NAME]: "模型",
+    [I18N_KEYS.ARIA_USER_MESSAGE]: "用户消息",
+    [I18N_KEYS.ARIA_ASSISTANT_MESSAGE]: "模型回复消息",
+    [I18N_KEYS.PROMPT_REASONING_GUARD]: "不要透露内部推理过程，只返回最终答案。",
 };
 
 /* ─── 지연 로드 캐시 ─── */

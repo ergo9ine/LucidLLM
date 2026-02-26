@@ -192,6 +192,18 @@
                 opacity: 1;
             }
         }
+        .message-edit-textarea {
+            font-family: inherit;
+            line-height: 1.625;
+        }
+
+        .message-edit-textarea:focus {
+            box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.2);
+        }
+
+        :root[data-theme="light"] .message-edit-textarea:focus {
+            box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+        }
     </style>
     <script defer="defer" src="https://unpkg.com/lucide@latest"></script>
 </head>
