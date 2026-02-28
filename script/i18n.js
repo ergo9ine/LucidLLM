@@ -83,7 +83,6 @@ export const I18N_KEYS = {
     SETTINGS_LABEL_PASSPHRASE: "settings.label.passphrase",
     // Chat
     CHAT_LABEL_LUCID: "chat.label_lucid",
-    CHAT_MEM_DEFAULT: "chat.mem_default",
     CHAT_VERSION: "chat.version",
     CHAT_META_YOU: "chat.meta.you",
     CHAT_META_ASSISTANT: "chat.meta.assistant",
@@ -108,6 +107,9 @@ export const I18N_KEYS = {
     CHAT_CANCEL_EDIT: "chat.cancel_edit",
     CHAT_EDIT_EMPTY_WARNING: "chat.edit_empty_warning",
     CHAT_REGENERATE_NO_USER_MESSAGE: "chat.regenerate_no_user_message",
+    CHAT_FORK_FROM_HERE: "chat.fork_from_here",
+    CHAT_FORKED_SUCCESS: "chat.forked_success",
+    CHAT_FORK_PREFIX: "chat.fork_prefix",
     // Profile
     PROFILE_CHIP_DEFAULT_NAME: "profile.chip.default_name",
     PROFILE_CHIP_AVATAR_ALT: "profile.chip.avatar_alt",
@@ -156,6 +158,8 @@ export const I18N_KEYS = {
     OPFS_CTX_RENAME: "opfs.ctx_rename",
     OPFS_CTX_MOVE: "opfs.ctx_move",
     OPFS_CTX_DELETE: "opfs.ctx_delete",
+    OPFS_DIRECTORY_CONNECTED: "opfs.directory_connected",
+    OPFS_EXPLORER_EMPTY: "opfs.explorer_empty",
     // Settings
     SETTINGS_CLOSE: "settings.close",
     SETTINGS_TITLE: "settings.title",
@@ -253,7 +257,6 @@ export const I18N_KEYS = {
     THEME_APPLIED: "theme.applied",
     THEME_HINT: "theme.hint",
     THEME_OLED_TIP: "theme.oled_tip",
-    THEME_HIGH_CONTRAST_TIP: "theme.high_contrast_tip",
     SETTINGS_FONT_SCALE_TITLE: "settings.font_scale_title",
     SETTINGS_FONT_SCALE_LABEL: "settings.font_scale_label",
     SETTINGS_FONT_SCALE_HINT: "settings.font_scale_hint",
@@ -428,11 +431,12 @@ export const I18N_KEYS = {
     TOAST_LOAD_LOCAL_MODEL_FIRST: "toast.load_local_model_first",
     TOAST_RESPONSE_EMPTY: "toast.response_empty",
     TOAST_MODEL_DEFAULTS_APPLIED: "toast.model_defaults_applied",
+    TOAST_LOADING_MODEL: "toast.loading_model",
+    TOAST_MODEL_LOADED: "toast.model_loaded",
     // UI Element Text
     HEADER_DEVICE_WEBGPU_UNSUPPORTED: "header.device.webgpu_unsupported",
     BACKUP_FILE_COUNT_ZERO: "backup.file_count_zero",
     BACKUP_FILE_COUNT_WITH_DETAILS: "backup.file_count_with_details",
-    DRIVE_STATUS_CONNECTED: "drive.status_connected",
     DRIVE_STATUS_DISCONNECTED: "drive.status_disconnected",
     DRIVE_LAST_SYNC_LABEL: "drive.last_sync_label",
     DRIVE_RECONNECT_ACCOUNT: "drive.reconnect_account",
@@ -441,9 +445,6 @@ export const I18N_KEYS = {
     OPFS_BROWSER_NOT_SUPPORTED: "opfs.browser_not_supported",
     OPFS_DIRECTORY_CONNECTED: "opfs.directory_connected",
     OPFS_FETCHING_CAPACITY_INFO: "opfs.fetching_capacity_info",
-    OPFS_STATUS_SELECTION: "opfs.status_selection",
-    OPFS_STATUS_SIZE: "opfs.status_size",
-    OPFS_STATUS_TOTAL: "opfs.status_total",
     OPFS_NO_SELECTION: "opfs.no_selection",
     OPFS_ITEM_SELECTED: "opfs.item_selected",
     OPFS_CONTEXT_TARGET_LABEL: "opfs.context_target_label",
@@ -452,7 +453,6 @@ export const I18N_KEYS = {
     OPFS_NOT_SUPPORTED: "opfs.not_supported",
     OPFS_DIRECTORY_EMPTY: "opfs.directory_empty",
     OPFS_BROWSER_NOT_SUPPORTED_LONG: "opfs.browser_not_supported_long",
-    OPFS_UPLOAD_STATUS_IDLE: "opfs.upload_status_idle",
     OPFS_REFRESHING: "opfs.refreshing",
     OPFS_REFRESH: "opfs.refresh",
     DELETE_DIALOG_MESSAGE: "delete.dialog_message",
@@ -544,7 +544,6 @@ export const I18N_KEYS = {
     COMMON_FILE: "common.file",
     PROFILE_VERSION_LABEL: "profile.version_label",
     CHAT_DISCLAIMER: "chat.disclaimer",
-    CHAT_TOKEN_SPEED_WAITING: "chat.token_speed_waiting",
 
     // Update
     UPDATE_BADGE_LABEL: "update.badge_label",
@@ -555,6 +554,13 @@ export const I18N_KEYS = {
     UPDATE_MODAL_VIEW_GITHUB: "update.modal_view_github",
     UPDATE_TOAST_NEW_VERSION: "update.toast_new_version",
     UPDATE_TOAST_APPLYING: "update.toast_applying",
+
+    // Warmup
+    WARMUP_LABEL: "warmup.label",
+    WARMUP_DESCRIPTION: "warmup.description",
+    WARMUP_STATUS_LOADING: "warmup.status_loading",
+    WARMUP_STATUS_READY: "warmup.status_ready",
+    CHAT_THINKING_PROCESS: "chat.thinking_process",
 };
 
 /* ─── 타입 정의 ─── */
@@ -572,10 +578,9 @@ let _appVersion = "Version-Pre-AT";
  */
 export function setAppVersion(version) {
     _appVersion = version;
-    DICTIONARY_CACHE.clear();
 }
 
-/* ─── 번역 사전 (계층적 구조) ─── */
+/* ─── 번역 사전 (정적 구성) ─── */
 
 // 공통 키 (모든 언어에서 동일)
 function getCommonEntries() {
@@ -583,7 +588,6 @@ function getCommonEntries() {
         [I18N_KEYS.HEADER_DEVICE_WEBGPU]: "⚡ WebGPU",
         [I18N_KEYS.HEADER_DEVICE_WASM]: "🧩 CPU (WASM)",
         [I18N_KEYS.CHAT_LABEL_LUCID]: "Lucid Chat",
-        [I18N_KEYS.CHAT_MEM_DEFAULT]: "Mem: -",
         [I18N_KEYS.CHAT_VERSION]: _appVersion,
         [I18N_KEYS.CHAT_META_YOU]: "YOU",
         [I18N_KEYS.CHAT_META_ASSISTANT]: "ASSISTANT",
@@ -603,7 +607,6 @@ function getCommonEntries() {
         [I18N_KEYS.LLM_REPEAT_PENALTY]: "repeat_penalty",
         [I18N_KEYS.PROFILE_VERSION_LABEL]: "v{appVersion}",
         [I18N_KEYS.CHAT_DISCLAIMER]: "LucidLLM can make mistakes. Check important info.",
-        [I18N_KEYS.CHAT_TOKEN_SPEED_WAITING]: "- tok/s",
         [I18N_KEYS.UPDATE_BADGE_LABEL]: "Update",
         [I18N_KEYS.UPDATE_MODAL_TITLE]: "Update {version} ({date})",
         [I18N_KEYS.UPDATE_MODAL_APPLY]: "Apply Update (Reload Page)",
@@ -617,6 +620,7 @@ function getCommonEntries() {
 
 // 한국어 전용
 const KO_SPECIFIC = {
+    [I18N_KEYS.BACKUP_GDRIVE_STATUS_DISCONNECTED]: "미연결",
     [I18N_KEYS.HEADER_MODEL_STATUS_WAITING]: "모델 로드 대기중...",
     [I18N_KEYS.HEADER_SETTINGS]: "설정",
     [I18N_KEYS.HEADER_NEW_CHAT]: "새 대화",
@@ -660,6 +664,9 @@ const KO_SPECIFIC = {
     [I18N_KEYS.CHAT_CANCEL_EDIT]: "취소",
     [I18N_KEYS.CHAT_EDIT_EMPTY_WARNING]: "빈 메시지는 저장할 수 없습니다.",
     [I18N_KEYS.CHAT_REGENERATE_NO_USER_MESSAGE]: "재생성할 사용자 메시지를 찾을 수 없습니다.",
+    [I18N_KEYS.CHAT_FORK_FROM_HERE]: "여기서 분기",
+    [I18N_KEYS.CHAT_FORKED_SUCCESS]: "대화가 분기되었습니다.",
+    [I18N_KEYS.CHAT_FORK_PREFIX]: "[분기]",
     [I18N_KEYS.PROFILE_CHIP_AVATAR_ALT]: "프로필 아바타",
     [I18N_KEYS.SETTINGS_CLOSE]: "설정 닫기",
     [I18N_KEYS.SETTINGS_TITLE]: "설정",
@@ -712,6 +719,8 @@ const KO_SPECIFIC = {
     [I18N_KEYS.OPFS_CTX_RENAME]: "이름 변경",
     [I18N_KEYS.OPFS_CTX_MOVE]: "이동",
     [I18N_KEYS.OPFS_CTX_DELETE]: "삭제",
+    [I18N_KEYS.OPFS_DIRECTORY_CONNECTED]: "OPFS 모델 디렉터리 연결 완료",
+    [I18N_KEYS.OPFS_EXPLORER_EMPTY]: "현재 디렉터리에 항목이 없습니다.",
     [I18N_KEYS.MODEL_SESSION_TITLE]: "모델 세션 목록 (OPFS 통합 관리)",
     [I18N_KEYS.MODEL_SESSION_SCANNING]: "모델 캐시를 스캔하는 중입니다...",
     [I18N_KEYS.MODEL_INPUT_PLACEHOLDER]: "업로더/모델명 형식 예: lightonai/LateOn-Code-edge",
@@ -787,7 +796,6 @@ const KO_SPECIFIC = {
     [I18N_KEYS.THEME_APPLIED]: "테마가 적용되었습니다.",
     [I18N_KEYS.THEME_HINT]: "테마 변경 사항은 즉시 적용되며 자동 저장됩니다.",
     [I18N_KEYS.THEME_OLED_TIP]: "OLED Black: 배터리 절약을 위해 순수 검정을 유지합니다.",
-    [I18N_KEYS.THEME_HIGH_CONTRAST_TIP]: "고대비: 가독성을 위해 검정 배경과 흰색 테두리를 사용합니다.",
     [I18N_KEYS.SETTINGS_FONT_SCALE_TITLE]: "UI 폰트 크기",
     [I18N_KEYS.SETTINGS_FONT_SCALE_LABEL]: "폰트 크기 조절",
     [I18N_KEYS.SETTINGS_FONT_SCALE_HINT]: "UI 전체의 폰트 크기를 75% ~ 150% 범위에서 조절합니다. (기본 100%)",
@@ -992,9 +1000,6 @@ const KO_SPECIFIC = {
     [I18N_KEYS.OPFS_BROWSER_NOT_SUPPORTED]: "현재 브라우저는 OPFS 를 지원하지 않습니다.",
     [I18N_KEYS.OPFS_DIRECTORY_CONNECTED]: "OPFS 모델 디렉터리 연결 완료",
     [I18N_KEYS.OPFS_FETCHING_CAPACITY_INFO]: "용량 정보를 가져오는 중...",
-    [I18N_KEYS.OPFS_STATUS_SELECTION]: "선택: {count} 개",
-    [I18N_KEYS.OPFS_STATUS_SIZE]: "선택 크기: {size}",
-    [I18N_KEYS.OPFS_STATUS_TOTAL]: "현재 폴더: {count} 개 / {size}",
     [I18N_KEYS.OPFS_NO_SELECTION]: "선택된 항목 없음",
     [I18N_KEYS.OPFS_ITEM_SELECTED]: "{type} 선택됨: {path}",
     [I18N_KEYS.OPFS_CONTEXT_TARGET_LABEL]: "{type}: {path}",
@@ -1093,10 +1098,6 @@ const KO_SPECIFIC = {
     [I18N_KEYS.OPFS_USAGE_TEXT]: "사용량 {used} / {total} ({percent}%)",
     [I18N_KEYS.COMMON_DIRECTORY]: "디렉터리",
     [I18N_KEYS.COMMON_FILE]: "파일",
-    [I18N_KEYS.PROFILE_VERSION_LABEL]: "v{appVersion}",
-    [I18N_KEYS.CHAT_DISCLAIMER]: "LucidLLM은 실수를 할 수 있습니다. 중요한 정보를 확인하세요.",
-    [I18N_KEYS.SETTINGS_LABEL_PASSPHRASE]: "백업 암호 (AES-256)",
-    [I18N_KEYS.SETTINGS_PLACEHOLDER_PASSPHRASE]: "설정 및 대화 백업 암호화에 사용됩니다.",
     [I18N_KEYS.UPDATE_BADGE_LABEL]: "업데이트",
     [I18N_KEYS.UPDATE_MODAL_TITLE]: "업데이트 {version} ({date})",
     [I18N_KEYS.UPDATE_MODAL_APPLY]: "지금 업데이트 (페이지 새로고침)",
@@ -1112,10 +1113,20 @@ const KO_SPECIFIC = {
     [I18N_KEYS.ARIA_USER_MESSAGE]: "사용자 메시지",
     [I18N_KEYS.ARIA_ASSISTANT_MESSAGE]: "모델 응답 메시지",
     [I18N_KEYS.PROMPT_REASONING_GUARD]: "내부 추론을 드러내지 마세요. 최종 답변만 반환하세요.",
+    [I18N_KEYS.CHAT_THINKING_PROCESS]: "추론 과정",
+
+    // Warmup
+    [I18N_KEYS.WARMUP_LABEL]: "모델 워밍업",
+    [I18N_KEYS.WARMUP_DESCRIPTION]: "앱 시작 시 모델 실행 환경을 미리 준비하여 첫 응답 속도를 개선합니다.",
+    [I18N_KEYS.WARMUP_STATUS_LOADING]: "{model} 워밍업 중...",
+    [I18N_KEYS.WARMUP_STATUS_READY]: "실행 환경 준비 완료",
+    [I18N_KEYS.TOAST_LOADING_MODEL]: "모델 로딩 중: {name}",
+    [I18N_KEYS.TOAST_MODEL_LOADED]: "모델 로드 완료: {name}",
 };
 
 // 영어 전용
 const EN_SPECIFIC = {
+    [I18N_KEYS.BACKUP_GDRIVE_STATUS_DISCONNECTED]: "Disconnected",
     [I18N_KEYS.HEADER_MODEL_STATUS_WAITING]: "Waiting for model load...",
     [I18N_KEYS.HEADER_SETTINGS]: "Settings",
     [I18N_KEYS.HEADER_NEW_CHAT]: "New Chat",
@@ -1143,6 +1154,7 @@ const EN_SPECIFIC = {
     [I18N_KEYS.CHAT_TOKEN_STATS_DEFAULT]: "Token Speed Avg: - | Max: - | Min: -",
     [I18N_KEYS.CHAT_PLACEHOLDER]: "Type a message...",
     [I18N_KEYS.CHAT_SEND]: "Send",
+    [I18N_KEYS.CHAT_THINKING_PROCESS]: "Thinking process",
     [I18N_KEYS.CHAT_SENDING]: "Sending...",
     [I18N_KEYS.CHAT_WAITING_FOR_MODEL]: "Waiting for model load. Fetch or load an OPFS session first.",
     [I18N_KEYS.CHAT_NEW_SESSION_HINT]: "Start a new conversation by entering a message.",
@@ -1159,6 +1171,9 @@ const EN_SPECIFIC = {
     [I18N_KEYS.CHAT_CANCEL_EDIT]: "Cancel",
     [I18N_KEYS.CHAT_EDIT_EMPTY_WARNING]: "Cannot save an empty message.",
     [I18N_KEYS.CHAT_REGENERATE_NO_USER_MESSAGE]: "No user message found to regenerate from.",
+    [I18N_KEYS.CHAT_FORK_FROM_HERE]: "Fork from here",
+    [I18N_KEYS.CHAT_FORKED_SUCCESS]: "Conversation forked.",
+    [I18N_KEYS.CHAT_FORK_PREFIX]: "[Fork]",
     [I18N_KEYS.PROFILE_CHIP_AVATAR_ALT]: "Profile avatar",
     [I18N_KEYS.SETTINGS_CLOSE]: "Close Settings",
     [I18N_KEYS.SETTINGS_TITLE]: "Settings",
@@ -1211,6 +1226,8 @@ const EN_SPECIFIC = {
     [I18N_KEYS.OPFS_CTX_RENAME]: "Rename",
     [I18N_KEYS.OPFS_CTX_MOVE]: "Move",
     [I18N_KEYS.OPFS_CTX_DELETE]: "Delete",
+    [I18N_KEYS.OPFS_DIRECTORY_CONNECTED]: "OPFS model directory connected",
+    [I18N_KEYS.OPFS_EXPLORER_EMPTY]: "No items in current directory.",
     [I18N_KEYS.MODEL_SESSION_TITLE]: "Model Sessions (OPFS Unified)",
     [I18N_KEYS.MODEL_SESSION_SCANNING]: "Scanning model cache...",
     [I18N_KEYS.MODEL_INPUT_PLACEHOLDER]: "org/model e.g. lightonai/LateOn-Code-edge",
@@ -1483,7 +1500,6 @@ const EN_SPECIFIC = {
     [I18N_KEYS.HEADER_DEVICE_WEBGPU_UNSUPPORTED]: "⚡ WebGPU (Unsupported)",
     [I18N_KEYS.BACKUP_FILE_COUNT_ZERO]: "0 backup files",
     [I18N_KEYS.BACKUP_FILE_COUNT_WITH_DETAILS]: "{count} backup files (Latest: {latest}, Total: {size})",
-    [I18N_KEYS.DRIVE_STATUS_CONNECTED]: "Google Drive connected",
     [I18N_KEYS.DRIVE_STATUS_DISCONNECTED]: "Disconnected",
     [I18N_KEYS.DRIVE_LAST_SYNC_LABEL]: "Last sync: {timestamp}",
     [I18N_KEYS.DRIVE_RECONNECT_ACCOUNT]: "Reconnect Google Account",
@@ -1593,8 +1609,6 @@ const EN_SPECIFIC = {
     [I18N_KEYS.OPFS_USAGE_TEXT]: "Usage {used} / {total} ({percent}%)",
     [I18N_KEYS.COMMON_DIRECTORY]: "Directory",
     [I18N_KEYS.COMMON_FILE]: "File",
-    [I18N_KEYS.PROFILE_VERSION_LABEL]: "v{appVersion}",
-    [I18N_KEYS.CHAT_DISCLAIMER]: "LucidLLM can make mistakes. Check important info.",
     [I18N_KEYS.UPDATE_BADGE_LABEL]: "Update",
     [I18N_KEYS.UPDATE_MODAL_TITLE]: "Update {version} ({date})",
     [I18N_KEYS.UPDATE_MODAL_APPLY]: "Apply Update (Reload Page)",
@@ -1610,6 +1624,14 @@ const EN_SPECIFIC = {
     [I18N_KEYS.ARIA_USER_MESSAGE]: "User message",
     [I18N_KEYS.ARIA_ASSISTANT_MESSAGE]: "Assistant message",
     [I18N_KEYS.PROMPT_REASONING_GUARD]: "Do not reveal internal reasoning. Return only the final answer.",
+
+    // Warmup
+    [I18N_KEYS.WARMUP_LABEL]: "Model Warmup",
+    [I18N_KEYS.WARMUP_DESCRIPTION]: "Pre-initializes model runtime at startup for faster first response.",
+    [I18N_KEYS.WARMUP_STATUS_LOADING]: "Warming up {model}...",
+    [I18N_KEYS.WARMUP_STATUS_READY]: "Runtime prepared",
+    [I18N_KEYS.TOAST_LOADING_MODEL]: "Loading model: {name}",
+    [I18N_KEYS.TOAST_MODEL_LOADED]: "Model loaded: {name}",
 };
 
 // 일본어 Overrides (영어 기반 + 차이점만)
@@ -1659,9 +1681,11 @@ const JA_OVERRIDES = {
     [I18N_KEYS.CHAT_CANCEL_EDIT]: "キャンセル",
     [I18N_KEYS.CHAT_EDIT_EMPTY_WARNING]: "空のメッセージは保存できません。",
     [I18N_KEYS.CHAT_REGENERATE_NO_USER_MESSAGE]: "再生成するユーザーメッセージが見つかりません。",
+    [I18N_KEYS.CHAT_FORK_FROM_HERE]: "ここから分岐",
+    [I18N_KEYS.CHAT_FORKED_SUCCESS]: "会話が分岐されました。",
+    [I18N_KEYS.CHAT_FORK_PREFIX]: "[分岐]",
     // Profile
     [I18N_KEYS.PROFILE_CHIP_AVATAR_ALT]: "プロフィールアバター",
-    [I18N_KEYS.PROFILE_VERSION_LABEL]: "v{appVersion}",
     // Settings
     [I18N_KEYS.SETTINGS_CLOSE]: "設定を閉じる",
     [I18N_KEYS.SETTINGS_TITLE]: "設定",
@@ -1716,6 +1740,8 @@ const JA_OVERRIDES = {
     [I18N_KEYS.OPFS_CTX_RENAME]: "名前変更",
     [I18N_KEYS.OPFS_CTX_MOVE]: "移動",
     [I18N_KEYS.OPFS_CTX_DELETE]: "削除",
+    [I18N_KEYS.OPFS_DIRECTORY_CONNECTED]: "OPFSモデルディレクトリ接続完了",
+    [I18N_KEYS.OPFS_EXPLORER_EMPTY]: "現在のディレクトリにアイテムがありません。",
     // Model
     [I18N_KEYS.MODEL_SESSION_TITLE]: "モデルセッション（OPFS統合）",
     [I18N_KEYS.MODEL_SESSION_SCANNING]: "モデルキャッシュをスキャン中...",
@@ -1855,7 +1881,7 @@ const JA_OVERRIDES = {
     [I18N_KEYS.STATUS_MODEL_WAITING]: "モデル読み込み待機中...",
     [I18N_KEYS.STATUS_MODEL_LOADING]: "{model} 読み込み中...",
     [I18N_KEYS.STATUS_MODEL_LOADED]: "{model} アクティブ",
-    [I18N_KEYS.STATUS_MODEL_FAILED]: "{model} の読��込みに失敗しました",
+    [I18N_KEYS.STATUS_MODEL_FAILED]: "{model} の読込みに失敗しました",
     // Token
     [I18N_KEYS.TOKEN_STATS]: "トークン速度 Avg: {avg} tok/s | Max: {max} | Min: {min}",
     // Sidebar
@@ -1975,7 +2001,15 @@ const JA_OVERRIDES = {
     [I18N_KEYS.DRIVE_LAST_SYNC_LABEL]: "最終同期：{timestamp}",
     [I18N_KEYS.DRIVE_RECONNECT_ACCOUNT]: "Google アカウントを再接続",
     [I18N_KEYS.DRIVE_LOGIN]: "Google ログイン",
+    [I18N_KEYS.SETTINGS_LABEL_PASSPHRASE]: "バックアップ暗号化パスフレーズ (AES-256)",
+    [I18N_KEYS.SETTINGS_PLACEHOLDER_PASSPHRASE]: "設定やチャットのバックアップ暗号化に使用されます。",
+    [I18N_KEYS.SETTINGS_LABEL_COMPRESSION]: "バックアップデータの圧縮を使用 (対応ブラウザのみ)",
+    [I18N_KEYS.SETTINGS_PLACEHOLDER_LIMIT]: "バックアップ容量制限 (MB)",
+    [I18N_KEYS.BACKUP_SIZE_ESTIMATE]: "予想バックアップ容量：{size} / 制限：{limit} MB",
     [I18N_KEYS.BACKUP_SIZE_ESTIMATE_LABEL]: "予想バックアップ容量：{size} / 制限：{limit} MB",
+    [I18N_KEYS.BACKUP_NO_RESTORE_OPTIONS]: "復元可能なバックアップがありません。",
+    [I18N_KEYS.BACKUP_FILE_LIST_META]: "{count}個のバックアップ (計: {size})",
+    [I18N_KEYS.CHAT_THINKING_PROCESS]: "推論プロセス",
     [I18N_KEYS.OPFS_BROWSER_NOT_SUPPORTED]: "現在のブラウザは OPFS をサポートしていません。",
     [I18N_KEYS.OPFS_DIRECTORY_CONNECTED]: "OPFS モデルディレクトリ接続完了",
     [I18N_KEYS.OPFS_FETCHING_CAPACITY_INFO]: "容量情報を取得中...",
@@ -2026,6 +2060,14 @@ const JA_OVERRIDES = {
     [I18N_KEYS.ARIA_USER_MESSAGE]: "ユーザーメッセージ",
     [I18N_KEYS.ARIA_ASSISTANT_MESSAGE]: "モデル応答メッセージ",
     [I18N_KEYS.PROMPT_REASONING_GUARD]: "内部推論を明かさないでください。最終回答のみを返してください。",
+
+    // Warmup
+    [I18N_KEYS.WARMUP_LABEL]: "モデルウォームアップ",
+    [I18N_KEYS.WARMUP_DESCRIPTION]: "アプリ起動時にモデル実行環境を事前準備し、初回の応答速度を向上させます。",
+    [I18N_KEYS.WARMUP_STATUS_LOADING]: "{model} ウォームアップ中...",
+    [I18N_KEYS.WARMUP_STATUS_READY]: "実行環境の準備完了",
+    [I18N_KEYS.TOAST_LOADING_MODEL]: "モデルをロード中: {name}",
+    [I18N_KEYS.TOAST_MODEL_LOADED]: "モデルのロード完了: {name}",
 };
 
 // 중국어 간체 Overrides (영어 기반 + 차이점만)
@@ -2075,6 +2117,9 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.CHAT_CANCEL_EDIT]: "取消",
     [I18N_KEYS.CHAT_EDIT_EMPTY_WARNING]: "无法保存空消息。",
     [I18N_KEYS.CHAT_REGENERATE_NO_USER_MESSAGE]: "找不到可重新生成的用户消息。",
+    [I18N_KEYS.CHAT_FORK_FROM_HERE]: "从这里分叉",
+    [I18N_KEYS.CHAT_FORKED_SUCCESS]: "对话已分叉。",
+    [I18N_KEYS.CHAT_FORK_PREFIX]: "[分叉]",
     // Profile
     [I18N_KEYS.PROFILE_CHIP_AVATAR_ALT]: "个人头像",
     // Settings
@@ -2110,7 +2155,7 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.OPFS_FILE_LIST]: "文件列表",
     [I18N_KEYS.OPFS_UPLOAD_STATUS_IDLE]: "空闲",
     [I18N_KEYS.OPFS_TH_NAME]: "名称",
-    [I18N_KEYS.OPFS_TH_SIZE]: "大��",
+    [I18N_KEYS.OPFS_TH_SIZE]: "大小",
     [I18N_KEYS.OPFS_TH_MODIFIED]: "修改时间",
     [I18N_KEYS.OPFS_TH_PATH]: "路径",
     [I18N_KEYS.OPFS_DIR_LOADING]: "正在加载OPFS目录...",
@@ -2131,6 +2176,8 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.OPFS_CTX_RENAME]: "重命名",
     [I18N_KEYS.OPFS_CTX_MOVE]: "移动",
     [I18N_KEYS.OPFS_CTX_DELETE]: "删除",
+    [I18N_KEYS.OPFS_DIRECTORY_CONNECTED]: "OPFS 模型目录已连接",
+    [I18N_KEYS.OPFS_EXPLORER_EMPTY]: "当前目录中没有项目。",
     // Model
     [I18N_KEYS.MODEL_SESSION_TITLE]: "模型会话（OPFS统一管理）",
     [I18N_KEYS.MODEL_SESSION_SCANNING]: "正在扫描模型缓存...",
@@ -2271,7 +2318,6 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.STATUS_MODEL_LOADING]: "{model} 加载中...",
     [I18N_KEYS.STATUS_MODEL_LOADED]: "{model} 运行中",
     [I18N_KEYS.STATUS_MODEL_FAILED]: "{model} 加载失败",
-    [I18N_KEYS.PROFILE_VERSION_LABEL]: "v{appVersion}",
     // Token
     [I18N_KEYS.TOKEN_STATS]: "令牌速度 平均: {avg} tok/s | 最大: {max} | 最小: {min}",
     // Sidebar
@@ -2371,9 +2417,9 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.TOAST_ANOTHER_DOWNLOAD_IN_PROGRESS]: "另一个下载正在进行中。",
     [I18N_KEYS.TOAST_UPDATE_INFO_NOT_FOUND]: "找不到更新信息。请重新获取模型后下载。",
     [I18N_KEYS.TOAST_USING_LATEST_VERSION]: "当前使用的是最新版本",
-    [I18N_KEYS.TOAST_LOAD_LOCAL_MODEL_FIRST]: "请先加载本地 ONNX 模型。",
+    [I18N_KEYS.TOAST_LOAD_LOCAL_MODEL_FIRST]: "先加载本地 ONNX 模型。",
     [I18N_KEYS.TOAST_RESPONSE_EMPTY]: "响应为空。",
-    [I18N_KEYS.TOAST_MODEL_DEFAULTS_APPLIED]: "已应用模型的默认生成设置（{model}）。",
+    [I18N_KEYS.TOAST_MODEL_DEFAULTS_APPLIED]: "模型的默认生成设置（{model}）已应用。",
     // UI Element Text
     [I18N_KEYS.HEADER_DEVICE_WEBGPU_UNSUPPORTED]: "⚡ WebGPU（不支持）",
     [I18N_KEYS.BACKUP_FILE_COUNT_ZERO]: "0 个备份文件",
@@ -2383,7 +2429,15 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.DRIVE_LAST_SYNC_LABEL]: "最后同步：{timestamp}",
     [I18N_KEYS.DRIVE_RECONNECT_ACCOUNT]: "重新连接 Google 账户",
     [I18N_KEYS.DRIVE_LOGIN]: "Google 登录",
+    [I18N_KEYS.SETTINGS_LABEL_PASSPHRASE]: "备份加密密码 (AES-256)",
+    [I18N_KEYS.SETTINGS_PLACEHOLDER_PASSPHRASE]: "用于设置和对话备份的加密。",
+    [I18N_KEYS.SETTINGS_LABEL_COMPRESSION]: "启用备份数据压缩 (仅受支持的浏览器)",
+    [I18N_KEYS.SETTINGS_PLACEHOLDER_LIMIT]: "备份容量限制 (MB)",
+    [I18N_KEYS.BACKUP_SIZE_ESTIMATE]: "预计备份大小：{size} / 限制：{limit} MB",
     [I18N_KEYS.BACKUP_SIZE_ESTIMATE_LABEL]: "预计备份大小：{size} / 限制：{limit} MB",
+    [I18N_KEYS.BACKUP_NO_RESTORE_OPTIONS]: "没有可还原的备份。",
+    [I18N_KEYS.BACKUP_FILE_LIST_META]: "{count}个备份 (共计: {size})",
+    [I18N_KEYS.CHAT_THINKING_PROCESS]: "推理过程",
     [I18N_KEYS.OPFS_BROWSER_NOT_SUPPORTED]: "当前浏览器不支持 OPFS。",
     [I18N_KEYS.OPFS_DIRECTORY_CONNECTED]: "OPFS 模型目录已连接",
     [I18N_KEYS.OPFS_FETCHING_CAPACITY_INFO]: "正在获取容量信息...",
@@ -2442,47 +2496,41 @@ const ZH_CN_OVERRIDES = {
     [I18N_KEYS.ARIA_USER_MESSAGE]: "用户消息",
     [I18N_KEYS.ARIA_ASSISTANT_MESSAGE]: "模型回复消息",
     [I18N_KEYS.PROMPT_REASONING_GUARD]: "不要透露内部推理过程，只返回最终答案。",
+
+    // Warmup
+    [I18N_KEYS.WARMUP_LABEL]: "模型预热",
+    [I18N_KEYS.WARMUP_DESCRIPTION]: "应用启动时预先准备模型运行环境，以提高首次响应速度。",
+    [I18N_KEYS.WARMUP_STATUS_LOADING]: "正在预热 {model}...",
+    [I18N_KEYS.WARMUP_STATUS_READY]: "运行环境已就绪",
+    [I18N_KEYS.TOAST_LOADING_MODEL]: "正在加载模型：{name}",
+    [I18N_KEYS.TOAST_MODEL_LOADED]: "模型加载完成：{name}",
 };
 
-/* ─── 지연 로드 캐시 ─── */
-/** @type {Map<string, Object>} */
-const DICTIONARY_CACHE = new Map();
+/* ─── 번역 사전 (정적 구성) ─── */
+
+const COMMON_STATIC = Object.freeze(getCommonEntries());
+
+// 초기 사전을 구성합니다.
+const DICTIONARIES = {
+    ko: Object.freeze({ ...COMMON_STATIC, ...KO_SPECIFIC }),
+    en: Object.freeze({ ...COMMON_STATIC, ...EN_SPECIFIC }),
+    ja: Object.freeze({ ...COMMON_STATIC, ...EN_SPECIFIC, ...JA_OVERRIDES }),
+    "zh-CN": Object.freeze({ ...COMMON_STATIC, ...EN_SPECIFIC, ...ZH_CN_OVERRIDES }),
+};
 
 /**
- * 언어별 사전을 지연 로드합니다.
+ * 언어별 사전을 가져옵니다. (최적화: 사전 호출 비용 제거)
  * @param {string} lang
  * @returns {Object}
  */
 function getDictionary(lang) {
     const normalizedLang = normalizeLanguage(lang);
-    if (DICTIONARY_CACHE.has(normalizedLang)) {
-        return DICTIONARY_CACHE.get(normalizedLang);
-    }
-
-    const common = getCommonEntries();
-    let dict;
-    switch (normalizedLang) {
-        case "ko":
-            dict = { ...common, ...KO_SPECIFIC };
-            break;
-        case "en":
-            dict = { ...common, ...EN_SPECIFIC };
-            break;
-        case "ja":
-            dict = { ...common, ...EN_SPECIFIC, ...JA_OVERRIDES };
-            break;
-        case "zh-CN":
-            dict = { ...common, ...EN_SPECIFIC, ...ZH_CN_OVERRIDES };
-            break;
-        default:
-            dict = { ...common, ...EN_SPECIFIC };
-    }
-
-    DICTIONARY_CACHE.set(normalizedLang, dict);
-    return dict;
+    return DICTIONARIES[normalizedLang] || DICTIONARIES["en"];
 }
 
 /* ─── 인터폴레이션 함수 ─── */
+
+const INTERPOLATION_RE = /\{(\w+)\}/g;
 
 /**
  * 템플릿 문자열의 변수를 치환합니다.
@@ -2493,7 +2541,7 @@ function getDictionary(lang) {
 function interpolate(template, vars) {
     if (!vars || !Object.keys(vars).length) return template;
 
-    return template.replace(/\{(\w+)\}/g, (_, key) => {
+    return template.replace(INTERPOLATION_RE, (_, key) => {
         return Object.hasOwn(vars, key)
             ? `${vars[key]}`
             : `{${key}}`;  // 변수 없으면 원본 표시 (디버깅 용이)
@@ -2558,8 +2606,7 @@ let _currentLanguage = "en";
 
 export function setCurrentLanguage(lang) {
     _currentLanguage = normalizeLanguage(lang);
-    // 언어 변경 시 캐시 클리어 (새로운 번역 적용)
-    DICTIONARY_CACHE.clear();
+    // 사전 클리어 대신 상태만 변경 (DICTIONARIES가 정적이므로)
 }
 
 export function getCurrentLanguage() {
@@ -2568,33 +2615,21 @@ export function getCurrentLanguage() {
 
 /* ─── 번역 함수 ─── */
 
-/**
- * 키로 번역문을 가져옵니다.
- * @param {keyof typeof I18N_KEYS} key
- * @param {Object} [vars={}]
- * @param {string} [fallback=""]
- * @returns {string}
- */
-export function t(key, vars = {}, fallback = "") {
-    if (key === I18N_KEYS.CHAT_VERSION) {
-        const version = String(_appVersion ?? "").trim();
-        if (version) return version;
-    }
+export function t(key, vars = null, fallback = "") {
+    if (key === I18N_KEYS.CHAT_VERSION) return _appVersion;
 
     const lang = _currentLanguage;
-    const dict = getDictionary(lang);
+    const dict = DICTIONARIES[lang];
 
     // 1. 현재 언어
     let template = dict[key];
 
     // 2. Fallback: en → ko
-    if (!template) {
-        const enDict = getDictionary("en");
-        template = enDict[key];
+    if (!template && lang !== "en") {
+        template = DICTIONARIES["en"][key];
     }
-    if (!template) {
-        const koDict = getDictionary("ko");
-        template = koDict[key];
+    if (!template && lang !== "ko") {
+        template = DICTIONARIES["ko"][key];
     }
 
     // 3. 최종 fallback
@@ -2602,59 +2637,75 @@ export function t(key, vars = {}, fallback = "") {
         template = fallback || key;
     }
 
-    const mergedVars = { appVersion: _appVersion, ...vars };
+    // 최적화: 플레이스홀더가 없으면 즉시 반환
+    if (!template.includes("{")) return template;
+
+    // 변수 및 appVersion 치환 처리
+    const hasAppVersion = template.includes("{appVersion}");
+    if (!vars && !hasAppVersion) return template;
+
+    const mergedVars = hasAppVersion ? { appVersion: _appVersion, ...vars } : vars;
     return interpolate(template, mergedVars);
 }
 
 /* ─── data-i18n 자동 적용 (최적화) ─── */
 
+/* ─── DOM 번역 캐시 ─── */
+const I18N_DOM_CACHE = new WeakMap();
+
 /**
  * DOM 내 모든 data-i18n 속성을 갖는 요소에 번역을 적용합니다.
- * 한 번의 순회로 모든 속성을 처리합니다.
+ * 값이 변경된 경우에만 DOM에 반영하여 성능을 최적화합니다.
  * @param {Document|Element} [root=document]
  */
 export function applyI18nToDOM(root = document) {
-    const selectors = [
-        "[data-i18n]",
-        "[data-i18n-placeholder]",
-        "[data-i18n-title]",
-        "[data-i18n-aria-label]",
-        "[data-i18n-alt]",
-    ].join(", ");
-
+    const selectors = "[data-i18n], [data-i18n-placeholder], [data-i18n-title], [data-i18n-aria-label], [data-i18n-alt]";
     const elements = root.querySelectorAll(selectors);
 
     for (const el of elements) {
-        // textContent
-        const i18nKey = el.getAttribute("data-i18n");
-        if (i18nKey) {
-            el.textContent = t(i18nKey);
+        const { i18n, i18nPlaceholder, i18nTitle, i18nAriaLabel, i18nAlt } = el.dataset;
+
+        // 요소별 캐시 객체
+        let cache = I18N_DOM_CACHE.get(el);
+        if (!cache) {
+            cache = {};
+            I18N_DOM_CACHE.set(el, cache);
         }
 
-        // placeholder
-        const placeholderKey = el.getAttribute("data-i18n-placeholder");
-        if (placeholderKey) {
-            if ("placeholder" in el) {
-                el.placeholder = t(placeholderKey);
+        if (i18n) {
+            const val = t(i18n);
+            if (cache.text !== val) {
+                el.textContent = val;
+                cache.text = val;
             }
         }
-
-        // title
-        const titleKey = el.getAttribute("data-i18n-title");
-        if (titleKey) {
-            el.setAttribute("title", t(titleKey));
+        if (i18nPlaceholder && "placeholder" in el) {
+            const val = t(i18nPlaceholder);
+            if (cache.placeholder !== val) {
+                el.placeholder = val;
+                cache.placeholder = val;
+            }
         }
-
-        // aria-label
-        const ariaLabelKey = el.getAttribute("data-i18n-aria-label");
-        if (ariaLabelKey) {
-            el.setAttribute("aria-label", t(ariaLabelKey));
+        if (i18nTitle) {
+            const val = t(i18nTitle);
+            if (cache.title !== val) {
+                el.title = val;
+                cache.title = val;
+            }
         }
-
-        // alt
-        const altKey = el.getAttribute("data-i18n-alt");
-        if (altKey) {
-            el.setAttribute("alt", t(altKey));
+        if (i18nAriaLabel) {
+            const val = t(i18nAriaLabel);
+            if (cache.ariaLabel !== val) {
+                el.setAttribute("aria-label", val);
+                cache.ariaLabel = val;
+            }
+        }
+        if (i18nAlt) {
+            const val = t(i18nAlt);
+            if (cache.alt !== val) {
+                el.setAttribute("alt", val);
+                cache.alt = val;
+            }
         }
     }
 }

@@ -6,6 +6,21 @@
 import { t, I18N_KEYS } from "./i18n.js";
 import { safeJsonParse } from "./shared-utils.js";
 
+/**
+ * Crypto operations timeout wrapper (30s)
+ */
+async function withCryptoTimeout(promise, timeoutMs = 30000) {
+    let timer;
+    const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Crypto operation timed out")), timeoutMs);
+    });
+    try {
+        return await Promise.race([promise, timeoutPromise]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 // ============================================================================
 // Compression Utilities
 // ============================================================================
@@ -33,20 +48,20 @@ async function decompressBytesGzip(bytes) {
 // ============================================================================
 
 function bytesToBase64(bytes) {
-    let binary = "";
     const step = 0x8000;
+    const chunks = [];
     for (let i = 0; i < bytes.length; i += step) {
-        const chunk = bytes.subarray(i, i + step);
-        binary += String.fromCharCode(...chunk);
+        chunks.push(String.fromCharCode(...bytes.subarray(i, i + step)));
     }
-    return btoa(binary);
+    return btoa(chunks.join(""));
 }
 
 function base64ToBytes(value) {
     const binary = atob(String(value ?? ""));
-    const out = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) {
-        out[i] = binary.charCodeAt(i);
+    let n = binary.length;
+    const out = new Uint8Array(n);
+    while (n--) {
+        out[n] = binary.charCodeAt(n);
     }
     return out;
 }
@@ -56,7 +71,8 @@ function base64ToBytes(value) {
 // ============================================================================
 
 function normalizeKdfIterations(n) {
-    return Math.max(1, Math.trunc(Number(n || 1)));
+    // DB-3/DB-5: 최소 100_000, 최대 2_000_000 보장
+    return Math.max(100_000, Math.min(2_000_000, Math.trunc(Number(n || 100_000))));
 }
 
 async function deriveBackupAesKey(passphrase, saltBytes, iterations) {
@@ -166,6 +182,10 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
     }
     const parsed = parsedResult.value;
     if (!parsed || parsed.format !== "lucid-backup-envelope.v1" || !parsed.encrypted) {
+        // DB-1: 미인식 포맷 시 에러 throw
+        if (parsed && parsed.format && parsed.format !== "lucid-backup-envelope.v1") {
+            throw new Error(`${t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID)}: unknown format '${parsed.format}'`);
+        }
         return parsed;
     }
 
@@ -190,13 +210,29 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
     }
     const parsedIterations = normalizeKdfIterations(parsed?.kdf?.iterations ?? kdfIterations);
     const key = await deriveBackupAesKey(normalizedPassphrase, salt, parsedIterations);
-    const plainBuffer = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv },
-        key,
-        encrypted,
-    );
+
+    let plainBuffer;
+    try {
+        // DB-1: Add timeout to prevent indefinite hang in some browsers
+        plainBuffer = await withCryptoTimeout(crypto.subtle.decrypt(
+            { name: "AES-GCM", iv },
+            key,
+            encrypted,
+        ));
+    } catch (error) {
+        // DB-2: Catch OperationError (wrong password) or timeout
+        if (error.name === "OperationError" || error.message.includes("Crypto")) {
+            throw new Error(`${t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID)}: ${t(I18N_KEYS.ERROR_ENCRYPTED_BACKUP_PASSWORD)} (or file corrupted)`);
+        }
+        throw error;
+    }
+
     let plainBytes = new Uint8Array(plainBuffer);
     if (String(parsed.compression ?? "none").toLowerCase() === "gzip") {
+        // DB-2: 압축 비지원 브라우저에서 명확한 에러 메시지
+        if (!HAS_COMPRESSION_STREAM) {
+            throw new Error(`${t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID)}: gzip compression not supported in this browser`);
+        }
         plainBytes = await decompressBytesGzip(plainBytes);
     }
     const plainText = new TextDecoder("utf-8", { fatal: true }).decode(plainBytes);
@@ -219,9 +255,9 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
  */
 export function formatBackupFileName(prefix = "backup_", now = new Date()) {
     const safePrefix = String(prefix ?? "backup_");
-    const timestamp = now instanceof Date ? now : new Date(now);
-    const pad = (num) => String(num).padStart(2, "0");
-    const stamp = `${timestamp.getFullYear()}${pad(timestamp.getMonth() + 1)}${pad(timestamp.getDate())}_${pad(timestamp.getHours())}${pad(timestamp.getMinutes())}${pad(timestamp.getSeconds())}`;
+    const d = now instanceof Date ? now : new Date(now);
+    // toISOString(): YYYY-MM-DDTHH:mm:ss.sssZ -> YYYYMMDD_HHmmss
+    const stamp = d.toISOString().replace(/[-:T]/g, "").slice(0, 14).replace(/(\d{8})(\d{6})/, "$1_$2");
     return `${safePrefix}${stamp}.json`;
 }
 

@@ -2,15 +2,16 @@ import {
     detectNavigatorLanguage,
     setCurrentLanguage,
     applyI18nToDOM,
+    SUPPORTED_LANGUAGES,
 } from "./i18n.js";
 import {
     readFromStorage,
+    STORAGE_KEYS,
 } from "./shared-utils.js";
 
 const MAIN_MODULE_PATH = "./main.js";
-const USER_PROFILE_KEY = "lucid_user_profile_v1";
-const THEME_KEY = "lucid_theme";
-const LANGUAGE_KEY = "lucid_language";
+const USER_PROFILE_KEY = STORAGE_KEYS.userProfile;
+const LANGUAGE_KEY = STORAGE_KEYS.language;
 
 /**
  * 초기 i18n 설정: main.js 로드 전에 기본적인 UI 번역 적용
@@ -23,14 +24,16 @@ function initEarlyI18n() {
 
     // 2. Legacy key (fallback)
     if (!lang) {
-        const result = readFromStorage(USER_PROFILE_KEY, null, { deserialize: true });
-        if (result.success && result.value && typeof result.value === "object") {
-            lang = result.value.language;
-        }
+        lang = readFromStorage(USER_PROFILE_KEY, null, { deserialize: true }).value?.language;
     }
 
     // 3. Final fallback
     lang = lang || defaultLang;
+
+    // BOOT-4: 지원하지 않는 언어 코드인 경우 기본 언어로 폴백
+    if (!SUPPORTED_LANGUAGES.includes(lang)) {
+        lang = SUPPORTED_LANGUAGES.includes(defaultLang) ? defaultLang : "ko";
+    }
 
     setCurrentLanguage(lang);
     document.documentElement.lang = lang;
@@ -40,7 +43,7 @@ function initEarlyI18n() {
 async function loadMainBundle() {
     try {
         await import(MAIN_MODULE_PATH);
-        console.log('모델 파일 로드 완료');
+        console.log('[BOOT] Main module loaded');
     } catch (error) {
         console.error("[BOOT] Failed to load main bundle", error);
         // 사용자에게 최소한의 에러 피드백 표시
@@ -57,16 +60,13 @@ async function loadMainBundle() {
 function bootstrapWithCodeSplitting() {
     // 1. i18n 즉시 초기화
     initEarlyI18n();
-    const start = () => {
-        void loadMainBundle();
-    };
 
     if (typeof window.requestIdleCallback === "function") {
-        window.requestIdleCallback(start, { timeout: 1200 });
+        window.requestIdleCallback(() => loadMainBundle(), { timeout: 300 });
         return;
     }
 
-    window.setTimeout(start, 0);
+    window.setTimeout(() => loadMainBundle(), 0);
 }
 
 function registerServiceWorker() {
@@ -79,7 +79,6 @@ function registerServiceWorker() {
             // 이미 대기 중인 SW가 있다면 이벤트 발생
             if (reg.waiting) {
                 window.dispatchEvent(new CustomEvent("swUpdateWaiting"));
-                return;
             }
 
             // 새로운 SW 발견 시

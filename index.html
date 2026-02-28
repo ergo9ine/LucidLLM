@@ -6,11 +6,12 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title data-i18n="html.title">LucidLLM Chat</title>
     <link rel="icon" type="image/svg+xml" sizes="any" href="./favicon.svg">
-    <link rel="shortcut icon" href="./favicon.svg">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" as="style"
-        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
+    <link rel="dns-prefetch" href="https://unpkg.com">
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="dns-prefetch" href="https://api.github.com">
+    <link rel="dns-prefetch" href="https://huggingface.co">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
     <link rel="modulepreload" href="./script/main.js">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -192,6 +193,7 @@
                 opacity: 1;
             }
         }
+
         .message-edit-textarea {
             font-family: inherit;
             line-height: 1.625;
@@ -205,7 +207,7 @@
             box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
         }
     </style>
-    <script defer="defer" src="https://unpkg.com/lucide@latest"></script>
+    <script defer="defer" src="https://unpkg.com/lucide@0.454.0"></script>
 </head>
 
 <body
@@ -243,7 +245,7 @@
                     <i data-lucide="plus" class="w-4 h-4"></i>
                 </div>
                 <span
-                    class="text-sm font-medium text-slate-300 light:text-slate-600 oled:text-[#aaa] group-hover:text-cyan-100 light:text-sky-700 oled:text-[#eee] light:text-slate-600 light:group-hover:text-sky-700"
+                    class="text-sm font-medium text-slate-300 group-hover:text-cyan-100 light:text-sky-700 oled:text-[#eee] light:group-hover:text-sky-700"
                     data-i18n="header.new_chat">New Chat</span>
             </button>
         </div>
@@ -300,6 +302,9 @@
                 <div id="model-status-text"
                     class="text-sm font-medium text-slate-200 light:text-slate-800 oled:text-[#c4c4c4]"
                     data-i18n="header.model_status_waiting"></div>
+                <div id="warmup-indicator" hidden
+                    class="text-xs text-cyan-400/70 light:text-sky-500/70 px-3 py-1 animate-pulse">
+                </div>
             </div>
 
             <div class="flex items-center gap-3">
@@ -397,37 +402,37 @@
                     class="w-[72px] md:w-[280px] shrink-0 border-r border-slate-700/70 bg-slate-900 p-3 md:p-4 overflow-y-auto light:bg-slate-100 light:border-slate-400 oled:bg-black oled:border-[#1f1f1f]"
                     data-i18n-aria-label="settings.menu_label">
                     <nav class="space-y-2" data-i18n-aria-label="settings.tabs_label"> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 light:text-slate-600 oled:text-[#aaa] transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:text-sky-700 oled:text-[#eee] light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
                             data-settings-tab-btn="model" aria-selected="true" aria-controls="settings-panel-model"
                             data-i18n-aria-label="common.model_management" data-i18n-title="common.model_management"> <i
                                 data-lucide="box" class="w-5 h-5 shrink-0 pointer-events-none"></i>
                             <span class="sr-only" data-i18n="common.model_management"></span>
                         </button> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 light:text-slate-600 oled:text-[#aaa] transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:text-sky-700 oled:text-[#eee] light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
                             data-settings-tab-btn="llm" aria-selected="false" aria-controls="settings-panel-llm"
                             data-i18n-aria-label="common.llm_settings" data-i18n-title="common.llm_settings"> <i
                                 data-lucide="sliders-horizontal" class="w-5 h-5 shrink-0 pointer-events-none"></i> <span
                                 class="sr-only" data-i18n="common.llm_settings"></span> </button> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 light:text-slate-600 oled:text-[#aaa] transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:text-sky-700 oled:text-[#eee] light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
                             data-settings-tab-btn="profile" aria-selected="false" aria-controls="settings-panel-profile"
                             data-i18n-aria-label="common.profile" data-i18n-title="common.profile"> <i
                                 data-lucide="user-round" class="w-5 h-5 shrink-0 pointer-events-none"></i>
                             <span class="sr-only" data-i18n="common.profile"></span>
                         </button> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 light:text-slate-600 oled:text-[#aaa] transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:text-sky-700 oled:text-[#eee] light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
                             data-settings-tab-btn="theme" aria-selected="false" aria-controls="settings-panel-theme"
                             data-i18n-aria-label="common.theme" data-i18n-title="common.theme"> <i data-lucide="palette"
                                 class="w-5 h-5 shrink-0 pointer-events-none"></i> <span class="sr-only"
                                 data-i18n="common.theme"></span>
                         </button> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 light:text-slate-600 oled:text-[#aaa] transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:text-sky-700 oled:text-[#eee] light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
                             data-settings-tab-btn="language" aria-selected="false"
                             aria-controls="settings-panel-language" data-i18n-aria-label="common.language"
                             data-i18n-title="common.language">
                             <i data-lucide="languages" class="w-5 h-5 shrink-0 pointer-events-none"></i> <span
                                 class="sr-only" data-i18n="common.language"></span>
                         </button> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 light:text-slate-600 oled:text-[#aaa] transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:text-sky-700 oled:text-[#eee] light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
                             data-settings-tab-btn="backup" aria-selected="false" aria-controls="settings-panel-backup"
                             data-i18n-aria-label="common.backup_and_restore"
                             data-i18n-title="common.backup_and_restore"> <i data-lucide="hard-drive-upload"
@@ -554,10 +559,11 @@
                                                 id="download-attempt-text"
                                                 class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">0</span></div>
                                     </div>
-                                    <div class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"><span
-                                            data-i18n="model.download.bytes"></span> <span id="download-bytes-text"
+                                    <div class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]">
+                                        <span data-i18n="model.download.bytes"></span> <span id="download-bytes-text"
                                             class="text-cyan-100 light:text-sky-700 oled:text-[#eee]"
-                                            data-i18n="model.download.bytes_default"></span></div>
+                                            data-i18n="model.download.bytes_default"></span>
+                                    </div>
                                     <div id="download-status-text"
                                         class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                         data-i18n="model.download.status_text"></div>
@@ -778,6 +784,19 @@
                                     class="border border-slate-600 hover:bg-slate-800/70 rounded-lg px-3 py-2 text-xs"
                                     data-i18n="llm.btn_clear_token"></button> </div>
                         </article>
+                        <article
+                            class="rounded-xl border border-slate-700/70 bg-slate-950/45 light:bg-white light:border-slate-200 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] p-4 space-y-2">
+                            <label
+                                class="inline-flex items-center gap-2 text-xs text-slate-200 light:text-slate-700 cursor-pointer">
+                                <input id="model-warmup-toggle" type="checkbox"
+                                    class="accent-cyan-400 light:accent-sky-500">
+                                <span>
+                                    <span data-i18n="warmup.label" class="font-medium"></span>
+                                    <span data-i18n="warmup.description"
+                                        class="block text-[10px] text-slate-400 light:text-slate-500 mt-0.5"></span>
+                                </span>
+                            </label>
+                        </article>
                         <article class="rounded-xl border border-cyan-400/30 bg-cyan-500/10 p-4 space-y-3">
                             <p id="llm-settings-validation" class="text-[0.75rem] text-slate-200"
                                 data-i18n="llm.validation_hint"></p>
@@ -807,7 +826,7 @@
                                     </button> <button id="profile-avatar-clear-btn" type="button"
                                         class="inline-flex items-center gap-2 rounded-lg border border-slate-500/60 hover:bg-slate-700/50 px-3 py-2 text-xs">
                                         <i data-lucide="image-minus" class="w-4 h-4"></i> <span
-                                            id="profile-avatar-clear-label" data-i1e8n="profile.remove"></span>
+                                            id="profile-avatar-clear-label" data-i18n="profile.remove"></span>
                                     </button> </div>
                             </div>
                             <div class="space-y-2"> <label id="profile-nickname-label" for="profile-nickname-input"
@@ -855,7 +874,8 @@
                                 class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                 data-i18n="theme.hint"></p>
                         </article>
-                        <article class="rounded-xl border border-slate-700/70 bg-slate-950/45 light:bg-white light:border-slate-200 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] p-4 space-y-3">
+                        <article
+                            class="rounded-xl border border-slate-700/70 bg-slate-950/45 light:bg-white light:border-slate-200 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] p-4 space-y-3">
                             <h2 id="font-scale-title"
                                 class="text-sm font-semibold text-cyan-100 light:text-sky-700 oled:text-[#eee]"
                                 data-i18n="settings.font_scale_title">폰트 크기</h2>
@@ -867,8 +887,7 @@
                                     <span id="font-scale-value"
                                         class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">100%</span>
                                 </div>
-                                <input id="font-scale-input" type="range"
-                                    min="0.75" max="1.5" step="0.05" value="1"
+                                <input id="font-scale-input" type="range" min="0.75" max="1.5" step="0.05" value="1"
                                     class="w-full">
                                 <p class="text-[0.6875rem] text-slate-400 light:text-slate-500 oled:text-[#888]"
                                     data-i18n="settings.font_scale_hint">75% ~ 150% 범위에서 조절 가능합니다.</p>
@@ -959,8 +978,8 @@
                                     <div id="drive-progress-bar"
                                         class="h-full w-0 bg-cyan-400 transition-[width] duration-200"></div>
                                 </div>
-                                <div class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"> <span
-                                        data-i18n="backup.gdrive.progress"></span>
+                                <div class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]">
+                                    <span data-i18n="backup.gdrive.progress"></span>
                                     <span id="drive-progress-percent"
                                         class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">0%</span>
                                 </div>
@@ -982,9 +1001,9 @@
                                     id="drive-restore-overwrite-toggle" type="checkbox" class="accent-cyan-400"
                                     checked="checked"> <span data-i18n="backup.restore.overwrite_label"></span> </label>
                             <button id="drive-restore-btn" type="button"
-                                class="inline-flex items-center gap-2 border border-amber-300/40 hover:bg-amber-500/15 rounded-lg px-3 py-2 text-xs"
-                                data-i18n="backup.restore.btn_restore">
-                                <i data-lucide="download-cloud" class="w-4 h-4"></i></button>
+                                class="inline-flex items-center gap-2 border border-amber-300/40 hover:bg-amber-500/15 rounded-lg px-3 py-2 text-xs">
+                                <i data-lucide="download-cloud" class="w-4 h-4"></i> <span
+                                    data-i18n="backup.restore.btn_restore"></span></button>
                             <div id="drive-file-list-meta"
                                 class="text-[0.6875rem] text-slate-300 light:text-slate-600 oled:text-[#aaa]"
                                 data-i18n="backup.restore.file_count"></div>
@@ -997,7 +1016,7 @@
     <div id="model-card-overlay" class="hidden fixed inset-0 z-[70] bg-black/55" tabindex="-1">
         <div id="model-card-window"
             class="panel absolute left-1/2 top-20 -translate-x-1/2 w-[min(94vw,720px)] rounded-2xl shadow-2xl"
-            style="max-height:calc(100vh - 6rem)">
+            role="dialog" aria-modal="true" style="max-height:calc(100vh - 6rem)">
             <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-700/70">
                 <div class="inline-flex items-center gap-2 text-cyan-100 light:text-sky-700 oled:text-[#eee] font-semibold"
                     data-i18n="model_card.title"> <i data-lucide="badge-info" class="w-4 h-4"></i> </div> <button
@@ -1074,7 +1093,7 @@
         </div>
     </div>
     <div id="delete-dialog-overlay" class="hidden fixed inset-0 z-[75] bg-black/60 px-4" tabindex="-1">
-        <div class="mui-dialog w-full max-w-xl rounded-2xl mx-auto mt-24 md:mt-32 p-5">
+        <div class="mui-dialog w-full max-w-xl rounded-2xl mx-auto mt-24 md:mt-32 p-5" role="dialog" aria-modal="true">
             <div class="text-sm font-semibold text-slate-100" data-i18n="dialog.delete.title"></div>
             <p id="delete-dialog-message" class="mt-3 text-sm text-slate-200 leading-relaxed"
                 data-i18n="dialog.delete.message"></p>
@@ -1122,7 +1141,8 @@
         class="hidden fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm transition-opacity duration-300"
         aria-hidden="true">
         <div id="changelog-modal-window"
-            class="relative w-[min(90vw,600px)] max-h-[85vh] mx-auto mt-20 md:mt-24 flex flex-col rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl light:bg-white light:border-slate-300 oled:bg-black oled:border-[#1f1f1f] overflow-hidden">
+            class="relative w-[min(90vw,600px)] max-h-[85vh] mx-auto mt-20 md:mt-24 flex flex-col rounded-2xl border border-slate-700/70 bg-slate-950 shadow-2xl light:bg-white light:border-slate-300 oled:bg-black oled:border-[#1f1f1f] overflow-hidden"
+            role="dialog" aria-modal="true" aria-labelledby="changelog-modal-title">
 
             <!-- Modal Header -->
             <div

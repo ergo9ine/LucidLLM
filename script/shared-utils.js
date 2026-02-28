@@ -13,16 +13,66 @@ export const OPFS_MODELS_DIR = "models";
 
 export const TRANSFORMERS_JS_VERSION = "4.0.0-next.1";
 export const TRANSFORMERS_JS_IMPORT_CANDIDATES = Object.freeze([
-    // Local self-hosted bundle (same-origin → enables multi-threaded WASM)
+    // Prefer the self-hosted bundle so worker/runtime assets stay same-origin.
     `../vendor/transformers/transformers.bundle.min.mjs`,
-    // CDN fallback
     `https://cdn.jsdelivr.net/npm/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}/+esm`,
     `https://unpkg.com/@huggingface/transformers@${TRANSFORMERS_JS_VERSION}?module`,
 ]);
+export const WORKER_MSG = {
+    INIT: "init",
+    GENERATE: "generate",
+    WARMUP: "warmup",
+    WARMUP_DONE: "warmup_done",
+    ABORT: "abort",
+    DISPOSE: "dispose",
+    INIT_DONE: "init_done",
+    INIT_ERROR: "init_error",
+    GENERATE_TOKEN: "generate_token",
+    GENERATE_DONE: "generate_done",
+    ABORT_ACK: "abort_ack",
+    DISPOSE_DONE: "dispose_done",
+    TOKEN: "token",
+    GENERATION_ABORTED: "generation_aborted",
+    TOKEN_ERROR: "token_error",
+    ERROR: "error",
+    WORKER_ERROR: "worker_error",
+};
+
 
 // ============================================================================
-// Error & HTML Utilities
+// Error & UI Utilities
 // ============================================================================
+
+/**
+ * 문자열을 정규화합니다 (trim + lowercase).
+ * @param {*} value
+ * @param {string} defaultVal
+ * @returns {string}
+ */
+export function normalizeLowercase(value, defaultVal = "") {
+    return String(value ?? defaultVal).trim().toLowerCase();
+}
+
+/**
+ * 대소문자를 무시하고 두 문자열이 같은지 확인합니다.
+ * @param {*} a
+ * @param {*} b
+ * @returns {boolean}
+ */
+export function eqIgnoreCase(a, b) {
+    return normalizeLowercase(a) === normalizeLowercase(b);
+}
+
+/**
+ * 대소문자를 무시하고 부분 문자열이 포함되어 있는지 확인합니다.
+ * @param {*} str
+ * @param {*} sub
+ * @returns {boolean}
+ */
+export function includesIgnoreCase(str, sub) {
+    return normalizeLowercase(str).includes(normalizeLowercase(sub));
+}
+
 
 /**
  * 오류 객체에서 메시지를 추출합니다.
@@ -30,9 +80,9 @@ export const TRANSFORMERS_JS_IMPORT_CANDIDATES = Object.freeze([
  * @returns {string}
  */
 export function getErrorMessage(error) {
-    if (!error) return "알 수 없는 오류";
+    if (error == null) return "알 수 없는 오류가 발생했습니다.";
     if (typeof error === "string") return error;
-    if (typeof error.message === "string" && error.message.trim()) return error.message;
+    if (typeof error.message === "string") return error.message;
     return String(error);
 }
 
@@ -41,13 +91,14 @@ export function getErrorMessage(error) {
  * @param {*} value
  * @returns {string}
  */
+const HTML_ESCAPE_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+/**
+ * HTML 특수 문자를 이스케이프 처리합니다.
+ * @param {*} value
+ * @returns {string}
+ */
 export function escapeHtml(value) {
-    return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;");
+    return String(value ?? "").replace(/[&<>"']/g, c => HTML_ESCAPE_MAP[c]);
 }
 
 /**
@@ -128,8 +179,9 @@ export function countApproxTokens(text) {
     const s = String(text ?? "");
     if (!s) return 0;
     let count = 0;
-    for (let i = 0; i < s.length; i++) {
-        const code = s.charCodeAt(i);
+    // S-3: Use for...of to correctly iterate over Unicode characters (handles surrogate pairs like emojis)
+    for (const char of s) {
+        const code = char.codePointAt(0);
         // ASCII characters (English, numbers, basic symbols) are roughly 4 chars/token
         if (code <= 127) {
             count += 0.25;
@@ -239,8 +291,13 @@ export function isHttpsUrl(value, options = {}) {
     const text = String(value ?? "").trim();
     if (!text) return false;
 
+    // S7: 상대경로 방지를 위해 base URL 없이 파싱
     try {
-        const parsed = new URL(text, "https://example.com");
+        // 절대 URL인지 확인 (프로토콜로 시작해야 함)
+        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(text)) {
+            return false;
+        }
+        const parsed = new URL(text);
         const protocol = String(parsed.protocol ?? "").toLowerCase();
         if (protocol === "https:") {
             return true;
@@ -272,85 +329,15 @@ export function resolveInferenceBackendChain(preferredDevice, capabilities = {})
     const hasWebGpu = capabilities.webgpu === true;
     const hasWasm = capabilities.wasm !== false;
 
-    const supported = new Set();
-    if (hasWebGpu) supported.add("webgpu");
-    if (hasWasm) supported.add("wasm");
-    if (supported.size === 0) {
-        return ["wasm"];
-    }
-
-    let order = ["wasm", "webgpu"];
-    if (preferred === "webgpu") {
-        order = ["webgpu", "wasm"];
-    } else if (preferred === "wasm") {
-        order = ["wasm", "webgpu"];
-    }
-
-    const deduped = [];
-    for (const device of order) {
-        if (!supported.has(device)) continue;
-        if (deduped.includes(device)) continue;
-        deduped.push(device);
-    }
-    if (!deduped.includes("wasm") && supported.has("wasm")) {
-        deduped.push("wasm");
-    }
-    return deduped.length > 0 ? deduped : ["wasm"];
+    const order = (preferred === "webgpu") ? ["webgpu", "wasm"] : ["wasm", "webgpu"];
+    const result = order.filter(d => (d === "webgpu" && hasWebGpu) || (d === "wasm" && hasWasm));
+    return result.length > 0 ? result : ["wasm"];
 }
 
 // ============================================================================
 // Streaming Utilities
 // ============================================================================
 
-/**
- * 빔 서치/생성 결과에서 토큰 ID 배열을 추출합니다.
- * Transformers.js 의 다양한 출력 형식을 지원합니다.
- * @param {*} payload
- * @returns {number[]}
- */
-export function extractTokenIdsFromBeamPayload(payload) {
-    if (!payload) return [];
-    if (Array.isArray(payload)) {
-        const first = payload[0];
-        if (first && typeof first === "object" && Array.isArray(first.output_token_ids)) {
-            return first.output_token_ids;
-        }
-        if (Array.isArray(first)) {
-            return first;
-        }
-    }
-    if (payload && typeof payload === "object") {
-        if (Array.isArray(payload.output_token_ids)) return payload.output_token_ids;
-        if (Array.isArray(payload.token_ids)) return payload.token_ids;
-        if (Array.isArray(payload.ids)) return payload.ids;
-    }
-    return [];
-}
-
-/**
- * 누적 디코딩된 텍스트에서 이전 텍스트 대비 새로 생성된 델타를 계산합니다.
- * @param {string} decoded - 현재까지 누적 디코딩된 전체 텍스트
- * @param {string} previousText - 이전 단계까지의 텍스트
- * @returns {{ delta: string, fullText: string }}
- */
-export function computeStreamTokenDelta(decoded, previousText) {
-    const prev = String(previousText ?? "");
-    const current = String(decoded ?? "");
-    if (!current) return { delta: "", fullText: prev };
-
-    if (current.startsWith(prev)) {
-        // 정상적인 성장: 이전 텍스트 이후의 새로운 부분만 delta로 반환
-        return { delta: current.slice(prev.length), fullText: current };
-    }
-
-    // 텍스트 후퇴: current가 prev보다 짧아진 경우 (빔 재평가 등)
-    if (prev.startsWith(current)) {
-        return { delta: "", fullText: current };
-    }
-
-    // 완전히 다른 텍스트: current 전체를 delta로 (스트림 리셋과 유사)
-    return { delta: current, fullText: current };
-}
 
 /**
  * 버퍼링된 텍스트의 길이에 따라 한 번에 드레인할 문자 수를 결정합니다.
@@ -374,9 +361,10 @@ export function computeStreamDrainCount(bufferedLength) {
  * @returns {number}
  */
 export function computeTokensPerSecond(totalTokens, startedAtMs, nowMs) {
-    if (!startedAtMs || totalTokens <= 0) return 0;
-    const elapsedSec = Math.max((nowMs - startedAtMs) / 1000, 0.001);
-    return totalTokens / elapsedSec;
+    // S-2: Better null/negative checks and clock skew defense
+    if (startedAtMs == null || totalTokens <= 0 || nowMs == null) return 0;
+    const elapsedSec = Math.max((Number(nowMs) - Number(startedAtMs)) / 1000, 0.001);
+    return Number(totalTokens) / elapsedSec;
 }
 
 // ============================================================================
@@ -488,7 +476,7 @@ export function publishLucidValue(key, value, options = {}) {
  * @param {*} data
  * @returns {{success: boolean, value: string|null, error: string|null}}
  */
-export function safeJsonStringify(data) {
+function safeJsonStringify(data) {
     try {
         if (data === undefined) return { success: true, value: null, error: null };
         const result = JSON.stringify(data);
@@ -506,8 +494,14 @@ export function safeJsonStringify(data) {
  * @returns {{success: boolean, value: any, error: string|null}}
  */
 export function safeJsonParse(text, defaultValue = null) {
-    if (!text || typeof text !== "string") {
+    // S-1: Check text == null to allow empty strings if intention is to parse "" (though JSON.parse("") fails)
+    // Actually JSON.parse("") is invalid, so !text is mostly fine, but let's be more precise.
+    if (text == null || typeof text !== "string") {
         return { success: false, value: defaultValue, error: "Input is not a string" };
+    }
+    // Still forbid empty string if we want strictly valid JSON
+    if (text.trim() === "") {
+        return { success: false, value: defaultValue, error: "Empty string is not valid JSON" };
     }
     try {
         const result = JSON.parse(text);
@@ -533,7 +527,8 @@ export function readFromStorage(key, defaultValue = null, options = {}) {
     const { deserialize = false } = options;
     try {
         const raw = localStorage.getItem(key);
-        if (!raw) {
+        // S3: null 체크로 변경 (빈 문자열은 유효한 값)
+        if (raw == null) {
             return { success: true, value: defaultValue, error: null };
         }
         if (deserialize) {
@@ -557,7 +552,7 @@ export function readFromStorage(key, defaultValue = null, options = {}) {
 export function writeToStorage(key, value, options = {}) {
     const { serialize = false } = options;
     try {
-        if (value === null || value === undefined) {
+        if (value == null) {
             localStorage.removeItem(key);
             return { success: true, error: null };
         }
@@ -570,10 +565,14 @@ export function writeToStorage(key, value, options = {}) {
             }
             stringValue = stringifyResult.value;
         } else {
+            // S2: 객체인 경우 명시적 에러 반환
+            if (typeof value === 'object' && value != null) {
+                return { success: false, error: 'Cannot store object without serialize=true' };
+            }
             stringValue = String(value);
         }
 
-        if (stringValue === null || stringValue === undefined) {
+        if (stringValue == null) {
             localStorage.removeItem(key);
             return { success: true, error: null };
         }
@@ -631,4 +630,399 @@ export function normalizeString(value, defaultValue = "", transformer = null) {
         }
     }
     return str;
+}
+
+export const TOAST_MS = {
+    SHORT: 1500,
+    DEFAULT: 2200,
+    LONG: 2800,
+    ERROR: 3200,
+};
+
+export const STORAGE_KEYS = {
+    token: "lucid_hf_token",
+    systemPrompt: "lucid_system_prompt",
+    maxOutputTokens: "lucid_max_output_tokens",
+    contextWindow: "lucid_context_window",
+    generationTemperature: "lucid_generation_temperature",
+    generationTopP: "lucid_generation_top_p",
+    generationPresencePenalty: "lucid_generation_presence_penalty",
+    generationMaxLength: "lucid_generation_max_length",
+    inferenceDevice: "lucid_inference_device",
+    opfsModelManifest: "lucid_opfs_model_manifest",
+    lastLoadedSessionFile: "lucid_last_loaded_session_file",
+    chatSessions: "lucid_chat_sessions_v1",
+    activeChatSessionId: "lucid_active_chat_session_id_v1",
+    userProfile: "lucid_user_profile_v1",
+    theme: "lucid_theme",
+    language: "lucid_language",
+    googleDriveClientId: "lucid_google_drive_client_id",
+    googleDriveAutoBackup: "lucid_google_drive_auto_backup",
+    googleDriveLastSyncAt: "lucid_google_drive_last_sync_at",
+    googleDriveBackupLimitMb: "lucid_google_drive_backup_limit_mb",
+    updateLastCheckAt: "lucid_update_last_check_at",
+    updateLatestRelease: "lucid_update_latest_release",
+    updateDismissedVersion: "lucid_update_dismissed_version",
+    generationConfigBootstrapByModel: "lucid_generation_config_bootstrap_by_model",
+    fontScale: "lucid_font_scale",
+    warmupEnabled: "lucid_model_warmup_enabled",
+};
+
+// ============================================================================
+// OPFS Path & Candidate Utilities
+// ============================================================================
+
+/**
+ * 모델 ID의 유효성을 검사합니다.
+ * @param {string} modelId
+ * @returns {boolean}
+ */
+export function isValidModelId(modelId) {
+    return /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(String(modelId ?? ""));
+}
+
+/**
+ * URL 디코딩을 안전하게 수행합니다.
+ * @param {string} value
+ * @returns {string}
+ */
+export function decodeUriComponentSafe(value) {
+    try {
+        return decodeURIComponent(String(value ?? ""));
+    } catch {
+        return String(value ?? "");
+    }
+}
+
+/**
+ * Hugging Face 호스트네임인지 확인합니다.
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+export function isHfHostName(hostname) {
+    const h = String(hostname ?? "").toLowerCase();
+    return h === "huggingface.co" || h === "www.huggingface.co" || h === "cdn-lfs.huggingface.co";
+}
+
+/**
+ * 명시적인 Hugging Face 다운로드 요청인지 확인합니다.
+ * @param {string} url
+ * @returns {boolean}
+ */
+export function isExplicitHfDownloadRequest(url) {
+    try {
+        const parsed = new URL(url);
+        return isHfHostName(parsed.hostname) && parsed.searchParams.get("download") === "1";
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Hugging Face API 요청인지 확인합니다.
+ * @param {string} url
+ * @returns {boolean}
+ */
+export function isHfApiRequest(url) {
+    try {
+        const parsed = new URL(String(url ?? ""));
+        return isHfHostName(parsed.hostname) && parsed.pathname.startsWith("/api/");
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * HuggingFace resolve URL을 파싱하여 modelId와 filePath를 추출합니다.
+ * @param {string} rawUrl
+ * @returns {{ modelId: string, filePath: string, revision: string } | null}
+ */
+export function parseHfResolveUrl(rawUrl) {
+    try {
+        const parsed = new URL(rawUrl);
+        if (!isHfHostName(parsed.hostname)) return null;
+        if (parsed.searchParams.get("download") === "1") return null;
+
+        const segments = parsed.pathname
+            .split("/")
+            .filter(Boolean)
+            .map((s) => decodeUriComponentSafe(s));
+
+        const resolveIndex = segments.indexOf("resolve");
+        if (resolveIndex < 2 || resolveIndex + 2 >= segments.length) return null;
+
+        const modelId = segments.slice(0, resolveIndex).join("/");
+        const revision = segments[resolveIndex + 1] || "main";
+        const filePath = normalizeOpfsModelRelativePath(segments.slice(resolveIndex + 2).join("/"));
+
+        if (!modelId || !filePath) return null;
+        return { modelId, revision, filePath };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * 로컬 모델 요청 URL을 파싱합니다.
+ * @param {string} rawUrl
+ * @param {string} [baseOrigin] - (선택 사항) 베이스 오리진
+ * @returns {{ modelId: string, revision: string, filePath: string, url: string } | null}
+ */
+export function parseLocalModelRequestUrl(rawUrl, baseOrigin) {
+    const text = String(rawUrl ?? "").trim();
+    if (!text) return null;
+
+    try {
+        const parsed = new URL(text, baseOrigin || (typeof window !== "undefined" ? window.location.origin : undefined));
+        const segments = parsed.pathname
+            .split("/")
+            .filter(Boolean)
+            .map((part) => decodeUriComponentSafe(part));
+
+        if (segments.length < 4) return null;
+        if (String(segments[0] ?? "").toLowerCase() !== OPFS_MODELS_DIR) {
+            return null;
+        }
+
+        const modelId = normalizeModelId(`${segments[1] ?? ""}/${segments[2] ?? ""}`);
+        if (!isValidModelId(modelId)) {
+            return null;
+        }
+
+        const filePath = normalizeOpfsModelRelativePath(segments.slice(3).join("/"));
+        if (!filePath) {
+            return null;
+        }
+
+        return {
+            modelId,
+            revision: "local",
+            filePath,
+            url: parsed.toString(),
+        };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * 모델 ID를 정규화합니다.
+ * @param {*} raw
+ * @returns {string}
+ */
+export function normalizeModelId(raw) {
+    return String(raw ?? "").trim().replace(/^\/+|\/+$/g, "");
+}
+
+/**
+ * OPFS 모델 상대 경로를 정규화합니다.
+ * @param {string} path
+ * @returns {string}
+ */
+export function normalizeOpfsModelRelativePath(path) {
+    let value = String(path ?? "").trim();
+    if (!value) return "";
+    value = value.replace(/\\/g, "/");
+    if (!value) return "";
+
+    const segments = value.match(/[^/]+/g) ?? [];
+    if (segments.length === 0) return "";
+
+    const result = [];
+    for (const s of segments) {
+        if (s === "." || s === "..") return "";
+        result.push(s);
+    }
+    return result.join("/");
+}
+
+/**
+ * ONNX 파일명을 정규화합니다.
+ * @param {string} fileName
+ * @returns {string}
+ */
+export function normalizeOnnxFileName(fileName) {
+    const value = normalizeOpfsModelRelativePath(fileName);
+    if (!value) return "";
+    if (!value.toLowerCase().endsWith(".onnx")) return "";
+    return value;
+}
+
+/**
+ * 모델 ID로부터 저장소 프리픽스를 정규화합니다.
+ * @param {string} modelId
+ * @returns {string}
+ */
+export function normalizeStoragePrefixFromModelId(modelId) {
+    return normalizeModelId(modelId)
+        .replaceAll("/", "--")
+        .replace(/[^A-Za-z0-9._-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * 모델 번들 디렉토리명을 안전하게 생성합니다.
+ * @param {string} modelId
+ * @returns {string}
+ */
+export function toSafeModelBundleDirectoryName(modelId = "") {
+    return normalizeStoragePrefixFromModelId(modelId) || "model-bundle";
+}
+
+/**
+ * 파일명 세그먼트를 안전하게 변환합니다.
+ * @param {string} segment
+ * @param {string} fallback
+ * @returns {string}
+ */
+export function toSafeModelPathSegment(segment, fallback = "entry") {
+    const safe = String(segment ?? "")
+        .replace(/[^A-Za-z0-9._-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    return safe || fallback;
+}
+
+/**
+ * 모델 번들 내의 상대 경로를 안전하게 생성합니다.
+ * @param {string} sourceFileName
+ * @param {string} fallbackFileName
+ * @returns {string}
+ */
+export function toSafeModelBundleRelativePath(sourceFileName, fallbackFileName = "file.bin") {
+    const normalized = normalizeOpfsModelRelativePath(sourceFileName);
+    const rawSegments = normalized ? normalized.split("/") : [fallbackFileName];
+    if (rawSegments.length === 0) {
+        return fallbackFileName;
+    }
+    return rawSegments
+        .map((segment, index) => toSafeModelPathSegment(
+            segment,
+            index === rawSegments.length - 1 ? fallbackFileName : "dir",
+        ))
+        .join("/");
+}
+
+/**
+ * 안전한 모델 저장 파일명을 생성합니다.
+ * @param {string} sourceFileName
+ * @param {string} modelId
+ * @returns {string}
+ */
+export function toSafeModelStorageFileName(sourceFileName, modelId = "") {
+    const bundleDir = toSafeModelBundleDirectoryName(modelId);
+    const relativePath = toSafeModelBundleRelativePath(sourceFileName, "model.onnx");
+    const segments = relativePath.split("/").filter(Boolean);
+    if (segments.length === 0) return "";
+    const base = segments.at(-1);
+    const normalizedBase = base.toLowerCase().endsWith(".onnx")
+        ? base
+        : `${base.replace(/\.[^.]+$/g, "")}.onnx`;
+    segments[segments.length - 1] = normalizedBase ?? "model.onnx";
+    const merged = `${bundleDir}/${segments.join("/")}`;
+    return normalizeOnnxFileName(merged);
+}
+
+/**
+ * 안전한 모델 자산 저장 파일명을 생성합니다.
+ * @param {string} sourceFileName
+ * @param {string} modelId
+ * @returns {string}
+ */
+export function toSafeModelStorageAssetFileName(sourceFileName, modelId = "") {
+    const bundleDir = toSafeModelBundleDirectoryName(modelId);
+    const relativePath = toSafeModelBundleRelativePath(sourceFileName, "asset.bin");
+    const normalized = normalizeOpfsModelRelativePath(`${bundleDir}/${relativePath}`);
+    return normalized ?? "";
+}
+
+/**
+ * HuggingFace resolve 요청에 대한 OPFS 후보 경로들을 생성합니다.
+ * @param {{modelId: string, filePath: string}} request
+ * @param {string} [activeFileName] - (선택 사항) 현재 활성화된 파일명
+ * @returns {string[]}
+ */
+export function buildOpfsCandidatePaths(request, activeFileName = "", externalDataChunkCount = 0) {
+    const candidates = [];
+    const sourcePaths = [];
+    const addSourcePath = (value) => {
+        const normalized = normalizeOpfsModelRelativePath(value);
+        if (!normalized) return;
+        if (!sourcePaths.includes(normalized)) {
+            sourcePaths.push(normalized);
+        }
+    };
+    const addCandidate = (value) => {
+        const normalized = normalizeOpfsModelRelativePath(value);
+        if (!normalized) return;
+        if (!candidates.includes(normalized)) {
+            candidates.push(normalized);
+        }
+    };
+
+    const primarySource = normalizeOpfsModelRelativePath(request?.filePath ?? "");
+    if (!primarySource) return [];
+    addSourcePath(primarySource);
+    if (primarySource.includes("onnx/onnx/")) {
+        addSourcePath(primarySource.replace("onnx/onnx/", "onnx/"));
+    }
+    if (primarySource.startsWith("onnx/")) {
+        addSourcePath(primarySource.slice(5));
+    }
+
+    const primarySourceLower = primarySource.toLowerCase();
+
+    // Active file is the strongest candidate for ONNX files
+    if (primarySourceLower.endsWith(".onnx") && activeFileName) {
+        const normalizedActive = normalizeOnnxFileName(activeFileName);
+        if (normalizedActive) {
+            addCandidate(normalizedActive);
+        }
+    }
+
+    // Active file is the strongest anchor for external data files (.onnx_data or .onnx.data)
+    if (activeFileName && (primarySourceLower.includes(".onnx_data") || primarySourceLower.includes(".onnx.data"))) {
+        const normalizedActive = normalizeOnnxFileName(activeFileName);
+        if (normalizedActive) {
+            const chunkCount = Math.max(0, Math.trunc(Number(externalDataChunkCount ?? 0)));
+            const requestShardMatch = primarySourceLower.match(/\.onnx(?:_|\.)data(?:_(\d+))?$/);
+            const requestedShard = requestShardMatch?.[1] ? Number(requestShardMatch[1]) : null;
+            const addActiveShardCandidates = (index = null) => {
+                if (index === null) {
+                    addCandidate(`${normalizedActive}_data`);
+                    addCandidate(`${normalizedActive}.data`);
+                    return;
+                }
+                addCandidate(`${normalizedActive}_data_${index}`);
+                addCandidate(`${normalizedActive}.data_${index}`);
+            };
+
+            // Derive sidecar candidates from the exact active ONNX file identity.
+            // Example:
+            //   model_q4.onnx -> model_q4.onnx_data, model_q4.onnx_data_0, ...
+            addActiveShardCandidates(requestedShard);
+            if (requestedShard == null) {
+                addActiveShardCandidates(null);
+                if (chunkCount > 0) {
+                    for (let index = 0; index < chunkCount; index += 1) {
+                        addActiveShardCandidates(index);
+                    }
+                } else {
+                    // Some repositories store a single sidecar as `_data_0`.
+                    addActiveShardCandidates(0);
+                }
+            }
+        }
+    }
+
+    const modelId = request.modelId || "";
+
+    for (const sourcePath of sourcePaths) {
+        if (sourcePath.toLowerCase().endsWith(".onnx")) {
+            addCandidate(toSafeModelStorageFileName(sourcePath, modelId));
+            continue;
+        }
+        addCandidate(toSafeModelStorageAssetFileName(sourcePath, modelId));
+    }
+
+    return candidates;
 }
