@@ -9,6 +9,7 @@
 | [onnx-community/Phi-4-mini-instruct-ONNX](https://huggingface.co/onnx-community/Phi-4-mini-instruct-ONNX) | Q4 | Verified | Pass |
 | [onnx-community/Apertus-8B-Instruct-2509-ONNX](https://huggingface.co/onnx-community/Apertus-8B-Instruct-2509-ONNX) | Q4 | Verified | Pass |
 | [onnx-community/Qwen3-4B-Thinking-2507-ONNX](https://huggingface.co/onnx-community/Qwen3-4B-Thinking-2507-ONNX) | Q4 | Verified | Pass |
+| [onnx-community/Olmo-3-7B-Instruct-ONNX](https://huggingface.co/onnx-community/Olmo-3-7B-Instruct-ONNX) | Q4 | Verified | Pass |
 
 ## Sanity QA checks
 
