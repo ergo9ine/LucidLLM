@@ -7,13 +7,26 @@ import {
     OPFS_MODELS_DIR,
     TRANSFORMERS_JS_IMPORT_CANDIDATES,
     WORKER_MSG,
-    normalizeOpfsModelRelativePath,
+} from "./constants.js";
+import {
     normalizeOnnxFileName,
     buildOpfsCandidatePaths,
     isHfHostName,
     isExplicitHfDownloadRequest,
     parseHfResolveUrl,
-} from "./shared-utils.js";
+} from "./opfs-utils.js";
+
+// ── Polyfills ─────────────────────────────────────────────────────────────
+if (typeof Promise.withResolvers !== "function") {
+    Promise.withResolvers = function () {
+        let resolve, reject;
+        const promise = new Promise((res, rej) => {
+            resolve = res;
+            reject = rej;
+        });
+        return { promise, resolve, reject };
+    };
+}
 
 // ── WebGPU Adapter Probe (deferred) ────────────────────────────────────────
 let _gpuProbePromise = null;
@@ -25,11 +38,15 @@ let _gpuProbePromise = null;
 let _localOnlyMode = false;
 
 /**
- * [Lucid] The currently active or being-initialized ONNX file name.
+ * [Lucid] Debug mode for worker logging.
+ */
+let _debugMode = false;
+
+/**
+ * [Lucid] Track active ONNX info per modelId.
  * Used by candidate path resolution in fetch interceptor.
  */
-let _activeOnnxFileName = "";
-let _activeExternalDataChunkCount = 0;
+const _activeModelInfoMap = new Map(); // modelId -> { activeOnnxFileName, externalDataChunkCount }
 
 /**
  * [Lucid] Track current worker phase for better diagnostics.
@@ -51,9 +68,9 @@ function configureOrtRuntime(env) {
 
     wasm.proxy = false;
 
-    // transformers.js 모듈 초기화 시 CDN wasmPaths = { mjs, wasm }을 설정하는데,
+    // transformers.js (4.0.0-next.6) 모듈 초기화 시 CDN wasmPaths = { mjs, wasm }을 설정하는데,
     // mjs 키가 있으면 cross-origin Worker 생성을 시도함 (COEP 환경에서 SecurityError).
-    // mjs 키를 제거하면 번들에 내장된 asyncify 팩토리(li)를 사용하여
+    // mjs 키를 제거하면 번들에 내장된 방식을 사용하여
     // same-origin Worker 생성을 보장하고, .wasm 바이너리만 CDN에서 fetch.
     if (wasm.wasmPaths && typeof wasm.wasmPaths === "object") {
         delete wasm.wasmPaths.mjs;
@@ -96,22 +113,40 @@ async function ensureGpuProbeComplete() {
 
 const originalWorkerFetch = self.fetch.bind(self);
 
+let _opfsRootHandle = null;
+let _opfsModelsDirHandle = null;
+const _dirHandleCache = new Map(); // path -> directoryHandle
+
 async function readOpfsFileInWorker(relativePath) {
     try {
-        const root = await navigator.storage.getDirectory();
-        const modelsDir = await root.getDirectoryHandle(OPFS_MODELS_DIR, { create: false });
+        if (!_opfsRootHandle) _opfsRootHandle = await navigator.storage.getDirectory();
+        if (!_opfsModelsDirHandle) {
+            _opfsModelsDirHandle = await _opfsRootHandle.getDirectoryHandle(OPFS_MODELS_DIR, { create: false });
+        }
 
         const segments = relativePath.split("/").filter(Boolean);
         if (segments.length === 0) return null;
 
-        let current = modelsDir;
-        for (let i = 0; i < segments.length - 1; i++) {
-            current = await current.getDirectoryHandle(segments[i], { create: false });
-        }
+        const dirSegments = segments.slice(0, -1);
         const fileName = segments.at(-1);
+
+        let current = _opfsModelsDirHandle;
+        let currentPath = "";
+
+        for (const segment of dirSegments) {
+            currentPath = currentPath ? `${currentPath}/${segment}` : segment;
+            if (_dirHandleCache.has(currentPath)) {
+                current = _dirHandleCache.get(currentPath);
+            } else {
+                current = await current.getDirectoryHandle(segment, { create: false });
+                _dirHandleCache.set(currentPath, current);
+            }
+        }
+
         const fileHandle = await current.getFileHandle(fileName, { create: false });
         return await fileHandle.getFile();
-    } catch {
+    } catch (e) {
+        if (_debugMode) console.debug(`[Worker] readOpfsFileInWorker failed for ${relativePath}:`, e.message);
         return null;
     }
 }
@@ -121,6 +156,10 @@ function inferWorkerContentType(path) {
     if (lower.endsWith(".json")) return "application/json";
     if (lower.endsWith(".txt") || lower.endsWith(".md") || lower.endsWith(".jinja")) {
         return "text/plain; charset=utf-8";
+    }
+    // 명시적 이진 파일 타입 처리 (의도 명확화)
+    if (lower.endsWith(".onnx") || lower.endsWith(".onnx_data") || lower.endsWith(".bin")) {
+        return "application/octet-stream";
     }
     return "application/octet-stream";
 }
@@ -178,9 +217,10 @@ self.fetch = async (input, init) => {
         return originalWorkerFetch(input, init);
     }
 
-    const candidates = buildOpfsCandidatePaths(request, _activeOnnxFileName, _activeExternalDataChunkCount);
+    const activeInfo = _activeModelInfoMap.get(request.modelId) || { activeOnnxFileName: "", externalDataChunkCount: 0 };
+    const candidates = buildOpfsCandidatePaths(request, activeInfo.activeOnnxFileName, activeInfo.externalDataChunkCount);
 
-    // Log external data file lookups for diagnostics
+    // Log external data file lookups only if requested or hitting
     const isExternalDataRequest = request.filePath && (
         request.filePath.toLowerCase().includes('.onnx_data') ||
         request.filePath.toLowerCase().includes('.onnx.data')
@@ -223,6 +263,12 @@ self.fetch = async (input, init) => {
                     start = Math.max(0, file.size - suffix);
                 }
 
+                // RFC 7233: Check if range is satisfiable
+                if (start >= file.size) {
+                    headers.set("content-range", `bytes */${file.size}`);
+                    return new Response(null, { status: 416, headers });
+                }
+
                 start = Math.max(0, Math.min(start, file.size - 1));
                 end = Math.max(start, Math.min(end, file.size - 1));
 
@@ -242,26 +288,36 @@ self.fetch = async (input, init) => {
         return new Response(file, { status: 200, headers });
     }
 
-    if (isExternalDataRequest) {
-        console.warn(`[Worker] External data MISS: ${request.filePath}`, {
-            activeFileName: _activeOnnxFileName,
-            externalDataChunkCount: _activeExternalDataChunkCount,
-            candidates,
-        });
-    } else {
-        console.warn(`[Worker] OPFS Fetch MISS: ${request.modelId} -> ${request.filePath}`, {
-            activeFileName: _activeOnnxFileName,
-            phase: _currentWorkerPhase,
-            candidates,
-            url,
-            localOnly: _localOnlyMode,
+    // MISS PATH
+    if (_localOnlyMode) {
+        if (isExternalDataRequest) {
+            if (_debugMode) {
+                console.warn(`[Worker] External data MISS: ${request.filePath}`, {
+                    activeInfo,
+                    candidates,
+                });
+            }
+        } else {
+            if (_debugMode) {
+                console.warn(`[Worker] OPFS Fetch MISS (Local-Only): ${request.modelId} -> ${request.filePath}`, {
+                    activeInfo,
+                    phase: _currentWorkerPhase,
+                    candidates,
+                });
+            }
+        }
+        return new Response(`OPFS Cache Miss (Local-Only): ${request.filePath}`, {
+            status: 404,
+            statusText: "Not Found (OPFS Cache Miss)",
+            headers: { "x-lucid-opfs-worker": "miss" }
         });
     }
-    return new Response(`OPFS Cache Miss: ${request.filePath}`, {
-        status: 404,
-        statusText: "Not Found (OPFS Cache Miss)",
-        headers: { "x-lucid-opfs-worker": "miss" }
-    });
+
+    if (_debugMode) {
+        console.debug(`[Worker] OPFS Miss, falling back to network: ${request.filePath}`);
+    }
+    // If not local-only mode, fall back to network fetch
+    return originalWorkerFetch(input, init);
 };
 
 // ============================================================================
@@ -286,6 +342,34 @@ const generationAbortControllers = new Map(); // id → abortController
 // ============================================================================
 
 let _transformersLoadingPromise = null;
+const ORT_WEBGPU_BROWSER_MODULE_URL = "https://esm.run/onnxruntime-web@1.24.3/webgpu";
+const TRANSFORMERS_IMPORT_REWRITES = Object.freeze([
+    ['"onnxruntime-web/webgpu"', `"${ORT_WEBGPU_BROWSER_MODULE_URL}"`],
+    ['"onnxruntime-common"', `"${ORT_WEBGPU_BROWSER_MODULE_URL}"`],
+]);
+
+async function importTransformersModule(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch transformers module: ${response.status} ${response.statusText}`);
+    }
+
+    let source = await response.text();
+    // 단일 pass 로 모든 import 재작성 (성능 최적화)
+    const rewriteMap = new Map(TRANSFORMERS_IMPORT_REWRITES);
+    const pattern = new RegExp(
+        TRANSFORMERS_IMPORT_REWRITES.map(([f]) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"),
+        "g"
+    );
+    source = source.replace(pattern, (match) => rewriteMap.get(match) ?? match);
+
+    const blobUrl = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+    try {
+        return await import(blobUrl);
+    } finally {
+        URL.revokeObjectURL(blobUrl);
+    }
+}
 
 async function loadTransformersModule() {
     if (transformersModule) return transformersModule;
@@ -297,7 +381,7 @@ async function loadTransformersModule() {
         let lastError = null;
         for (const url of TRANSFORMERS_JS_IMPORT_CANDIDATES) {
             try {
-                const mod = await import(url);
+                const mod = await importTransformersModule(url);
                 transformersModule = mod;
 
                 const env = mod.env || mod.default?.env;
@@ -324,14 +408,9 @@ function getPipelineFactory(mod) {
 // ============================================================================
 
 self.addEventListener("error", (e) => {
-    console.error("[Worker] uncaught error:", e?.message ?? "", e?.filename ?? "", e?.lineno ?? "", e?.colno ?? "");
-    self.postMessage({
-        type: WORKER_MSG.WORKER_ERROR,
-        message: e?.message ?? "Unknown error",
-        filename: e?.filename ?? "",
-        lineno: e?.lineno ?? 0,
-        colno: e?.colno ?? 0
-    });
+    const { message = "Unknown error", filename = "", lineno = 0, colno = 0 } = e ?? {};
+    console.error("[Worker] uncaught error:", message, filename, lineno, colno);
+    self.postMessage({ type: WORKER_MSG.WORKER_ERROR, message, filename, lineno, colno });
 });
 
 self.addEventListener("unhandledrejection", (e) => {
@@ -343,30 +422,39 @@ self.addEventListener("unhandledrejection", (e) => {
     });
 });
 
+// ============================================================================
+// Message Dispatch Table
+// ============================================================================
+
+const MESSAGE_HANDLERS = new Map([
+    [WORKER_MSG.INIT, (id, data) => handleInit(id, data)],
+    [WORKER_MSG.GENERATE, (id, data) => handleGenerate(id, data)],
+    [WORKER_MSG.WARMUP, (id, data) => handleWarmup(id, data)],
+    [WORKER_MSG.ABORT, (id) => handleAbort(id)],
+    [WORKER_MSG.DISPOSE, (id, data) => handleDispose(id, data)],
+    ["SET_DEBUG", (id, data) => { 
+        _debugMode = !!data.debug;
+        console.info(`[Worker] Debug mode set to: ${_debugMode}`);
+    }],
+]);
+
 self.onmessage = async (e) => {
     const { type, id, data } = e.data;
 
     try {
-        if (type === WORKER_MSG.INIT) {
-            await handleInit(id, data);
-        } else if (type === WORKER_MSG.GENERATE) {
-            await handleGenerate(id, data);
-        } else if (type === WORKER_MSG.WARMUP) {
-            await handleWarmup(id, data);
-        } else if (type === WORKER_MSG.ABORT) {
-            await handleAbort(id);
-        } else if (type === WORKER_MSG.DISPOSE) {
-            await handleDispose(id, data);
+        const handler = MESSAGE_HANDLERS.get(type);
+        if (handler) {
+            await handler(id, data);
         } else {
             self.postMessage({
-                type: 'error',
+                type: WORKER_MSG.ERROR,
                 id,
                 error: { message: `[Worker] Unknown message type: ${type}`, stack: "" }
             });
         }
     } catch (error) {
         self.postMessage({
-            type: 'error',
+            type: WORKER_MSG.ERROR,
             id,
             error: {
                 message: error instanceof Error ? error.message : String(error),
@@ -447,14 +535,22 @@ async function handleInit(id, data) {
             throw new Error(`[Worker] handleInit: missing required params (key=${!!key}, task=${!!task}, modelId=${!!modelId})`);
         }
 
+        // init 중에는 항상 localOnly 모드 강제 (warmup 과 동일 패턴)
+        _localOnlyMode = true;
+        if (options?.debug) _debugMode = true;
+
+        const info = {
+            activeOnnxFileName: "",
+            externalDataChunkCount: 0
+        };
         if (options?.activeFileName) {
-            _activeOnnxFileName = normalizeOnnxFileName(options.activeFileName);
-            _localOnlyMode = true;
+            info.activeOnnxFileName = normalizeOnnxFileName(options.activeFileName);
         }
-        _activeExternalDataChunkCount = Math.max(0, Math.trunc(Number(options?.externalDataChunkCount ?? 0)));
+        info.externalDataChunkCount = Math.max(0, Math.trunc(Number(options?.externalDataChunkCount ?? 0)));
+        _activeModelInfoMap.set(modelId, info);
 
         await getOrCreatePipeline(task, modelId, options, key);
-        self.postMessage({ type: 'init_done', id, key });
+        self.postMessage({ type: WORKER_MSG.INIT_DONE, id, key });
     } finally {
         _localOnlyMode = oldLocalOnly;
         _currentWorkerPhase = oldPhase;
@@ -476,10 +572,15 @@ async function handleWarmup(id, data) {
 
         _localOnlyMode = true;
 
+        const info = {
+            activeOnnxFileName: "",
+            externalDataChunkCount: 0
+        };
         if (options?.activeFileName) {
-            _activeOnnxFileName = normalizeOnnxFileName(options.activeFileName);
+            info.activeOnnxFileName = normalizeOnnxFileName(options.activeFileName);
         }
-        _activeExternalDataChunkCount = Math.max(0, Math.trunc(Number(options?.externalDataChunkCount ?? 0)));
+        info.externalDataChunkCount = Math.max(0, Math.trunc(Number(options?.externalDataChunkCount ?? 0)));
+        _activeModelInfoMap.set(modelId, info);
 
         const pipe = await getOrCreatePipeline(task, modelId, options, key);
         await pipe(prompt ?? "Hi", {
@@ -518,8 +619,8 @@ async function handleGenerate(id, data) {
     let pendingTokenIncrement = 0;
     let aborted = false;
 
-    const localAbortController = { aborted: false };
-    generationAbortControllers.set(id, localAbortController);
+    const abortController = new AbortController();
+    generationAbortControllers.set(id, abortController);
 
     const TextStreamer = transformersModule?.TextStreamer;
     let streamer = null;
@@ -527,9 +628,9 @@ async function handleGenerate(id, data) {
     if (TextStreamer && pipe.tokenizer) {
         streamer = new TextStreamer(pipe.tokenizer, {
             skip_prompt: true,
-            skip_special_tokens: true,
+            skip_special_tokens: options?.skip_special_tokens !== false,
             token_callback_function: (_tokenIds) => {
-                if (localAbortController.aborted) {
+                if (abortController.signal.aborted) {
                     aborted = true;
                     throw new Error('Generation aborted by user');
                 }
@@ -539,7 +640,7 @@ async function handleGenerate(id, data) {
             callback_function: (textChunk) => {
                 if (!textChunk) return;
                 self.postMessage({
-                    type: "token",
+                    type: WORKER_MSG.TOKEN,
                     id,
                     token: textChunk,
                     tokenIncrement: pendingTokenIncrement,
@@ -555,23 +656,23 @@ async function handleGenerate(id, data) {
     const generateOptions = {
         ...options,
         ...(streamer ? { streamer } : {}),
+        signal: abortController.signal,
     };
 
     try {
         const output = await pipe(prompt, generateOptions);
         if (!aborted) {
-            const serializedOutput = structuredClone(output);
             self.postMessage({
-                type: "generate_done",
+                type: WORKER_MSG.GENERATE_DONE,
                 id,
-                output: serializedOutput,
+                output,
             });
         }
     } catch (e) {
         const errorMessage = e instanceof Error ? e.message : String(e);
         if (aborted || errorMessage.includes('aborted')) {
             self.postMessage({
-                type: "generation_aborted",
+                type: WORKER_MSG.GENERATION_ABORTED,
                 id,
                 reason: "user_cancelled"
             });
@@ -586,16 +687,16 @@ async function handleGenerate(id, data) {
 function handleAbort(id) {
     console.log("[Worker] Abort requested for generation", id);
     const controller = generationAbortControllers.get(id);
-    if (controller) {
-        controller.aborted = true;
+    if (controller instanceof AbortController) {
+        controller.abort("User requested abort");
         self.postMessage({
-            type: "abort_ack",
+            type: WORKER_MSG.ABORT_ACK,
             id,
             message: "Generation abort signal sent"
         });
     } else {
         self.postMessage({
-            type: "abort_ack",
+            type: WORKER_MSG.ABORT_ACK,
             id,
             message: "No active generation to abort"
         });
@@ -618,5 +719,5 @@ async function handleDispose(id, data) {
         }
         pipelines.delete(key);
     }
-    self.postMessage({ type: 'dispose_done', id });
+    self.postMessage({ type: WORKER_MSG.DISPOSE_DONE, id });
 }

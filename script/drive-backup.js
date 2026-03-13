@@ -57,13 +57,8 @@ function bytesToBase64(bytes) {
 }
 
 function base64ToBytes(value) {
-    const binary = atob(String(value ?? ""));
-    let n = binary.length;
-    const out = new Uint8Array(n);
-    while (n--) {
-        out[n] = binary.charCodeAt(n);
-    }
-    return out;
+    const binary = atob(value || "");
+    return Uint8Array.from(binary, c => c.charCodeAt(0));
 }
 
 // ============================================================================
@@ -198,16 +193,19 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
         throw new Error(t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID));
     }
 
-    let salt;
-    let iv;
-    let encrypted;
+    let salt, iv, encrypted;
     try {
-        salt = base64ToBytes(parsed.salt);
-        iv = base64ToBytes(parsed.iv);
-        encrypted = base64ToBytes(parsed.data);
+        [salt, iv, encrypted] = [
+            base64ToBytes(parsed.salt),
+            base64ToBytes(parsed.iv),
+            base64ToBytes(parsed.data),
+        ];
     } catch {
         throw new Error(`${t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID)}: invalid base64`);
     }
+    if (salt.length < 8) throw new Error(`${t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID)}: invalid salt length`);
+    if (iv.length < 12) throw new Error(`${t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID)}: invalid IV length`);
+    if (encrypted.length === 0) throw new Error(`${t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID)}: empty encrypted data`);
     const parsedIterations = normalizeKdfIterations(parsed?.kdf?.iterations ?? kdfIterations);
     const key = await deriveBackupAesKey(normalizedPassphrase, salt, parsedIterations);
 
@@ -228,7 +226,7 @@ export async function parseBackupPayloadFromText(rawText, options = {}) {
     }
 
     let plainBytes = new Uint8Array(plainBuffer);
-    if (String(parsed.compression ?? "none").toLowerCase() === "gzip") {
+    if ((parsed.compression ?? "none").toLowerCase() === "gzip") {
         // DB-2: 압축 비지원 브라우저에서 명확한 에러 메시지
         if (!HAS_COMPRESSION_STREAM) {
             throw new Error(`${t(I18N_KEYS.ERROR_BACKUP_FORMAT_INVALID)}: gzip compression not supported in this browser`);

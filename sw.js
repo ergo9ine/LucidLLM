@@ -1,13 +1,13 @@
-const CACHE_VERSION = "1.2.0";
+const CACHE_VERSION = "1.2.5";
 const CACHE_NAME = `lucidllm-app-v${CACHE_VERSION}`;
 
 const PRECACHE_ASSETS = [
     "/", "/index.html",
-    "/script/main.js", "/script/bootstrap.js", "/script/i18n.js",
-    "/script/shared-utils.js", "/script/worker.js", "/script/drive-backup.js",
+    "/script/constants.js", "/script/opfs-utils.js", "/script/shared-utils.js", "/script/worker.js", "/script/drive-backup.js",
+    "/script/i18n-keys.js", "/script/locales/ko.js", "/script/locales/en.js", "/script/locales/ja.js", "/script/locales/zh-CN.js",
     "/favicon.svg",
     // Transformers.js bundle (same-origin mandatory for multi-threaded WASM on Cloudflare Pages)
-    "/vendor/transformers/transformers.bundle.min.mjs",
+    "/vendor/transformers/transformers.web.min.js",
 ];
 
 // 외부 호스트 목록 (이들은 항상 네트워크로만 요청)
@@ -42,14 +42,12 @@ self.addEventListener("install", (event) => {
         try {
             const cache = await caches.open(CACHE_NAME);
             console.log(`[SW] Pre-caching assets for v${CACHE_VERSION}`);
-            await Promise.all(
-                PRECACHE_ASSETS.map(async (asset) => {
-                    try {
-                        await cache.add(asset);
-                    } catch (err) {
-                        console.warn(`[SW] Failed to cache: ${asset}`, err);
-                    }
-                })
+            await Promise.allSettled(
+                PRECACHE_ASSETS.map(asset =>
+                    cache.add(asset).catch(err =>
+                        console.warn(`[SW] Failed to cache: ${asset}`, err)
+                    )
+                )
             );
         } catch (err) {
             console.error("[SW] Pre-cache failed:", err);
@@ -94,11 +92,25 @@ self.addEventListener("fetch", (event) => {
                 const response = await fetch(event.request);
                 if (response.ok) {
                     const clone = response.clone();
-                    caches.open(WASM_CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => { });
+                    caches.open(WASM_CACHE_NAME).then(async (cache) => {
+                        await cache.put(event.request, clone);
+                        const keys = await cache.keys();
+                        if (keys.length > 20) {
+                            const excess = keys.length - 20;
+                            await Promise.all(
+                                keys.slice(0, excess).map((key) => cache.delete(key))
+                            );
+                        }
+                    }).catch((err) => { console.warn("[SW] WASM cache operation failed:", err); });
                 }
                 return response;
-            } catch {
-                return new Response('Service Unavailable', { status: 503, statusText: 'Service Unavailable' });
+            } catch (err) {
+                console.error("[SW] WASM fetch failed:", err);
+                return new Response('Service Unavailable', {
+                    status: 503,
+                    statusText: 'Service Unavailable',
+                    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+                });
             }
         })());
         return;
@@ -122,8 +134,9 @@ self.addEventListener("fetch", (event) => {
 
 // 4. Message Event: { type: "SKIP_WAITING" } 수신 시 skipWaiting() 호출
 self.addEventListener("message", (event) => {
-    if (event.data && event.data.type === "SKIP_WAITING") {
+    if (event.data?.type === "SKIP_WAITING") {
         console.log("[SW] Skipping waiting...");
         self.skipWaiting();
     }
 });
+

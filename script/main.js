@@ -1,5 +1,14 @@
 // App Version - managed centrally in main.js
-const APP_VERSION = "0.0.8"; //Pre-Alpha Test
+const APP_VERSION = "0.0.9"; //Pre-Alpha Test
+
+function toFiniteNumber(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function asString(value, fallback = "") {
+    return typeof value === "string" ? value : fallback;
+}
 
 import {
     calculateExponentialBackoffDelay,
@@ -10,40 +19,31 @@ import {
     withRetry,
     escapeHtml,
     formatBytes,
-    formatEta,
     formatSpeed,
-    getErrorMessage,
     isHttpsUrl,
     normalizePromptText,
     publishLucidApi,
     publishLucidValue,
-    readFileAsDataUrl,
     resolveInferenceBackendChain,
     // Storage utilities
     readFromStorage,
     writeToStorage,
     safeJsonParse,
+    safeJsonStringify,
     getStorageEstimate,
     normalizeString,
     normalizeLowercase,
-    eqIgnoreCase,
-    includesIgnoreCase,
     WORKER_MSG,
     STORAGE_KEYS,
     TOAST_MS,
+    SW_EVENT,
     // Constants
     OPFS_MODELS_DIR,
-    // Transformers module injection
-    getInjectedTransformersModule,
-    setInjectedTransformersModule,
     // OPFS & Path utilities
     normalizeModelId,
     normalizeOpfsModelRelativePath,
     normalizeOnnxFileName,
     normalizeStoragePrefixFromModelId,
-    toSafeModelBundleDirectoryName,
-    toSafeModelPathSegment,
-    toSafeModelBundleRelativePath,
     toSafeModelStorageFileName,
     toSafeModelStorageAssetFileName,
     isValidModelId,
@@ -56,6 +56,11 @@ import {
     buildOpfsCandidatePaths,
 } from "./shared-utils.js";
 import {
+    formatEta,
+    getErrorMessage,
+    readFileAsDataUrl,
+} from "./shared-utils-i18n.js";
+import {
     buildBackupSignature,
     createBackupUploadText,
     escapeDriveQueryLiteral,
@@ -64,11 +69,9 @@ import {
     parseBackupPayloadFromText,
 } from "./drive-backup.js";
 import {
-    SUPPORTED_LANGUAGES,
     I18N_KEYS,
     t,
     normalizeLanguage,
-    matchSupportedLanguage,
     detectNavigatorLanguage,
     setCurrentLanguage,
     getCurrentLanguage,
@@ -96,7 +99,7 @@ const LLM_DEFAULT_SETTINGS = Object.freeze({
     token: "",
 });
 const LOCAL_GENERATION_DEFAULT_SETTINGS = Object.freeze({
-    temperature: 0.9,
+    temperature: 0.5,
     topP: 0.9,
     presencePenalty: 0,
     maxLength: 512,
@@ -114,6 +117,7 @@ const ASSISTANT_STREAM_MIN_FRAME_MS = Math.ceil(1000 / ASSISTANT_STREAM_MAX_FPS)
 const CHAT_TAB_MAX_COUNT = 10;
 const LOCAL_MAX_NEW_TOKENS_DEFAULT_CAP = 1024;
 const LOCAL_MAX_NEW_TOKENS_QWEN_CAP = 384;
+const LOCAL_MAX_NEW_TOKENS_QWEN_THINKING_CAP = 4096;
 const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 const GOOGLE_DRIVE_API_BASE = "https://www.googleapis.com/drive/v3";
 const GOOGLE_DRIVE_UPLOAD_API_BASE = "https://www.googleapis.com/upload/drive/v3";
@@ -176,7 +180,7 @@ async function trySafe(fn, { errorLabel = t(I18N_KEYS.COMMON_LOAD), toastMs = TO
     try {
         return await fn();
     } catch (e) {
-        showToast(`${errorLabel}: ${getErrorMessage(e)}`, "error", toastMs);
+        showErrorToast(e, `${errorLabel}: ${getErrorMessage(e)}`);
     }
 }
 
@@ -185,7 +189,7 @@ async function withExplorerBusy(fn, errorLabel = t(I18N_KEYS.OPFS_TITLE)) {
     try {
         await fn();
     } catch (e) {
-        showToast(`${errorLabel} ${t(I18N_KEYS.DIALOG_ERROR_TITLE)}: ${getErrorMessage(e)}`, "error", TOAST_MS.ERROR);
+        showErrorToast(e, `${errorLabel} ${t(I18N_KEYS.DIALOG_ERROR_TITLE)}: ${getErrorMessage(e)}`);
     } finally {
         setExplorerBusy(false);
     }
@@ -380,6 +384,20 @@ const state = {
         isChecking: false,
         changelogModalOpen: false,
     },
+    debug: {
+        lastGeneration: {
+            modelId: "",
+            activeFile: "",
+            device: "",
+            promptLabel: "",
+            payloadType: "",
+            options: null,
+            streamedTextPrefix: "",
+            finalWorkerOutputPrefix: "",
+            cleanedOutputPrefix: "",
+            timestamp: "",
+        }
+    },
 };
 
 let els = {};
@@ -401,6 +419,8 @@ publishLucidApi({
     setLocalGenerationSettings,
     getRuntimeCapabilities,
 });
+
+publishLucidValue("debug", state.debug);
 
 /* chat inference toggle UI removed */
 
@@ -562,7 +582,7 @@ async function bootstrapApplication() {
 
         await refreshOpfsExplorer({ silent: true });
     } catch (error) {
-        showToast(`${t(I18N_KEYS.OPFS_TITLE)} ${t(I18N_KEYS.DIALOG_ERROR_TITLE)}: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+        showErrorToast(error, `${t(I18N_KEYS.OPFS_TITLE)} ${t(I18N_KEYS.DIALOG_ERROR_TITLE)}: ${getErrorMessage(error)}`);
         renderOpfsExplorerList();
         renderModelSessionList();
     } finally {
@@ -583,6 +603,9 @@ async function bootstrapApplication() {
     openSettings();
 
     checkForAppUpdate();
+
+    // Phase 0: Expose app state for manual E2E inspection
+    window.LucidApp = { state };
 
     await tryAutoLoadLastSessionOnStartup();
 
@@ -660,7 +683,7 @@ function serializeErrorSummary(error) {
         name: error?.name ?? "",
         details: error?.details || {},
         context: error?.context || {},
-        stack: typeof error?.stack === "string" ? error.stack : "",
+        stack: asString(error?.stack, ""),
     };
 }
 
@@ -769,26 +792,26 @@ function openSettingsToTab(tabId) {
 
 function deleteActiveChatSessionFromSidebar() {
     if (state.isSendingChat) {
-        showToast(t("toast.cannot_delete_during_response"), "error", 2200);
+        showToast(t("toast.cannot_delete_during_response"), "error", TOAST_MS.DEFAULT);
         return;
     }
     const activeId = String(state.activeChatSessionId ?? "").trim();
     if (!activeId) {
-        showToast(t("chat.export.empty"), "info", 1600);
+        showToast(t("chat.export.empty"), "info", TOAST_MS.SHORT);
         return;
     }
     if (!window.confirm(t("chat.delete.confirm", {}, "현재 대화를 삭제할까요?"))) {
         return;
     }
     deleteChatSession(activeId);
-    showToast(t("chat.deleted"), "info", 1800);
+    showToast(t("chat.deleted"), "info", TOAST_MS.INFO);
 }
 
 function exportActiveChatSessionToFile() {
     const activeId = String(state.activeChatSessionId ?? "").trim();
     const active = state.chatSessions.find((session) => session.id === activeId) ?? null;
     if (!active) {
-        showToast(t("chat.export.empty"), "info", 1800);
+        showToast(t("chat.export.empty"), "info", TOAST_MS.INFO);
         return;
     }
 
@@ -824,7 +847,7 @@ function exportActiveChatSessionToFile() {
     } finally {
         URL.revokeObjectURL(url);
     }
-    showToast(t("chat.exported"), "success", 1800);
+    showToast(t("chat.exported"), "success", TOAST_MS.INFO);
 }
 
 
@@ -875,7 +898,6 @@ function moveLegacyToolbarIntoSidebar() {
 }
 
 function initializeNavigationSidebar() {
-    cacheElements();
     moveLegacyToolbarIntoSidebar();
     // delete/export chat buttons are injected during moveLegacyToolbarIntoSidebar()
     // and must be re-cached before binding listeners.
@@ -886,9 +908,7 @@ function initializeNavigationSidebar() {
 }
 
 function renderSidebarStaticText() {
-    if (els.sidebarTitleText) {
-        els.sidebarTitleText.textContent = t("sidebar.title");
-    }
+
     const chatLabel = document.getElementById("sidebar-panel-chat-label");
     const workspaceLabel = document.getElementById("sidebar-panel-workspace-label");
     if (chatLabel) chatLabel.textContent = t("sidebar.panel.chat");
@@ -1103,7 +1123,7 @@ function createInvalidRangeResponse(totalSize = 0) {
     headers.set("content-type", "text/plain; charset=utf-8");
     headers.set("x-lucid-opfs-cache", "invalid-range");
     headers.set("accept-ranges", "bytes");
-    if (Number.isFinite(Number(totalSize)) && Number(totalSize) > 0) {
+    if (toFiniteNumber(totalSize, 0) > 0) {
         headers.set("content-range", `bytes */${Math.trunc(Number(totalSize))}`);
     }
     return new Response("Requested Range Not Satisfiable", {
@@ -1405,9 +1425,6 @@ function cacheElements() {
 
         inferenceDeviceSelect: document.getElementById("inference-device-select"),
         sidebar: document.getElementById("app-sidebar"),
-        sidebarTitleText: document.getElementById("sidebar-title-text"),
-        sidebarMobileToggle: document.getElementById("sidebar-mobile-toggle"),
-        sidebarBackdrop: document.getElementById("sidebar-backdrop"),
         sidebarPanelButtons: [...document.querySelectorAll("[data-sidebar-panel-btn]")],
         sidebarPanels: [...document.querySelectorAll("[data-sidebar-panel]")],
         sidebarChatActions: document.getElementById("sidebar-chat-actions"),
@@ -1617,7 +1634,7 @@ function showUpdateBadge(version) {
         { transform: "scale(1)", opacity: 1 }
     ], { duration: 300, easing: "cubic-bezier(0.175, 0.885, 0.32, 1.275)" });
 
-    showToast(t(I18N_KEYS.UPDATE_TOAST_NEW_VERSION, { version: version || "New" }), "info", 4000);
+    showToast(t(I18N_KEYS.UPDATE_TOAST_NEW_VERSION, { version: version || "New" }), "info", TOAST_MS.CRITICAL);
 }
 
 function hideUpdateBadge() {
@@ -1693,7 +1710,7 @@ async function applySwUpdate() {
     const reg = await navigator.serviceWorker.getRegistration();
     if (reg && reg.waiting) {
         // Send skipWaiting message
-        reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        reg.waiting.postMessage({ type: SW_EVENT.SKIP_WAITING });
     } else {
         window.location.reload();
     }
@@ -1951,6 +1968,12 @@ function cancelWarmupIfRunning() {
     }
 }
 
+function addInputChangeListener(element, handler) {
+    if (!element) return;
+    element.addEventListener("input", handler);
+    element.addEventListener("change", handler);
+}
+
 function bindEvents() {
     if (els.warmupToggle) {
         els.warmupToggle.addEventListener("change", () => {
@@ -2160,7 +2183,7 @@ function bindEvents() {
         });
     }
 
-    window.addEventListener("swUpdateWaiting", () => {
+    window.addEventListener(SW_EVENT.UPDATE_WAITING, () => {
         showUpdateBadge();
     });
 
@@ -2303,20 +2326,14 @@ function bindEvents() {
     }
 
     if (els.maxOutputTokensInput) {
-        els.maxOutputTokensInput.addEventListener("input", () => {
+        const onMaxTokensChange = () => {
             const value = Math.max(1, Math.min(32768, Math.round(Number(els.maxOutputTokensInput.value) || LLM_DEFAULT_SETTINGS.maxOutputTokens)));
             els.maxOutputTokensInput.value = String(value);
             setMaxOutputTokens(value);
             state.settings.pendingResetUndo = null;
             renderLlmDraftStatus();
-        });
-        els.maxOutputTokensInput.addEventListener("change", () => {
-            const value = Math.max(1, Math.min(32768, Math.round(Number(els.maxOutputTokensInput.value) || LLM_DEFAULT_SETTINGS.maxOutputTokens)));
-            els.maxOutputTokensInput.value = String(value);
-            setMaxOutputTokens(value);
-            state.settings.pendingResetUndo = null;
-            renderLlmDraftStatus();
-        });
+        };
+        addInputChangeListener(els.maxOutputTokensInput, onMaxTokensChange);
     }
 
     if (els.contextWindowSelect) {
@@ -2333,8 +2350,7 @@ function bindEvents() {
             renderLlmDraftStatus();
             setLocalGenerationSettings({ temperature: value });
         };
-        els.llmTemperatureInput.addEventListener("input", onTemperatureChange);
-        els.llmTemperatureInput.addEventListener("change", onTemperatureChange);
+        addInputChangeListener(els.llmTemperatureInput, onTemperatureChange);
     }
 
     if (els.llmTopPInput) {
@@ -2345,8 +2361,7 @@ function bindEvents() {
             renderLlmDraftStatus();
             setLocalGenerationSettings({ topP: value });
         };
-        els.llmTopPInput.addEventListener("input", onTopPChange);
-        els.llmTopPInput.addEventListener("change", onTopPChange);
+        addInputChangeListener(els.llmTopPInput, onTopPChange);
     }
 
     if (els.llmPresencePenaltyInput) {
@@ -2357,8 +2372,7 @@ function bindEvents() {
             renderLlmDraftStatus();
             setLocalGenerationSettings({ presencePenalty: value });
         };
-        els.llmPresencePenaltyInput.addEventListener("input", onPresencePenaltyChange);
-        els.llmPresencePenaltyInput.addEventListener("change", onPresencePenaltyChange);
+        addInputChangeListener(els.llmPresencePenaltyInput, onPresencePenaltyChange);
     }
 
     if (els.hfTokenInput) {
@@ -2563,7 +2577,7 @@ function bindEvents() {
             try {
                 await handleExplorerContextMenuAction(action);
             } catch (error) {
-                showToast(getErrorMessage(error), "error", TOAST_MS.ERROR);
+                showErrorToast(error);
             }
         });
     }
@@ -2593,7 +2607,7 @@ function bindEvents() {
             const name = state.opfs.explorer.selectedEntryName;
             const kind = state.opfs.explorer.selectedEntryKind ?? "file";
             if (!path) {
-                showToast("삭제할 항목을 먼저 선택하세요.", "error", 2200);
+                showToast("삭제할 항목을 먼저 선택하세요.", "error", TOAST_MS.DEFAULT);
                 return;
             }
             openDeleteDialog(name || path, {
@@ -2800,7 +2814,7 @@ function getStoredUserProfile() {
         nickname: (typeof parsed.nickname === "string" && /^[A-Za-z0-9가-힣_-]{2,24}$/.test(parsed.nickname.trim()))
             ? parsed.nickname.trim()
             : "YOU",
-        avatarDataUrl: typeof parsed.avatarDataUrl === "string" ? parsed.avatarDataUrl : "",
+        avatarDataUrl: asString(parsed.avatarDataUrl, ""),
     };
 }
 
@@ -2948,18 +2962,11 @@ function hydrateProfileSettings() {
     if (els.profileNicknameInput) {
         els.profileNicknameInput.value = getProfileNickname();
     }
-    if (els.themeOptionDark) {
-        els.themeOptionDark.checked = getProfileTheme() === "dark";
-    }
-    if (els.themeOptionLight) {
-        els.themeOptionLight.checked = getProfileTheme() === "light";
-    }
-    if (els.themeOptionOled) {
-        els.themeOptionOled.checked = getProfileTheme() === "oled";
-    }
-    if (els.themeOptionHighContrast) {
-        els.themeOptionHighContrast.checked = getProfileTheme() === "high-contrast";
-    }
+    const theme = getProfileTheme();
+    if (els.themeOptionDark) els.themeOptionDark.checked = theme === "dark";
+    if (els.themeOptionLight) els.themeOptionLight.checked = theme === "light";
+    if (els.themeOptionOled) els.themeOptionOled.checked = theme === "oled";
+    if (els.themeOptionHighContrast) els.themeOptionHighContrast.checked = theme === "high-contrast";
     if (els.languageSelect) {
         els.languageSelect.value = getProfileLanguage();
     }
@@ -2986,11 +2993,11 @@ async function onProfileAvatarInputChange(event) {
     const file = event?.target?.files?.[0] ?? null;
     if (!file) return;
     if (!String(file.type ?? "").startsWith("image/")) {
-        showToast(t("profile.avatar_invalid"), "error", 2200);
+        showToast(t("profile.avatar_invalid"), "error", TOAST_MS.DEFAULT);
         return;
     }
     if (Number(file.size ?? 0) > (5 * 1024 * 1024)) {
-        showToast(t("profile.avatar_too_large"), "error", 2600);
+        showToast(t("profile.avatar_too_large"), "error", TOAST_MS.INFO);
         return;
     }
 
@@ -3001,7 +3008,7 @@ async function onProfileAvatarInputChange(event) {
         renderActiveChatMessages();
         showToast(t("profile.avatar_updated"), "success", TOAST_MS.DEFAULT);
     } catch (error) {
-        showToast(getErrorMessage(error), "error", 2600);
+        showErrorToast(error);
     }
 }
 
@@ -3009,7 +3016,7 @@ function onClearProfileAvatar() {
     saveUserProfile({ avatarDataUrl: "" });
     renderProfileIdentityChip();
     renderActiveChatMessages();
-    showToast(t("profile.avatar_cleared"), "info", 1800);
+    showToast(t("profile.avatar_cleared"), "info", TOAST_MS.INFO);
 }
 
 function renderLocalizedStaticText() {
@@ -3043,7 +3050,7 @@ function applyTheme(theme, options = {}) {
     }
 
     if (!options.silent) {
-        showToast(t("theme.applied"), "success", 1500);
+        showToast(t("theme.applied"), "success", TOAST_MS.SHORT);
     }
 }
 
@@ -3087,7 +3094,7 @@ function applyLanguage(language, options = {}) {
     renderDriveBackupFileOptions();
 
     if (!options.silent) {
-        showToast(t("language.applied"), "success", 1500);
+        showToast(t("language.applied"), "success", TOAST_MS.SHORT);
     }
 }
 
@@ -3192,7 +3199,7 @@ async function reloadActiveSessionForInferenceDevice(preferredDevice) {
                 `활성 모델을 ${targetLabel}로 다시 로드합니다...`,
             ),
             "info",
-            2000,
+            TOAST_MS.INFO,
         );
 
         const session = await loadCachedSession(activeFile, { preferredDevice: targetDevice });
@@ -3210,7 +3217,7 @@ async function reloadActiveSessionForInferenceDevice(preferredDevice) {
                 `활성 모델이 ${targetLabel}로 다시 로드되었습니다.`,
             ),
             "success",
-            2200,
+            TOAST_MS.DEFAULT,
         );
     } catch (error) {
         const classified = classifySessionLoadError(error);
@@ -3218,7 +3225,7 @@ async function reloadActiveSessionForInferenceDevice(preferredDevice) {
         showToast(
             `${t("inference.toggle.reload_failed", {}, "백엔드 전환은 저장됐지만 활성 모델 재로드에 실패했습니다.")} (${classified.message})`,
             "error",
-            3600,
+            TOAST_MS.LONG,
         );
     } finally {
         syncSessionRuntimeState();
@@ -3237,7 +3244,7 @@ async function onInferenceDeviceSelectChange(event) {
     const capabilities = getRuntimeCapabilities();
 
     if (next === "webgpu" && !capabilities.webgpu) {
-        showToast(t("inference.device.webgpu_unsupported", {}, "WebGPU를 지원하지 않는 환경입니다."), "error", 2200);
+        showToast(t("inference.device.webgpu_unsupported", {}, "WebGPU를 지원하지 않는 환경입니다."), "error", TOAST_MS.DEFAULT);
         renderInferenceDeviceToggle();
         return;
     }
@@ -3473,7 +3480,7 @@ function saveDriveClientIdFromInput() {
 }
 
 function setDriveBackupLimitMbFromInput() {
-    const raw = Number(els.driveBackupLimitMbInput?.value || state.driveBackup.backupLimitMb || DRIVE_BACKUP_DEFAULT_LIMIT_MB);
+    const raw = Number(els.driveBackupLimitMbInput?.value || (state.driveBackup.backupLimitMb ?? DRIVE_BACKUP_DEFAULT_LIMIT_MB));
     const next = Math.max(DRIVE_BACKUP_MIN_LIMIT_MB, Math.min(DRIVE_BACKUP_MAX_LIMIT_MB, Math.round(raw || DRIVE_BACKUP_DEFAULT_LIMIT_MB)));
     state.driveBackup.backupLimitMb = next;
     setStoredDriveBackupLimitMb(next);
@@ -3589,7 +3596,7 @@ async function onDriveConnectClick() {
         showToast("Google Drive 연결이 완료되었습니다.", "success", TOAST_MS.DEFAULT);
     } catch (error) {
         setDriveProgress(0, `연결 실패: ${getErrorMessage(error)}`);
-        showToast(`Google Drive 연결 실패: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+        showErrorToast(error, `Google Drive 연결 실패: ${getErrorMessage(error)}`);
     } finally {
         state.driveBackup.inProgress = false;
         renderDriveBackupUi();
@@ -3647,12 +3654,8 @@ async function driveRequest(url, options = {}, context = {}) {
         interactiveAuth = false,
         purpose = "drive_request",
     } = context;
-    const maxRetries = Number.isFinite(Number(rawMaxRetries))
-        ? Number(rawMaxRetries)
-        : DRIVE_MAX_RETRIES;
-    const baseDelay = Number.isFinite(Number(rawBaseDelayMs))
-        ? Number(rawBaseDelayMs)
-        : DRIVE_RETRY_BASE_DELAY_MS;
+    const maxRetries = toFiniteNumber(rawMaxRetries, DRIVE_MAX_RETRIES);
+    const baseDelay = toFiniteNumber(rawBaseDelayMs, DRIVE_RETRY_BASE_DELAY_MS);
     let authRefreshed = false;
     let authRefreshAttempt = 0;
 
@@ -3736,7 +3739,7 @@ async function ensureDriveBackupFolder() {
         {
             method: "POST",
             headers: { "Content-Type": "application/json; charset=UTF-8" },
-            body: JSON.stringify({
+            body: safeJsonStringify({
                 name: DRIVE_BACKUP_FOLDER_NAME,
                 mimeType: "application/vnd.google-apps.folder",
             }),
@@ -3783,8 +3786,8 @@ function buildBackupPayload() {
         .map((item) => ({
             id: String(item.id ?? "").trim(),
             title: String(item.title || getDefaultChatTitle()).trim() || getDefaultChatTitle(),
-            createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
-            updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : new Date().toISOString(),
+            createdAt: asString(item.createdAt, new Date().toISOString()),
+            updatedAt: asString(item.updatedAt, new Date().toISOString()),
             messages: Array.isArray(item.messages) ? item.messages : [],
             forkedFrom: (item.forkedFrom && typeof item.forkedFrom === "object") ? {
                 sessionId: String(item.forkedFrom.sessionId ?? ""),
@@ -3849,11 +3852,7 @@ async function uploadResumableBlobWithProgress(uploadUrl, blob, progressRange = 
             reject(error);
             return;
         }
-        try {
-            resolve(JSON.parse(xhr.responseText ?? "{}"));
-        } catch {
-            resolve({});
-        }
+        resolve(safeJsonParse(xhr.responseText, {}));
     };
     xhr.send(blob);
     return promise;
@@ -3888,7 +3887,7 @@ async function uploadBackupPayloadToDrive(uploadText, options = {}) {
                 "X-Upload-Content-Type": "application/json; charset=UTF-8",
                 "X-Upload-Content-Length": String(blob.size),
             },
-            body: JSON.stringify(metadata),
+            body: safeJsonStringify(metadata),
         },
         {
             purpose: "drive_backup_upload_init",
@@ -3923,11 +3922,11 @@ async function uploadBackupPayloadToDrive(uploadText, options = {}) {
 async function backupChatsToGoogleDrive({ manual = false } = {}) {
     if (state.driveBackup.inProgress) return;
     if (!state.driveBackup.connected) {
-        showToast("Google Drive 연결 후 백업을 진행하세요.", "error", 2600);
+        showToast("Google Drive 연결 후 백업을 진행하세요.", "error", TOAST_MS.INFO);
         return;
     }
     if (!navigator.onLine) {
-        showToast(t(I18N_KEYS.DRIVE_TOAST_OFFLINE), "error", 2600);
+        showToast(t(I18N_KEYS.DRIVE_TOAST_OFFLINE), "error", TOAST_MS.INFO);
         return;
     }
 
@@ -3949,7 +3948,7 @@ async function backupChatsToGoogleDrive({ manual = false } = {}) {
         showToast(
             t(I18N_KEYS.DRIVE_TOAST_LIMIT_EXCEEDED, { size: formatBytes(state.driveBackup.estimatedBackupBytes), limit: limitMb }),
             "error",
-            3600,
+            TOAST_MS.LONG,
         );
         return;
     }
@@ -3972,10 +3971,10 @@ async function backupChatsToGoogleDrive({ manual = false } = {}) {
         setDriveLastSyncNow();
         setDriveProgress(100, `백업 완료: ${uploaded?.name ?? "-"}`);
         await refreshDriveBackupFileList({ silent: true, interactiveAuth: false });
-        showToast("설정/대화 백업이 완료되었습니다.", "success", 2400);
+        showToast("설정/대화 백업이 완료되었습니다.", "success", TOAST_MS.INFO);
     } catch (error) {
         setDriveProgress(0, t(I18N_KEYS.DRIVE_TOAST_BACKUP_FAILED, { message: getErrorMessage(error) }));
-        showToast(t(I18N_KEYS.DRIVE_TOAST_BACKUP_FAILED, { message: getErrorMessage(error) }), "error", TOAST_MS.ERROR);
+        showErrorToast(error, t(I18N_KEYS.DRIVE_TOAST_BACKUP_FAILED, { message: getErrorMessage(error) }));
     } finally {
         state.driveBackup.inProgress = false;
         renderDriveBackupUi();
@@ -4010,11 +4009,11 @@ async function refreshDriveBackupFileList({ silent = true, interactiveAuth = fal
         renderDriveBackupUi();
 
         if (previousLatest && nextLatest && nextLatest !== previousLatest && silent) {
-            showToast(t(I18N_KEYS.DRIVE_TOAST_REMOTE_BACKUP_DETECTED), "info", 2600);
+            showToast(t(I18N_KEYS.DRIVE_TOAST_REMOTE_BACKUP_DETECTED), "info", TOAST_MS.INFO);
         }
     } catch (error) {
         if (!silent) {
-            showToast(`백업 파일 목록 조회 실패: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+            showErrorToast(error, `백업 파일 목록 조회 실패: ${getErrorMessage(error)}`);
         }
     }
 }
@@ -4167,17 +4166,17 @@ function applyBackupPayload(payload, { overwrite = true } = {}) {
 async function onDriveRestoreClick() {
     if (state.driveBackup.inProgress) return;
     if (!state.driveBackup.connected) {
-        showToast("Google Drive 연결 후 복원을 진행하세요.", "error", 2600);
+        showToast("Google Drive 연결 후 복원을 진행하세요.", "error", TOAST_MS.INFO);
         return;
     }
     if (!navigator.onLine) {
-        showToast(t(I18N_KEYS.DRIVE_TOAST_RESTORE_OFFLINE), "error", 2600);
+        showToast(t(I18N_KEYS.DRIVE_TOAST_RESTORE_OFFLINE), "error", TOAST_MS.INFO);
         return;
     }
 
     const fileId = String(els.driveBackupFileSelect?.value ?? "").trim();
     if (!fileId) {
-        showToast("복원할 백업 파일을 선택하세요.", "error", 2400);
+        showToast("복원할 백업 파일을 선택하세요.", "error", TOAST_MS.INFO);
         return;
     }
 
@@ -4195,10 +4194,10 @@ async function onDriveRestoreClick() {
         applyBackupPayload(payload, { overwrite });
         setDriveLastSyncNow();
         setDriveProgress(100, t(I18N_KEYS.DRIVE_STATUS_RESTORE_COMPLETED));
-        showToast(t(I18N_KEYS.DRIVE_TOAST_RESTORE_SUCCESS), "success", 2400);
+        showToast(t(I18N_KEYS.DRIVE_TOAST_RESTORE_SUCCESS), "success", TOAST_MS.INFO);
     } catch (error) {
         setDriveProgress(0, t(I18N_KEYS.DRIVE_TOAST_RESTORE_FAILED, { message: getErrorMessage(error) }));
-        showToast(t(I18N_KEYS.DRIVE_TOAST_RESTORE_FAILED, { message: getErrorMessage(error) }), "error", TOAST_MS.ERROR);
+        showErrorToast(error, t(I18N_KEYS.DRIVE_TOAST_RESTORE_FAILED, { message: getErrorMessage(error) }));
     } finally {
         state.driveBackup.inProgress = false;
         renderDriveBackupUi();
@@ -4237,7 +4236,7 @@ function hydrateSettings() {
         showToast(
             `기존 시스템 프롬프트가 ${SYSTEM_PROMPT_MAX_LINES}줄을 초과해 자동으로 잘렸습니다.`,
             "info",
-            3200,
+            TOAST_MS.ERROR,
         );
     }
 
@@ -4493,7 +4492,7 @@ function applyLlmSettingsFromDraft(options = {}) {
     if (!validated.valid) {
         renderLlmDraftStatus();
         if (!options.silent) {
-            showToast("LLM 설정 입력값을 확인해주세요.", "error", 2600);
+            showToast("LLM 설정 입력값을 확인해주세요.", "error", TOAST_MS.INFO);
         }
         return false;
     }
@@ -4544,7 +4543,7 @@ function snapshotDownloadPanelState() {
             quantizationKey: String(item?.quantizationKey ?? item?.key ?? ""),
             label: String(item?.label ?? ""),
             score: Number(item?.score) ?? 0,
-            rank: Number.isFinite(Number(item?.rank)) ? Number(item.rank) : 999,
+            rank: toFiniteNumber(item?.rank, 999),
             sourceFileName: String(item?.sourceFileName ?? ""),
             fileName: String(item?.fileName ?? ""),
             fileUrl: String(item?.fileUrl ?? ""),
@@ -4559,18 +4558,12 @@ function snapshotDownloadPanelState() {
         queueIndex: Math.max(0, Number(state.download.queueIndex ?? 0)),
         completedBytes: Math.max(0, Number(state.download.completedBytes ?? 0)),
         currentFileBytesReceived: Math.max(0, Number(state.download.currentFileBytesReceived ?? 0)),
-        currentFileTotalBytes: Number.isFinite(Number(state.download.currentFileTotalBytes))
-            ? Number(state.download.currentFileTotalBytes)
-            : null,
+        currentFileTotalBytes: toFiniteNumber(state.download.currentFileTotalBytes, null),
         bytesReceived: Math.max(0, Number(state.download.bytesReceived ?? 0)),
-        totalBytes: Number.isFinite(Number(state.download.totalBytes))
-            ? Number(state.download.totalBytes)
-            : null,
-        percent: Number.isFinite(Number(state.download.percent)) ? Number(state.download.percent) : 0,
+        totalBytes: toFiniteNumber(state.download.totalBytes, null),
+        percent: toFiniteNumber(state.download.percent, 0),
         speedBps: Math.max(0, Number(state.download.speedBps ?? 0)),
-        etaSeconds: Number.isFinite(Number(state.download.etaSeconds))
-            ? Number(state.download.etaSeconds)
-            : null,
+        etaSeconds: toFiniteNumber(state.download.etaSeconds, null),
         attempt: Math.max(0, Number(state.download.attempt ?? 0)),
         statusText: String(state.download.statusText ?? ""),
         lastRenderedAt: 0,
@@ -4591,7 +4584,7 @@ function restoreDownloadPanelState(snapshot) {
             quantizationKey: String(item?.quantizationKey ?? item?.key ?? ""),
             label: String(item?.label ?? ""),
             score: Number(item?.score) ?? 0,
-            rank: Number.isFinite(Number(item?.rank)) ? Number(item.rank) : 999,
+            rank: toFiniteNumber(item?.rank, 999),
             sourceFileName: String(item?.sourceFileName ?? ""),
             fileName: String(item?.fileName ?? ""),
             fileUrl: String(item?.fileUrl ?? ""),
@@ -4607,14 +4600,12 @@ function restoreDownloadPanelState(snapshot) {
     state.download.queueIndex = Math.max(0, Number(snapshot.queueIndex ?? 0));
     state.download.completedBytes = Math.max(0, Number(snapshot.completedBytes ?? 0));
     state.download.currentFileBytesReceived = Math.max(0, Number(snapshot.currentFileBytesReceived ?? 0));
-    state.download.currentFileTotalBytes = Number.isFinite(Number(snapshot.currentFileTotalBytes))
-        ? Number(snapshot.currentFileTotalBytes)
-        : null;
+    state.download.currentFileTotalBytes = toFiniteNumber(snapshot.currentFileTotalBytes, null);
     state.download.bytesReceived = Math.max(0, Number(snapshot.bytesReceived ?? 0));
-    state.download.totalBytes = Number.isFinite(Number(snapshot.totalBytes)) ? Number(snapshot.totalBytes) : null;
+    state.download.totalBytes = toFiniteNumber(snapshot.totalBytes, null);
     state.download.percent = Number.isFinite(Number(snapshot.percent)) ? Number(snapshot.percent) : 0;
     state.download.speedBps = Math.max(0, Number(snapshot.speedBps ?? 0));
-    state.download.etaSeconds = Number.isFinite(Number(snapshot.etaSeconds)) ? Number(snapshot.etaSeconds) : null;
+    state.download.etaSeconds = toFiniteNumber(snapshot.etaSeconds, null);
     state.download.attempt = Math.max(0, Number(snapshot.attempt ?? 0));
     state.download.statusText = String(snapshot.statusText ?? "모델 조회 후 다운로드 메뉴가 자동 활성화됩니다.");
     state.download.lastRenderedAt = 0;
@@ -5214,10 +5205,10 @@ function syncActiveSessionToState() {
             id: normalizedId,
             role: item?.role === "user" ? "user" : "assistant",
             text: String(item?.text ?? ""),
-            reasoning: typeof item?.reasoning === "string" ? item.reasoning : null,
+            reasoning: asString(item?.reasoning, null),
             at: typeof item?.at === "string" && item.at.trim() ? item.at : new Date().toISOString(),
-            tokenPerSecond: Number.isFinite(Number(item?.tokenPerSecond)) ? Number(item.tokenPerSecond) : null,
-            tokenCount: Number.isFinite(Number(item?.tokenCount)) ? Number(item.tokenCount) : null,
+            tokenPerSecond: toFiniteNumber(item?.tokenPerSecond, null),
+            tokenCount: toFiniteNumber(item?.tokenCount, null),
             tokenSpeedSamples: Array.isArray(item?.tokenSpeedSamples)
                 ? item.tokenSpeedSamples.reduce((acc, val) => {
                     const n = Number(val);
@@ -5240,10 +5231,10 @@ function persistActiveSessionMessages() {
         id: Number(item.id),
         role: item.role === "user" ? "user" : "assistant",
         text: String(item.text ?? ""),
-        reasoning: typeof item.reasoning === "string" ? item.reasoning : null,
+        reasoning: asString(item.reasoning, null),
         at: typeof item.at === "string" && item.at.trim() ? item.at : new Date().toISOString(),
-        tokenPerSecond: Number.isFinite(Number(item.tokenPerSecond)) ? Number(item.tokenPerSecond) : null,
-        tokenCount: Number.isFinite(Number(item.tokenCount)) ? Number(item.tokenCount) : null,
+        tokenPerSecond: toFiniteNumber(item.tokenPerSecond, null),
+        tokenCount: toFiniteNumber(item.tokenCount, null),
         tokenSpeedSamples: Array.isArray(item.tokenSpeedSamples)
             ? item.tokenSpeedSamples.filter((value) => Number.isFinite(Number(value))).map((value) => Number(value))
             : [],
@@ -5330,10 +5321,9 @@ function initMobileSidebar() {
 
     const openSidebar = () => {
         sidebar.classList.remove("-translate-x-full");
-        overlay.classList.remove("hidden");
+        overlay.classList.remove("hidden", "opacity-0");
         // Trigger reflow
         void overlay.offsetWidth;
-        overlay.classList.remove("opacity-0");
     };
 
     const closeSidebar = () => {
@@ -5422,8 +5412,8 @@ function persistChatSessions() {
         .map((item) => ({
             id: String(item.id ?? "").trim(),
             title: String(item.title || getDefaultChatTitle()).trim() || getDefaultChatTitle(),
-            createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
-            updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : new Date().toISOString(),
+            createdAt: asString(item.createdAt, new Date().toISOString()),
+            updatedAt: asString(item.updatedAt, new Date().toISOString()),
             messages: Array.isArray(item.messages) ? item.messages : [],
             forkedFrom: (item.forkedFrom && typeof item.forkedFrom === "object") ? {
                 sessionId: String(item.forkedFrom.sessionId ?? ""),
@@ -5657,13 +5647,13 @@ async function handleModelLookup(rawInput, options = {}) {
         }
         applySelectedModel(metadataWithReadme.id || modelId, {
             task: metadataWithReadme.pipeline_tag ?? "-",
-            downloads: Number.isFinite(Number(metadataWithReadme.downloads)) ? Number(metadataWithReadme.downloads) : null,
+            downloads: toFiniteNumber(metadataWithReadme.downloads, null),
             raw: metadataWithReadme,
         });
 
         prepareDownloadForModel(metadataWithReadme, selectedModel);
         renderModelCardWindow(metadataWithReadme, selectedModel);
-        setSelectedModelLoadState("loaded", selectedModel, "");
+        setSelectedModelLoadState("waiting", selectedModel, "");
         // openModelCardWindow(); // User requested to disable auto-open
 
         showToast(`모델 선택 완료: ${selectedModel}`, "success", 2500);
@@ -5679,7 +5669,7 @@ async function handleModelLookup(rawInput, options = {}) {
         if (status === 404 || status === 401) {
             showToast("모델을 찾을 수 없습니다. 업로터/모델명을 확인해주세요.", "error", TOAST_MS.ERROR);
         } else {
-            showToast(getErrorMessage(error), "error", TOAST_MS.ERROR);
+            showErrorToast(error);
         }
 
         if (options.throwOnError) {
@@ -6051,7 +6041,7 @@ async function enrichModelMetadataWithSiblingSizeMap(metadata, modelId = "") {
             if (!fileName) return sibling;
             if (extractSiblingSizeBytes(sibling) !== null) return sibling;
             const sizeBytes = sizeMap.get(fileName.toLowerCase());
-            if (!Number.isFinite(Number(sizeBytes)) || Number(sizeBytes) <= 0) {
+            if (toFiniteNumber(sizeBytes, 0) <= 0) {
                 return sibling;
             }
             patchedCount += 1;
@@ -6148,9 +6138,7 @@ async function enrichModelMetadataWithReadme(metadata, modelId, options = {}) {
     base.__readmeResolved = true;
     base.__readmeContent = String(readmeResult.content ?? "");
     base.__readmeMissing = !!readmeResult.missing;
-    base.__readmeStatus = Number.isFinite(Number(readmeResult.status))
-        ? Number(readmeResult.status)
-        : 0;
+    base.__readmeStatus = toFiniteNumber(readmeResult.status, 0);
     base.__readmeError = String(readmeResult.errorMessage ?? "");
     return base;
 }
@@ -6192,7 +6180,7 @@ function applySelectedModel(modelId, options = {}) {
     const previousMeta = state.selectedModelMeta || {};
     const hasDownloadsOption = Object.hasOwn(options, "downloads");
     const nextDownloads = hasDownloadsOption
-        ? (Number.isFinite(Number(options.downloads)) ? Number(options.downloads) : null)
+        ? toFiniteNumber(options.downloads, null)
         : (Number.isFinite(Number(previousMeta.downloads)) ? Number(previousMeta.downloads) : null);
 
     selectedModel = normalized;
@@ -6217,7 +6205,7 @@ function normalizeDownloadQuantizationOptions(rawOptions) {
             quantizationKey: String(option?.quantizationKey ?? option?.key ?? "").trim().toLowerCase(),
             label: String(option?.label ?? "기본").trim(),
             score: Number(option?.score) ?? 0,
-            rank: Number.isFinite(Number(option?.rank)) ? Number(option.rank) : 999,
+            rank: toFiniteNumber(option?.rank, 999),
             sourceFileName: String(option?.sourceFileName ?? "").trim(),
             fileName: String(option?.fileName ?? "").trim(),
             fileUrl: String(option?.fileUrl ?? "").trim(),
@@ -6422,8 +6410,8 @@ function sortExternalDataSourcesForOnnxFile(paths, sourceOnnxPath) {
     return rows.toSorted((a, b) => {
         const indexA = getExternalDataChunkIndexForSource(a, sourceOnnxPath);
         const indexB = getExternalDataChunkIndexForSource(b, sourceOnnxPath);
-        const safeA = Number.isFinite(Number(indexA)) ? Number(indexA) : Number.MAX_SAFE_INTEGER;
-        const safeB = Number.isFinite(Number(indexB)) ? Number(indexB) : Number.MAX_SAFE_INTEGER;
+        const safeA = toFiniteNumber(indexA, Number.MAX_SAFE_INTEGER);
+        const safeB = toFiniteNumber(indexB, Number.MAX_SAFE_INTEGER);
         if (safeA !== safeB) {
             return safeA - safeB;
         }
@@ -6728,7 +6716,7 @@ function buildModelDownloadTarget(metadata, modelId, options = {}) {
             quantizationKey: String(quantization.key ?? "auto"),
             label: String(quantization.label ?? "기본"),
             score: scoreDownloadCandidate(sourceFileName),
-            rank: Number.isFinite(Number(quantization.rank)) ? Number(quantization.rank) : 999,
+            rank: toFiniteNumber(quantization.rank, 999),
             sourceFileName: target.primary.sourceFileName,
             fileName: target.primary.fileName,
             fileUrl: target.primary.fileUrl,
@@ -6846,7 +6834,7 @@ function renderDownloadPanel() {
             : [];
         const selectedKey = String(state.download.selectedQuantizationKey ?? "");
 
-        const currentSignature = JSON.stringify(
+        const currentSignature = safeJsonStringify(
             options.map((option) => [
                 option.key,
                 option.label,
@@ -6902,9 +6890,7 @@ function renderDownloadPanel() {
         els.downloadResumeBtnLabel.textContent = isPaused ? "재개" : "재개";
     }
 
-    const percent = Number.isFinite(Number(state.download.percent))
-        ? Math.max(0, Math.min(100, Number(state.download.percent)))
-        : 0;
+    const percent = Math.max(0, Math.min(100, toFiniteNumber(state.download.percent, 0)));
 
     if (els.downloadProgressBar) {
         els.downloadProgressBar.style.width = `${percent}%`;
@@ -6975,7 +6961,7 @@ function onDownloadQuantizationChange(event) {
         toast: true,
     });
     if (!changed) {
-        showToast("선택한 양자화 레벨의 다운로드 정보를 찾을 수 없습니다.", "error", 2600);
+        showToast("선택한 양자화 레벨의 다운로드 정보를 찾을 수 없습니다.", "error", TOAST_MS.INFO);
     }
 }
 
@@ -6984,13 +6970,13 @@ async function onClickDownloadStart() {
     state.download.autoReclaimAttempted = false;
 
     if (!state.download.enabled) {
-        showToast("먼저 모델을 조회해 다운로드 대상을 준비하세요.", "error", 2600);
+        showToast("먼저 모델을 조회해 다운로드 대상을 준비하세요.", "error", TOAST_MS.INFO);
         return;
     }
 
     const queue = Array.isArray(state.download.queue) ? state.download.queue : [];
     if (queue.length === 0) {
-        showToast("다운로드할 파일 정보를 찾을 수 없습니다.", "error", 2600);
+        showToast("다운로드할 파일 정보를 찾을 수 없습니다.", "error", TOAST_MS.INFO);
         return;
     }
 
@@ -6998,57 +6984,14 @@ async function onClickDownloadStart() {
         return;
     }
 
-    // Pre-download quota check — verify capacity first, auto-reclaim immediately when needed.
-    try {
-        const estimate = await getStorageEstimate();
-        if (estimate.quota > 0) {
-            const available = Math.max(0, estimate.quota - estimate.usage);
-            const requiredBytes = queue.reduce((sum, item) => {
-                const size = Number(item?.expectedSizeBytes ?? item?.size ?? 0);
-                return sum + (Number.isFinite(size) ? Math.max(0, size) : 0);
-            }, 0);
-            if (requiredBytes > 0 && requiredBytes > available) {
-                const keepPrefix = normalizeStoragePrefixFromModelId(state.download.modelId);
-                const neededBytes = Math.max(0, requiredBytes - available);
-
-                let reclaimed = false;
-                if (typeof attemptAutoFreeOpfsSpace === "function") {
-                    reclaimed = await attemptAutoFreeOpfsSpace(neededBytes, { keepPrefix });
-                }
-
-                const estimateAfter = await getStorageEstimate();
-                const availableAfter = Math.max(0, estimateAfter.quota - estimateAfter.usage);
-                if (requiredBytes > availableAfter) {
-                    const isAutomatedRun = navigator?.webdriver === true || window?.__isAutomated === true;
-                    if (isAutomatedRun) {
-                        showToast(
-                            `자동 모드: 저장소 여유가 부족해도 다운로드를 시작합니다. 필요: ${formatBytes(requiredBytes)}, 여유: ${formatBytes(availableAfter)}.`,
-                            "warning",
-                            4200,
-                        );
-                    } else {
-                        showToast(
-                            `저장소 용량이 부족합니다. 필요: ${formatBytes(requiredBytes)}, 여유: ${formatBytes(availableAfter)}.`,
-                            "error",
-                            5000,
-                        );
-                        return;
-                    }
-                }
-
-                if (reclaimed) {
-                    showToast("저장 공간을 자동 정리했습니다. 다운로드를 다시 시작합니다.", "info", 2600);
-                }
-            }
-        }
-    } catch (quotaCheckErr) {
-        // Silently ignore quota check errors - proceed with download
+    if (!(await ensureStorageCapacityForDownload(queue, state.download.modelId))) {
+        return;
     }
 
     try {
         await runDownloadFlow({ resume: false });
     } catch (error) {
-        showToast(`다운로드 시작 실패: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+        showErrorToast(error, `다운로드 시작 실패: ${getErrorMessage(error)}`);
     }
 }
 
@@ -7071,11 +7014,70 @@ async function onClickDownloadResume() {
     const queue = Array.isArray(state.download.queue) ? state.download.queue : [];
     if (queue.length === 0) return;
 
+    if (!(await ensureStorageCapacityForDownload(queue, state.download.modelId))) {
+        return;
+    }
+
     try {
         await runDownloadFlow({ resume: true });
     } catch (error) {
-        showToast(`다운로드 재개 실패: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+        showErrorToast(error, `다운로드 재개 실패: ${getErrorMessage(error)}`);
     }
+}
+
+// Attempt to ensure storage capacity before downloading (pre-check + auto-reclaim).
+async function ensureStorageCapacityForDownload(queue, modelId) {
+    if (!Array.isArray(queue) || queue.length === 0) return true;
+    
+    try {
+        const estimate = await getStorageEstimate();
+        if (estimate.quota <= 0) return true;
+
+        const available = Math.max(0, estimate.quota - estimate.usage);
+        const requiredBytes = queue.reduce((sum, item) => {
+            const size = Number(item?.expectedSizeBytes ?? item?.size ?? 0);
+            return sum + (Number.isFinite(size) ? Math.max(0, size) : 0);
+        }, 0);
+
+        if (requiredBytes > 0 && requiredBytes > available) {
+            const keepPrefix = normalizeStoragePrefixFromModelId(modelId);
+            const neededBytes = Math.max(0, requiredBytes - available);
+
+            let reclaimed = false;
+            if (typeof attemptAutoFreeOpfsSpace === "function") {
+                reclaimed = await attemptAutoFreeOpfsSpace(neededBytes, { keepPrefix });
+            }
+
+            const estimateAfter = await getStorageEstimate();
+            const availableAfter = Math.max(0, estimateAfter.quota - estimateAfter.usage);
+            
+            if (requiredBytes > availableAfter) {
+                const isAutomatedRun = navigator?.webdriver === true || window?.__isAutomated === true;
+                if (isAutomatedRun) {
+                    showToast(
+                        `자동 모드: 저장소 여유가 부족해도 다운로드를 시작합니다. 필요: ${formatBytes(requiredBytes)}, 여유: ${formatBytes(availableAfter)}.`,
+                        "warning",
+                        4200,
+                    );
+                    return true;
+                }
+                
+                showToast(
+                    `저장소 용량이 부족합니다. 필요: ${formatBytes(requiredBytes)}, 여유: ${formatBytes(availableAfter)}. (할당량: ${formatBytes(estimate.quota)})`,
+                    "error",
+                    6000,
+                );
+                return false;
+            }
+
+            if (reclaimed) {
+                showToast("저장 공간을 자동 정리했습니다.", "info", 2600);
+            }
+        }
+    } catch (quotaCheckErr) {
+        console.warn("[QuotaCheck] Error:", quotaCheckErr);
+    }
+    return true;
 }
 
 // Attempt to free OPFS space by deleting other model bundles (top-level helper).
@@ -7100,7 +7102,7 @@ async function attemptAutoFreeOpfsSpace(requiredBytes = 0, { keepPrefix = null }
                 try {
                     const file = await handle.getFile();
                     if (file && file.size > 0) candidates.push({ name, size: file.size, isFile: true });
-                } catch { }
+                } catch (err) { console.warn("[OPFS] Failed to read file handle:", err); }
             }
         }
 
@@ -7226,9 +7228,7 @@ async function runDownloadFlow({ resume = false } = {}) {
                 if (existingSize > 0) {
                     // Try to verify file size if metadata is available
                     let isValid = true;
-                    const expectedSize = Number.isFinite(Number(item.expectedSizeBytes))
-                        ? Number(item.expectedSizeBytes)
-                        : (Number.isFinite(Number(item.size)) ? Number(item.size) : null);
+                    const expectedSize = toFiniteNumber(item.expectedSizeBytes, toFiniteNumber(item.size, null));
 
                     if (expectedSize !== null && expectedSize > 0) {
                         if (existingSize !== expectedSize) {
@@ -7306,9 +7306,7 @@ async function runDownloadFlow({ resume = false } = {}) {
             downloadedFileSummaries.push({
                 fileName: item.fileName,
                 sourceFileName: displaySourceName,
-                sizeBytes: Number.isFinite(Number(result.totalBytes))
-                    ? Number(result.totalBytes)
-                    : Number(result.bytesReceived ?? 0),
+                sizeBytes: toFiniteNumber(result.totalBytes, Number(result.bytesReceived ?? 0)),
                 kind: item.kind ?? "asset",
                 fileUrl: item.fileUrl,
             });
@@ -7323,7 +7321,7 @@ async function runDownloadFlow({ resume = false } = {}) {
         state.download.percent = 100;
         state.download.speedBps = 0;
         state.download.etaSeconds = 0;
-        state.download.statusText = `다운로드 완료. 모델 번들 ${queue.length}개 파일이 OPFS에 저장되었습니다.`;
+        state.download.statusText = `다운로드 완료. 모델 번들을 초기화합니다...`;
         renderDownloadPanel();
 
         const primarySummary = downloadedFileSummaries.find((item) => item.fileName === primaryItem.fileName)
@@ -7350,6 +7348,20 @@ async function runDownloadFlow({ resume = false } = {}) {
 
         await refreshModelSessionList({ silent: true });
         await refreshOpfsExplorer({ silent: true });
+
+        // E2E-001: 다운로드 완료 후 자동 세션 활성화 시도
+        if (primaryItem && primaryItem.fileName) {
+            console.log("[DL] Auto-activating downloaded model session:", primaryItem.fileName);
+            // 약간의 지연을 주어 OPFS 반영을 보장함
+            setTimeout(() => {
+                onClickSessionLoad(primaryItem.fileName, {
+                    silent: true,
+                    skipSwitchConfirm: true,
+                    persistLastLoaded: true
+                }).catch(err => console.warn("[DL] Auto-activation failed:", err));
+            }, 300);
+        }
+
         renderRecommendedModels();
 
         showToast(`모델 번들 다운로드 완료 (${queue.length}개 파일)`, "success", 3200);
@@ -7389,9 +7401,28 @@ async function runDownloadFlow({ resume = false } = {}) {
         state.download.etaSeconds = null;
         const isQuotaError = error?.name === "QuotaExceededError"
             || (error instanceof DOMException && /quota/i.test(error.message));
-        const userMessage = isQuotaError
-            ? t(I18N_KEYS.ERROR_STORAGE_QUOTA_EXCEEDED)
-            : `다운로드 실패: ${getErrorMessage(error)}`;
+
+        // Build detailed quota error message with quota info
+        let userMessage;
+        if (isQuotaError) {
+            try {
+                const estimate = await getStorageEstimate();
+                const totalRequired = queue.reduce((sum, item) => {
+                    const size = Number(item?.expectedSizeBytes ?? item?.size ?? 0);
+                    return sum + (Number.isFinite(size) ? Math.max(0, size) : 0);
+                }, 0);
+                const quota = Number(estimate.quota ?? 0);
+                const usage = Number(estimate.usage ?? 0);
+                const available = Math.max(0, quota - usage);
+                const shortage = Math.max(0, totalRequired - available);
+
+                userMessage = `저장소 용량이 부족합니다. 할당량: ${formatBytes(quota)}, 사용 중: ${formatBytes(usage)}, 여유: ${formatBytes(available)}, 필요: ${formatBytes(totalRequired)}, 부족: ${formatBytes(shortage)}. OPFS 탐색기에서 사용하지 않는 모델을 삭제한 후 다시 시도하세요.`;
+            } catch {
+                userMessage = t(I18N_KEYS.ERROR_STORAGE_QUOTA_EXCEEDED);
+            }
+        } else {
+            userMessage = `다운로드 실패: ${getErrorMessage(error)}`;
+        }
 
         // Try automatic reclamation once when quota error occurs (useful for automated tests and
         // to recover from unexpected storage pressure). Guard with a flag to avoid loops.
@@ -7431,7 +7462,7 @@ async function runDownloadFlow({ resume = false } = {}) {
                                     try {
                                         const file = await handle.getFile();
                                         if (file && file.size > 0) candidates.push({ name, size: file.size, isFile: true });
-                                    } catch { }
+                                    } catch (err) { console.warn("[OPFS] Failed to read file handle:", err); }
                                 }
                             }
                             candidates.sort((a, b) => b.size - a.size);
@@ -8010,12 +8041,8 @@ function renderStorageUsage() {
         return;
     }
 
-    const usageBytes = Number.isFinite(Number(state.opfs.explorer.usageBytes))
-        ? Number(state.opfs.explorer.usageBytes)
-        : null;
-    const quotaBytes = Number.isFinite(Number(state.opfs.explorer.quotaBytes))
-        ? Number(state.opfs.explorer.quotaBytes)
-        : null;
+    const usageBytes = toFiniteNumber(state.opfs.explorer.usageBytes, null);
+    const quotaBytes = toFiniteNumber(state.opfs.explorer.quotaBytes, null);
 
     if (usageBytes === null || quotaBytes === null || quotaBytes <= 0) {
         els.opfsUsageText.textContent = t(I18N_KEYS.OPFS_USAGE_LOADING);
@@ -8033,8 +8060,8 @@ async function refreshStorageEstimate() {
     }
 
     const estimate = await getStorageEstimate();
-    state.opfs.explorer.usageBytes = Number.isFinite(Number(estimate.usage)) ? Number(estimate.usage) : null;
-    state.opfs.explorer.quotaBytes = Number.isFinite(Number(estimate.quota)) ? Number(estimate.quota) : null;
+    state.opfs.explorer.usageBytes = toFiniteNumber(estimate.usage, null);
+    state.opfs.explorer.quotaBytes = toFiniteNumber(estimate.quota, null);
     renderStorageUsage();
 }
 
@@ -8535,7 +8562,7 @@ async function refreshOpfsExplorer({ silent = false } = {}) {
         closeExplorerContextMenu();
         renderOpfsExplorerList();
         if (!silent) {
-            showToast(`${t(I18N_KEYS.OPFS_TITLE)} ${t(I18N_KEYS.DIALOG_ERROR_TITLE)}: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+            showErrorToast(error, `${t(I18N_KEYS.OPFS_TITLE)} ${t(I18N_KEYS.DIALOG_ERROR_TITLE)}: ${getErrorMessage(error)}`);
         }
     } finally {
         setExplorerLoading(false);
@@ -8566,7 +8593,7 @@ async function onCreateExplorerDirectory() {
         showToast(`폴더 생성 완료: ${name}`, "success", TOAST_MS.DEFAULT);
         await refreshOpfsExplorer({ silent: true });
     } catch (error) {
-        showToast(`폴더 생성 실패: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+        showErrorToast(error, `폴더 생성 실패: ${getErrorMessage(error)}`);
     } finally {
         setExplorerBusy(false);
     }
@@ -8600,7 +8627,7 @@ async function onCreateExplorerFile() {
         await refreshOpfsExplorer({ silent: true });
         await refreshModelSessionList({ silent: true });
     } catch (error) {
-        showToast(`파일 생성 실패: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+        showErrorToast(error, `파일 생성 실패: ${getErrorMessage(error)}`);
     } finally {
         setExplorerBusy(false);
     }
@@ -8695,11 +8722,11 @@ function ensureManifestEntryForModelFile(fileName, options = {}) {
         modelId: isValidModelId(options.modelId) ? options.modelId : (selectedModel ?? ""),
         fileUrl: String(options.fileUrl ?? ""),
         downloadedAt: String(options.downloadedAt || new Date().toISOString()),
-        sizeBytes: Number.isFinite(Number(options.sizeBytes)) ? Number(options.sizeBytes) : null,
-        task: typeof options.task === "string" ? options.task : (state.selectedModelMeta?.task ?? "-"),
-        downloads: Number.isFinite(Number(options.downloads)) ? Number(options.downloads) : (state.selectedModelMeta?.downloads ?? null),
-        revision: typeof options.revision === "string" ? options.revision : "main",
-        downloadStatus: typeof options.downloadStatus === "string" ? options.downloadStatus : "downloaded",
+        sizeBytes: toFiniteNumber(options.sizeBytes, null),
+        task: asString(options.task, (state.selectedModelMeta?.task ?? "-")),
+        downloads: toFiniteNumber(options.downloads, (state.selectedModelMeta?.downloads ?? null)),
+        revision: asString(options.revision, "main"),
+        downloadStatus: asString(options.downloadStatus, "downloaded"),
     });
 }
 
@@ -8742,7 +8769,7 @@ async function uploadFilesToCurrentExplorerDirectory(files) {
         await refreshModelSessionList({ silent: true });
     } catch (error) {
         setExplorerUploadStatus(`업로드 실패: ${getErrorMessage(error)}`);
-        showToast(`업로드 실패: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+        showErrorToast(error, `업로드 실패: ${getErrorMessage(error)}`);
     } finally {
         setExplorerBusy(false);
     }
@@ -9012,7 +9039,7 @@ async function onRenameExplorerEntry() {
         await refreshOpfsExplorer({ silent: true });
         await refreshModelSessionList({ silent: true });
     } catch (error) {
-        showToast(`이름 변경 실패: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+        showErrorToast(error, `이름 변경 실패: ${getErrorMessage(error)}`);
     } finally {
         setExplorerBusy(false);
     }
@@ -9053,7 +9080,7 @@ async function onMoveExplorerEntry() {
         await refreshOpfsExplorer({ silent: true });
         await refreshModelSessionList({ silent: true });
     } catch (error) {
-        showToast(`이동 실패: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+        showErrorToast(error, `이동 실패: ${getErrorMessage(error)}`);
     } finally {
         setExplorerBusy(false);
     }
@@ -9100,7 +9127,7 @@ async function refreshModelSessionList({ silent = false } = {}) {
     } catch (error) {
         renderModelSessionList();
         if (!silent) {
-            showToast(`${t(I18N_KEYS.OPFS_TITLE)} ${t(I18N_KEYS.DIALOG_ERROR_TITLE)}: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+            showErrorToast(error, `${t(I18N_KEYS.OPFS_TITLE)} ${t(I18N_KEYS.DIALOG_ERROR_TITLE)}: ${getErrorMessage(error)}`);
         }
     } finally {
         setModelSessionLoading(false);
@@ -9292,7 +9319,7 @@ function buildLocalModelCardMetadata(fileName, modelId = "") {
     return {
         id: resolvedModelId || fallbackId,
         pipeline_tag: manifestEntry?.task ?? "-",
-        downloads: Number.isFinite(Number(manifestEntry?.downloads)) ? Number(manifestEntry.downloads) : null,
+        downloads: toFiniteNumber(manifestEntry?.downloads, null),
         likes: null,
         lastModified: fileEntry?.lastModified ?? manifestEntry?.downloadedAt ?? "",
         tags: [
@@ -9337,7 +9364,7 @@ async function onClickSessionModelCard(fileName) {
         if (status === 404 || status === 401) {
             showToast("모델 카드 API 조회 실패로 로컬 카드 정보를 표시합니다.", "info", 3200);
         } else {
-            showToast(`모델 카드 API 조회 실패: ${getErrorMessage(error)} (로컬 정보 표시)`, "info", 3400);
+            showErrorToast(error, `모델 카드 API 조회 실패: ${getErrorMessage(error)} (로컬 정보 표시)`);
         }
     }
 }
@@ -10325,7 +10352,7 @@ async function onClickSessionUpdate(fileName) {
         showToast(`업데이트 시작: ${targetFileName}`, "info", 2200);
         await onClickDownloadStart();
     } catch (error) {
-        showToast(`업데이트 실패: ${getErrorMessage(error)}`, "error", TOAST_MS.ERROR);
+        showErrorToast(error, `업데이트 실패: ${getErrorMessage(error)}`);
     }
 }
 
@@ -11525,21 +11552,18 @@ async function createTransformersSession({
                 options.presencePenalty ?? options.presence_penalty ?? LOCAL_GENERATION_DEFAULT_SETTINGS.presencePenalty,
             );
             const repetitionPenalty = mapPresencePenaltyToRepetitionPenalty(presencePenalty);
-            const maxLength = clampGenerationMaxLength(
-                options.maxLength ?? options.max_length ?? LOCAL_GENERATION_DEFAULT_SETTINGS.maxLength,
-            );
+            const isModelThinking = isThinkingModel(this.modelId);
             const generationOptions = {
                 max_new_tokens: maxNewTokens,
-                max_length: Math.max(maxLength, maxNewTokens),
                 temperature,
                 top_p: topP,
                 repetition_penalty: repetitionPenalty,
-                do_sample: temperature !== 1 || topP < 1,
+                do_sample: temperature > 0,
+                return_full_text: false,
                 inference: inferenceEnabled,
+                add_generation_prompt: hasChatMessages,
+                skip_special_tokens: !isModelThinking, // Thinking models often use special tokens for reasoning blocks
             };
-            if (!hasChatMessages) {
-                generationOptions.return_full_text = false;
-            }
 
             const workerOnToken = (delta, meta = {}) => {
                 if (onToken) {
@@ -11569,11 +11593,9 @@ function logSessionCreateAttempt(stage, payload) {
         task: String(payload?.task ?? ""),
         model_file_name_hint: String(payload?.modelFileNameHint ?? ""),
         dtype: String(payload?.dtype ?? ""),
-        external_data_chunks: Number.isFinite(Number(payload?.externalDataChunkCount))
-            ? Number(payload.externalDataChunkCount)
-            : 0,
+        external_data_chunks: toFiniteNumber(payload?.externalDataChunkCount, 0),
         model_binding: String(payload?.modelBinding ?? ""),
-        related_file_count: Number.isFinite(Number(payload?.relatedFileCount)) ? Number(payload.relatedFileCount) : null,
+        related_file_count: toFiniteNumber(payload?.relatedFileCount, null),
         runtime: String(payload?.runtime || LOCAL_INFERENCE_RUNTIME.runtime),
         error: payload?.error ? String(payload.error) : "",
     };
@@ -11594,10 +11616,10 @@ function extractNumericRuntimeErrorCode(error) {
     }
 
     const messageCandidates = [
-        typeof error === "string" ? error : "",
-        typeof error?.message === "string" ? error.message : "",
-        typeof error?.cause === "string" ? error.cause : "",
-        typeof error?.cause?.message === "string" ? error.cause.message : "",
+        asString(error, ""),
+        asString(error?.message, ""),
+        asString(error?.cause, ""),
+        asString(error?.cause?.message, ""),
     ];
     for (const raw of messageCandidates) {
         const text = String(raw ?? "").trim();
@@ -11977,7 +11999,7 @@ async function onConfirmDeleteModel() {
             if (modelFileName) {
                 const rowState = getSessionRowState(modelFileName);
                 if (rowState === "loading") {
-                    showToast(t("model.loading_warning", { model: modelFileName }), "warning", 3500);
+                    showToast(t("model.loading_warning", { model: modelFileName }), "warning", TOAST_MS.LONG);
                 }
                 if (state.activeSessionFile === modelFileName || sessionStore.sessions.has(modelFileName)) {
                     await unloadCachedSession(modelFileName, { silent: true, skipRender: true });
@@ -11998,15 +12020,15 @@ async function onConfirmDeleteModel() {
         await refreshOpfsExplorer({ silent: true });
         closeDeleteDialog(true);
         if (mode === "model") {
-            showToast(t("delete.done", { target: fileName }), "success", 2600);
+            showToast(t("delete.done", { target: fileName }), "success", TOAST_MS.INFO);
         } else {
-            showToast(t("delete.done", { target: targetPath }), "success", 2600);
+            showToast(t("delete.done", { target: targetPath }), "success", TOAST_MS.INFO);
         }
     } catch (error) {
         if (error instanceof DOMException) {
             openErrorDialog(t(I18N_KEYS.DIALOG_ERROR_MESSAGE));
         } else {
-            showToast(t("delete.failed", { message: getErrorMessage(error) }), "error", TOAST_MS.ERROR);
+            showErrorToast(error, t("delete.failed", { message: getErrorMessage(error) }));
         }
     } finally {
         state.deleteDialog.isDeleting = false;
@@ -12186,6 +12208,34 @@ function updateMessageEntryById(messageId, nextFields = {}) {
     return target;
 }
 
+function splitReasoningAndAnswer(rawText) {
+    let reasoning = "";
+    let answer = "";
+    let isThinking = false;
+    const text = String(rawText ?? "");
+
+    // Support for multiple reasoning tag variants: <think>, <|think|>, <thought>, <|thought|>
+    const thinkStartMatch = /<(?:\|?think|\|?thought)\|?>/i.exec(text);
+    if (thinkStartMatch) {
+        const startIndex = thinkStartMatch.index + thinkStartMatch[0].length;
+        const sub = text.substring(startIndex);
+        const thinkEndMatch = /<\/(?:\|?think|\|?thought)\|?>/i.exec(sub);
+        if (thinkEndMatch) {
+            reasoning = sub.substring(0, thinkEndMatch.index);
+            answer = text.substring(0, thinkStartMatch.index) + sub.substring(thinkEndMatch.index + thinkEndMatch[0].length);
+            isThinking = false;
+        } else {
+            reasoning = sub;
+            answer = text.substring(0, thinkStartMatch.index);
+            isThinking = true;
+        }
+    } else {
+        answer = text;
+        isThinking = false;
+    }
+    return { reasoning, answer, isThinking };
+}
+
 function createAssistantStreamRenderer(options = {}) {
     const message = addMessage("assistant", "", {
         showTokenBadge: true,
@@ -12250,28 +12300,7 @@ function createAssistantStreamRenderer(options = {}) {
             }
         }
 
-        let currentReasoning = "";
-        let currentAnswer = "";
-        let isThinking = false;
-
-        const thinkStartMatch = /<\|?think\|?>/i.exec(fullRawText);
-        if (thinkStartMatch) {
-            const startIndex = thinkStartMatch.index + thinkStartMatch[0].length;
-            const sub = fullRawText.substring(startIndex);
-            const thinkEndMatch = /<\|?\/think\|?>/i.exec(sub);
-            if (thinkEndMatch) {
-                currentReasoning = sub.substring(0, thinkEndMatch.index);
-                currentAnswer = fullRawText.substring(0, thinkStartMatch.index) + sub.substring(thinkEndMatch.index + thinkEndMatch[0].length);
-                isThinking = false;
-            } else {
-                currentReasoning = sub;
-                currentAnswer = fullRawText.substring(0, thinkStartMatch.index);
-                isThinking = true;
-            }
-        } else {
-            currentAnswer = fullRawText;
-            isThinking = false;
-        }
+        const { reasoning: currentReasoning, answer: currentAnswer, isThinking } = splitReasoningAndAnswer(fullRawText);
 
         if (message.thinkingContent && message.thinkingContainer) {
             if (currentReasoning) {
@@ -12398,17 +12427,29 @@ function createAssistantStreamRenderer(options = {}) {
         if (closed) return message;
         inputFinished = true;
 
+        // Phase 0: Capture streamed text for debug
+        if (state.debug && state.debug.lastGeneration) {
+            state.debug.lastGeneration.streamedTextPrefix = String(fullRawText ?? "").slice(0, 200);
+
+            // Phase 4: High discrepancy check between stream and final output
+            const raw = String(fullRawText ?? "").trim();
+            const cleaned = String(finalText ?? "").trim();
+            const isRejected = meta.rejected === true;
+
+            if (!isRejected && cleaned && raw && !raw.includes(cleaned.slice(0, 15))) {
+                console.error("[Inference Bug] High discrepancy between stream and final output noticed for SmolLM2 analysis.", {
+                    streamedPreview: raw.slice(0, 250),
+                    finalCleaned: cleaned.slice(0, 250)
+                });
+            }
+        }
+
         const skipMetrics = meta.skipMetrics === true;
         const resolvedFinalText = String(finalText ?? "");
 
         if (resolvedFinalText) {
-            const alreadyRendered = fullRawText + buffered;
-            if (resolvedFinalText.length > alreadyRendered.length) {
-                buffered += resolvedFinalText.slice(alreadyRendered.length);
-            } else if (resolvedFinalText !== alreadyRendered) {
-                fullRawText = "";
-                buffered = resolvedFinalText;
-            }
+            fullRawText = resolvedFinalText;
+            buffered = "";
             if (!skipMetrics) {
                 totalTokens = Math.max(totalTokens, Math.max(1, countApproxTokens(resolvedFinalText)));
             }
@@ -12436,22 +12477,18 @@ function createAssistantStreamRenderer(options = {}) {
             if (message.tokenBadge) {
                 message.tokenBadge.textContent = finalTps > 0 ? `${finalTps.toFixed(2)} tok/s` : "0.00 tok/s";
             }
-            let finalReasoning = "";
-            let finalAnswer = "";
-            const thinkStartMatch = /<\|?think\|?>/i.exec(fullRawText);
-            if (thinkStartMatch) {
-                const startIndex = thinkStartMatch.index + thinkStartMatch[0].length;
-                const sub = fullRawText.substring(startIndex);
-                const thinkEndMatch = /<\|?\/think\|?>/i.exec(sub);
-                if (thinkEndMatch) {
-                    finalReasoning = sub.substring(0, thinkEndMatch.index);
-                    finalAnswer = fullRawText.substring(0, thinkStartMatch.index) + sub.substring(thinkEndMatch.index + thinkEndMatch[0].length);
+            const { reasoning: finalReasoning, answer: finalAnswer, isThinking } = splitReasoningAndAnswer(fullRawText);
+
+            if (message.thinkingContent && message.thinkingContainer) {
+                if (finalReasoning) {
+                    message.thinkingContainer.classList.remove("hidden");
+                    message.thinkingContent.textContent = finalReasoning.trim() || "...";
                 } else {
-                    finalReasoning = sub;
-                    finalAnswer = fullRawText.substring(0, thinkStartMatch.index);
+                    message.thinkingContainer.classList.add("hidden");
                 }
-            } else {
-                finalAnswer = fullRawText;
+            }
+            if (message.content) {
+                message.content.textContent = finalAnswer;
             }
 
             updateMessageEntryById(message.id, {
@@ -12474,11 +12511,9 @@ function createAssistantStreamRenderer(options = {}) {
 
         const drainAndFinish = () => {
             if (buffered.length > 0) {
-                flush(false);
-                requestAnimationFrame(drainAndFinish);
-            } else {
-                finishFinish();
+                flush(true);
             }
+            finishFinish();
         };
         requestAnimationFrame(drainAndFinish);
         return message;
@@ -12589,7 +12624,7 @@ async function executeAndStreamResponse(userText) {
     } catch (error) {
         if (error?.message?.includes("aborted") || error?.code === "generation_aborted") {
             streamRenderer.finalize("[사용자에 의해 중단됨]", { skipMetrics: true });
-            showToast("생성이 중단되었습니다.", "info", 2000);
+            showToast("생성이 중단되었습니다.", "info", TOAST_MS.INFO);
             return;
         }
 
@@ -12601,8 +12636,8 @@ async function executeAndStreamResponse(userText) {
         recordChatErrorEvent(errorId, error, diagnostics);
 
         const uiMessage = formatChatFailureMessage(error, diagnostics, errorId);
-        streamRenderer.finalize(uiMessage.assistantText, { skipMetrics: true });
-        showToast(uiMessage.toastText, "error", 4200);
+        streamRenderer.finalize(uiMessage.assistantText, { skipMetrics: true, rejected: true });
+        showToast(uiMessage.toastText, "error", TOAST_MS.CRITICAL);
     } finally {
         state.isSendingChat = false;
         setChatSendingState(false);
@@ -12739,7 +12774,7 @@ function cancelMessageEdit(messageId) {
 
 async function regenerateFromMessage(messageId) {
     if (state.isSendingChat) {
-        showToast(t("toast.cannot_change_session_during_response") ?? "세션 응답 중에는 변경할 수 없습니다.", "error", 2200);
+        showToast(t("toast.cannot_change_session_during_response") ?? "세션 응답 중에는 변경할 수 없습니다.", "error", TOAST_MS.DEFAULT);
         return;
     }
 
@@ -12761,7 +12796,7 @@ async function regenerateFromMessage(messageId) {
     }
 
     if (!precedingUserText) {
-        showToast(t("chat.regenerate_no_user_message") ?? "재생성할 사용자 메시지를 찾을 수 없습니다.", "error", 2200);
+        showToast(t("chat.regenerate_no_user_message") ?? "재생성할 사용자 메시지를 찾을 수 없습니다.", "error", TOAST_MS.DEFAULT);
         return;
     }
 
@@ -12806,7 +12841,7 @@ async function abortGeneration() {
     // → 다음 요청 시 getWorker()로 새 Worker 생성 + init() 재호출
     transformersStore.pipelines.clear();
 
-    showToast(t("chat.generation_aborted") ?? "생성이 중단되었습니다.", "info", 2000);
+    showToast(t("chat.generation_aborted") ?? "생성이 중단되었습니다.", "info", TOAST_MS.INFO);
 }
 
 function getRecentNetworkEvents(limit = 8) {
@@ -12835,11 +12870,11 @@ async function collectChatFailureDiagnostics(error, context = {}) {
         active_session_file: activeFile,
         active_session_state: activeFile ? getSessionRowState(activeFile) : "",
         has_active_session_object: !!sessionStore.activeSession,
-        session_pipeline_key: typeof session?.pipelineKey === "string" ? session.pipelineKey : "",
-        session_model_file_hint: typeof session?.modelFileNameHint === "string" ? session.modelFileNameHint : "",
-        session_model_binding: typeof session?.modelBinding === "string" ? session.modelBinding : "",
-        session_device: typeof session?.device === "string" ? session.device : "",
-        session_dtype: typeof session?.dtype === "string" ? session.dtype : "",
+        session_pipeline_key: asString(session?.pipelineKey, ""),
+        session_model_file_hint: asString(session?.modelFileNameHint, ""),
+        session_model_binding: asString(session?.modelBinding, ""),
+        session_device: asString(session?.device, ""),
+        session_dtype: asString(session?.dtype, ""),
         session_inputs: Array.isArray(session?.inputNames) ? [...session.inputNames] : [],
         session_outputs: Array.isArray(session?.outputNames) ? [...session.outputNames] : [],
         session_input_metadata: sessionInputMetadata,
@@ -13041,7 +13076,7 @@ function findManifestEntriesByModelId(modelId) {
             fileName: norm,
             modelId: normalizeModelId(entry?.modelId ?? ""),
             task: String(entry?.task ?? ""),
-            sizeBytes: Number.isFinite(Number(entry?.sizeBytes)) ? Number(entry.sizeBytes) : null,
+            sizeBytes: toFiniteNumber(entry?.sizeBytes, null),
             fileUrl: String(entry?.fileUrl ?? ""),
             revision: String(entry?.revision ?? ""),
         });
@@ -13095,18 +13130,19 @@ function stripReasoningTrace(text) {
     let value = String(text ?? "").trim();
     if (!value) return "";
 
-    // Remove explicit reasoning blocks (Qwen-style think tags), keep only final answer text.
+    // Remove explicit reasoning blocks, keep only final answer text.
+    // Handles <think>, <|think|>, <thought>, <|thought|>
     value = value
-        .replace(/<\|?think\|?>[\s\S]*?<\|?\/think\|?>/gi, " ")
+        .replace(/<(?:\|?think|\|?thought)\|?>[\s\S]*?<\/(?:\|?think|\|?thought)\|?>/gi, " ")
         .trim();
 
-    // If an opening think tag exists without a closing tag, treat as non-user-facing output.
-    if (/^<\|?think\|?>/i.test(value)) {
+    // If an opening tag exists without a closing tag, treat as non-user-facing output for cleanup purposes.
+    if (/<(?:\|?think|\|?thought)\|?>/i.test(value)) {
         return "";
     }
 
     value = value
-        .replace(/^<\|?\/think\|?>\s*/i, "")
+        .replace(/^<\/(?:\|?think|\|?thought)\|?>\s*/i, "")
         .trim();
     return value;
 }
@@ -13219,6 +13255,12 @@ function createLocalEmptyOutputError(session, userText, context = {}) {
 
 function resolveLocalGenerationTokenCap(session) {
     const modelId = normalizeModelId(session?.modelId ?? selectedModel ?? "").toLowerCase();
+    
+    // Phase 5: Thinking/Reasoning models require significantly higher token budgets for the hidden trace
+    if (isThinkingModel(modelId)) {
+        return LOCAL_MAX_NEW_TOKENS_QWEN_THINKING_CAP; // 4096
+    }
+    
     if (modelId.includes("qwen")) {
         return LOCAL_MAX_NEW_TOKENS_QWEN_CAP;
     }
@@ -13257,13 +13299,7 @@ function normalizeTransformersChatMessages(rawMessages) {
 }
 
 function buildPromptInstructionText() {
-    const systemPrompt = getSystemPrompt();
-    const roleLabelGuard = t(I18N_KEYS.PROMPT_ROLE_LABEL_GUARD);
-    const reasoningGuard = t(I18N_KEYS.PROMPT_REASONING_GUARD);
-    return [systemPrompt, roleLabelGuard, reasoningGuard]
-        .map((item) => String(item ?? "").trim())
-        .filter(Boolean)
-        .join("\n");
+    return String(getSystemPrompt() ?? "").trim();
 }
 
 function collectRecentPromptMessages(userText) {
@@ -13321,7 +13357,7 @@ function getInferencePromptPayloadKey(payload) {
     }
     const messages = normalizeTransformersChatMessages(payload);
     if (messages.length === 0) return "";
-    return `messages::${JSON.stringify(messages)}`;
+    return `messages::${safeJsonStringify(messages)}`;
 }
 
 function describeInferencePromptPayload(payload) {
@@ -13341,6 +13377,11 @@ function buildDirectPrompt(userText) {
 function buildForcedAnswerPrompt(userText) {
     const trimmed = String(userText ?? "").trim();
     if (!trimmed) return "";
+    // For simple instruction-following prompts, use a more direct format
+    const isSimpleInstruction = trimmed.length <= 50 && !trimmed.includes("\n");
+    if (isSimpleInstruction) {
+        return `Follow this instruction exactly. Output only what is requested, nothing else.\nInstruction: ${trimmed}\nOutput:`;
+    }
     return `Answer the following request in at least one sentence.\nRequest: ${trimmed}\nAnswer:`;
 }
 
@@ -13353,6 +13394,20 @@ function shouldPreferMessagesPromptOnly(session, normalizedTask) {
         return true;
     }
     return false;
+}
+
+function getModelSpecificGenerationSettings(session) {
+    const modelId = normalizeModelId(session?.modelId ?? selectedModel ?? "").toLowerCase();
+    if (!modelId) return {};
+    
+    // SmolLM2 Instruct models benefit from lower temperature for stable instruction-following
+    if (modelId.includes("smollm2") && modelId.includes("instruct")) {
+        return {
+            temperature: 0.3,
+            topP: 0.85,
+        };
+    }
+    return {};
 }
 
 async function runInference(session, userText, options = {}) {
@@ -13372,25 +13427,47 @@ async function runInference(session, userText, options = {}) {
     } = options;
     const activeFileLabel = String(activeFile ?? state.activeSessionFile ?? "");
     const config = getLocalInferenceConfig();
+    // Merge model-specific generation settings for optimal output quality
     const generationConfig = {
         ...getLocalGenerationSettings(),
+        ...getModelSpecificGenerationSettings(session),
         ...(generation && typeof generation === "object" ? generation : {}),
     };
     const normalizedTask = normalizePipelineTask(session?.task || TRANSFORMERS_DEFAULT_TASK);
     const includeHistory = isolated !== true;
     const shouldUseChatPrompt = normalizedTask === "text-generation";
     const preferMessagesOnly = shouldPreferMessagesPromptOnly(session, normalizedTask);
-    const candidatePrompts = [
-        shouldUseChatPrompt ? { label: "chat_messages", payload: buildPromptMessages(userText, { includeHistory }) } : null,
-        preferMessagesOnly
-            ? { label: "direct_prompt_fallback", payload: buildDirectPrompt(userText) }
-            : { label: "direct_prompt", payload: buildDirectPrompt(userText) },
-        { label: "plain_prompt", payload: String(userText ?? "").trim() },
-        { label: "forced_answer_prompt", payload: buildForcedAnswerPrompt(userText) },
-        shouldUseChatPrompt
-            ? { label: "chat_prompt_legacy", payload: buildPrompt(userText, { includeHistory }) }
-            : null,
-    ];
+    const isSimpleInstruction = String(userText ?? "").trim().length <= 50 && !String(userText ?? "").includes("\n");
+    
+    const smollm2Instruct = isSmolLM2Instruct(session?.modelId);
+    const isStrictRequest = detectStrictAnswerRequest(userText);
+    const prioritizeForcedPrompt = preferMessagesOnly && isSimpleInstruction;
+
+    const candidatePrompts = (smollm2Instruct && shouldUseChatPrompt)
+        ? [
+            { label: "chat_messages", payload: buildPromptMessages(userText, { includeHistory }) },
+            { label: "chat_messages_retry_isolated", payload: buildPromptMessages(userText, { includeHistory: false }) },
+            // Phase 3 Recovery: Forced answer prompt as last resort for strict requests on SmolLM2
+            isStrictRequest ? { label: "forced_prompt_recovery", payload: buildForcedAnswerPrompt(userText) } : null,
+            { label: "plain_prompt_fallback", payload: String(userText ?? "").trim() },
+        ].filter(Boolean)
+        : (prioritizeForcedPrompt
+            ? [
+                { label: "forced_answer_prompt", payload: buildForcedAnswerPrompt(userText) },
+                shouldUseChatPrompt ? { label: "chat_messages", payload: buildPromptMessages(userText, { includeHistory }) } : null,
+                shouldUseChatPrompt ? { label: "chat_prompt_legacy", payload: buildPrompt(userText, { includeHistory }) } : null,
+                { label: "direct_prompt_fallback", payload: buildDirectPrompt(userText) },
+                { label: "plain_prompt", payload: String(userText ?? "").trim() },
+            ]
+            : [
+                shouldUseChatPrompt ? { label: "chat_messages", payload: buildPromptMessages(userText, { includeHistory }) } : null,
+                shouldUseChatPrompt ? { label: "chat_prompt_legacy", payload: buildPrompt(userText, { includeHistory }) } : null,
+                { label: "forced_answer_prompt", payload: buildForcedAnswerPrompt(userText) },
+                preferMessagesOnly
+                    ? { label: "direct_prompt_fallback", payload: buildDirectPrompt(userText) }
+                    : { label: "direct_prompt", payload: buildDirectPrompt(userText) },
+                { label: "plain_prompt", payload: String(userText ?? "").trim() },
+            ]);
     const promptSet = new Set();
     const prompts = candidatePrompts
         .filter((item) => item && isValidInferencePromptPayload(item.payload))
@@ -13414,18 +13491,60 @@ async function runInference(session, userText, options = {}) {
             onStreamReset();
         }
         try {
+            // Phase 2: Strict short-answer execution profile
+            // Lowered cap to 8 for exact-answer prompts, and 4 for ultra-strict recovery
+            // Phase 5: Thinking models are excluded from this aggressive capping as they need room for the reasoning trace.
+            const modelThinking = isThinkingModel(session?.modelId);
+            let currentMaxNewTokens = (isStrictRequest && !modelThinking) ? Math.min(effectiveMaxNewTokens, 8) : effectiveMaxNewTokens;
+            if (current.ultraStrict && !modelThinking) {
+                currentMaxNewTokens = 4;
+            }
+
             const generated = await session.generateText(currentPrompt, {
-                maxNewTokens: effectiveMaxNewTokens,
+                maxNewTokens: currentMaxNewTokens,
                 inference: inferenceEnabled,
                 onToken,
-                temperature: generationConfig.temperature,
-                topP: generationConfig.topP,
-                presencePenalty: generationConfig.presencePenalty,
+                temperature: isStrictRequest ? 0 : (generationConfig.temperature ?? 0.7),
+                topP: isStrictRequest ? 1 : (generationConfig.topP ?? 0.9),
+                presencePenalty: isStrictRequest ? 0 : (generationConfig.presencePenalty ?? 0),
                 maxLength: generationConfig.maxLength,
+                do_sample: isStrictRequest ? false : undefined,
             });
             const normalized = cleanupLocalAssistantText(generated, userText);
+
+            // Phase 0: Record E2E Generation Debug
+            state.debug.lastGeneration = {
+                modelId: session?.modelId ?? "",
+                activeFile: activeFileLabel,
+                device: session?.session?.device ?? state.inference.preferredDevice,
+                promptLabel: current.label,
+                payloadType: describeInferencePromptPayload(current.payload),
+                options: {
+                    maxNewTokens: currentMaxNewTokens,
+                    temperature: isStrictRequest ? 0 : (generationConfig.temperature ?? 0.7),
+                    topP: isStrictRequest ? 1 : (generationConfig.topP ?? 0.9),
+                    do_sample: isStrictRequest ? false : true,
+                },
+                streamedTextPrefix: "", // Will be filled by renderer finalize
+                finalWorkerOutputPrefix: String(generated ?? "").slice(0, 200),
+                cleanedOutputPrefix: String(normalized ?? "").slice(0, 200),
+                timestamp: new Date().toISOString(),
+            };
+
             if (isMeaningfulAssistantReply(normalized, userText)) {
-                return normalized;
+                if (isStrictRequest && !isStrictAnswerCompliant(normalized, userText)) {
+                    console.warn(`[Inference] Rejecting attempt ${index + 1} due to strict answer non-compliance.`, {
+                        label: current.label,
+                        normalized: normalized.slice(0, 100)
+                    });
+                    // Continue to next attempt
+                } else {
+                    console.log(`[Inference] Success on attempt ${index + 1} with prompt: ${current.label}`, {
+                        generatedPreview: String(generated ?? "").slice(0, 160),
+                        normalizedPreview: String(normalized ?? "").slice(0, 160)
+                    });
+                    return normalized;
+                }
             }
             outputsPreview.push({
                 attempt: index + 1,
@@ -13477,6 +13596,119 @@ function isAssistantLabelOnly(text) {
     ].includes(compact);
 }
 
+function isSmolLM2Instruct(modelId) {
+    const id = normalizeLowercase(modelId);
+    return id.includes("smollm2") && id.includes("instruct");
+}
+
+function isThinkingModel(modelId) {
+    if (!modelId) return false;
+    const id = normalizeLowercase(modelId);
+    // Covers Qwen3 Thinking, QWQ, DeepSeek R1, variants with "reasoning" or "distill" (likely R1 distill)
+    return id.includes("thinking") || id.includes("reasoning") || id.includes("qwq") || id.includes("r1") || id.includes("distill");
+}
+
+function detectStrictAnswerRequest(text) {
+    const lower = String(text ?? "").trim().toLowerCase();
+    const markers = [
+        "return only",
+        "reply with only",
+        "just answer",
+        "only the word",
+        "exactly the word",
+        "respond with only",
+        "answer with only",
+        "without extra"
+    ];
+    if (markers.some(m => lower.includes(m))) return true;
+
+    // Check for combined markers like "Respond with ONLY one word."
+    if (lower.includes("only") && (lower.includes("answer") || lower.includes("reply") || lower.includes("respond") || lower.includes("word"))) {
+        return true;
+    }
+
+    return false;
+}
+
+function isStrictAnswerCompliant(reply, originalPrompt) {
+    if (!detectStrictAnswerRequest(originalPrompt)) return true;
+    
+    const text = String(reply ?? "").trim();
+    if (!text) return false;
+    
+    const lower = text.toLowerCase();
+    
+    // Check for "Assistant:" or "User:" in the output (template leak)
+    if (lower.includes("assistant:") || lower.includes("user:")) return false;
+
+    // Phase 3: Reject outputs when they prepend boilerplate or append extra prose
+    const boilerplates = [
+        "the following is",
+        "i am an ai",
+        "sure, here's",
+        "here is the",
+        "as an ai",
+        "certainly!",
+        "okay,",
+        "alright,",
+        "understood,",
+        "here's the",
+        "hope that helps",
+        "is there anything else",
+        "i can assist you with"
+    ];
+    if (boilerplates.some(b => lower.includes(b))) return false;
+    
+    // Phase 3: List drift: reject if it expands into repeated numbered lists
+    if (text.includes("1.") && text.includes("2.") && text.includes("3.")) return false;
+
+    const words = text.split(/\s+/).filter(Boolean).length;
+    
+    // Multi-line outputs for "return only X" are usually failures
+    const lines = text.split("\n").filter(l => l.trim());
+    if (lines.length > 2) return false;
+
+    const lowerPrompt = originalPrompt.toLowerCase();
+    const isOnlyWordRequest = lowerPrompt.includes("only the word") || lowerPrompt.includes("exactly the word") || lowerPrompt.includes("one word");
+
+    // Phase 3: Exact-answer branch for prompts containing "only", "exactly", etc.
+    const exactMatchMarkers = [
+        "only the word", "exactly the word", "reply with only",
+        "answer with only", "respond with only", "return only",
+        "just answer", "exactly the answer"
+    ];
+    
+    if (exactMatchMarkers.some(m => lowerPrompt.includes(m))) {
+        // Pattern: marker + (optional 'the', 'word', 'number') + [target]
+        const escapedMarkers = exactMatchMarkers.map(m => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+        const pattern = new RegExp(`(?:${escapedMarkers})\\s+(?:the\\s+)?(?:(?:word|number)\\s+)?([a-zA-Z0-9]+)`, "i");
+        const match = originalPrompt.match(pattern);
+        if (match && match[1]) {
+            const target = match[1].toLowerCase();
+            // If target is just "word" or "number" or "one", it's likely part of the instruction "Return only word", not the target itself.
+            if (target !== "word" && target !== "number" && target !== "one") {
+                const actual = text.toLowerCase().replace(/[.,!?;:]+$/, "");
+                if (actual !== target) {
+                    console.warn("[Inference] Exact answer mismatch.", { target, actual });
+                    return false;
+                }
+            }
+        }
+    }
+
+    // If we asked for "only the word", be extremely strict on word count.
+    if (isOnlyWordRequest && words > 1) {
+        return false;
+    }
+
+    // Strict compliance usually implies very short answers.
+    if (words > 10) {
+        return false;
+    }
+    
+    return true;
+}
+
 function isMeaningfulAssistantReply(text, userText = "") {
     const value = String(text ?? "").trim();
     if (!value) return false;
@@ -13494,7 +13726,33 @@ function isMeaningfulAssistantReply(text, userText = "") {
     if (!/[A-Za-z0-9가-힣ㄱ-ㅎㅏ-ㅣ一-龥ぁ-ゔァ-ヴー々〆〤]/.test(semanticText)) {
         return false;
     }
+    if (isLikelyUnrelatedCompletion(value, userText)) {
+        return false;
+    }
     return true;
+}
+
+function isLikelyUnrelatedCompletion(text, userText) {
+    const val = String(text ?? "").trim();
+    const user = String(userText ?? "").trim();
+    if (!val) return true;
+    
+    const isShortUser = user.length <= 15 && user.split(/\s+/).length <= 3;
+    if (isShortUser && val.length > 500) {
+        return true;
+    }
+    
+    const tagMatch = val.match(/<\/?[a-zA-Z0-9_-]+>/g);
+    if (tagMatch && tagMatch.length > 5 && val.length < 200) {
+        return true;
+    }
+    
+    const urlMatch = val.match(/https?:\/\/[^\s]+/g);
+    if (isShortUser && urlMatch && urlMatch.length > 2) {
+        return true;
+    }
+    
+    return false;
 }
 
 function isLikelyPromptEchoReply(text, userText = "") {
@@ -13503,6 +13761,17 @@ function isLikelyPromptEchoReply(text, userText = "") {
         .map((line) => String(line ?? "").trim())
         .filter(Boolean);
     if (lines.length === 0) return false;
+
+    // Phase 3 Fix: For strict short-answer requests, a very short response (1-2 words/tokens)
+    // is almost certainly the requested answer, NOT an echo. The standard echo check
+    // uses `normalizedUser.includes(line)` which incorrectly flags '4' as an echo
+    // of a prompt like "...Reply with only 4." — so we bypass the echo check for these.
+    if (detectStrictAnswerRequest(userText)) {
+        const allLinesShort = lines.every(line => line.split(/\s+/).filter(Boolean).length <= 3);
+        if (allLinesShort) {
+            return false;
+        }
+    }
 
     const normalizedUser = normalizePromptText(String(userText ?? "")).toLowerCase();
 
@@ -13513,9 +13782,11 @@ function isLikelyPromptEchoReply(text, userText = "") {
 
     const isEchoLine = (line) => {
         if (!line) return true;
-        if (normalizedUser && (line === normalizedUser || normalizedUser.includes(line) || line.includes(normalizedUser))) {
+        if (normalizedUser && (line === normalizedUser || line.includes(normalizedUser))) {
             return true;
         }
+        // Only flag as echo if the reply line itself includes the FULL user prompt,
+        // NOT if the user prompt merely contains the reply line (which would false-positive on short answers).
         return false;
     };
 
@@ -13700,8 +13971,8 @@ function addMessage(role, text, options = {}) {
         text: String(text ?? ""),
         reasoning: null,
         at: new Date().toISOString(),
-        tokenPerSecond: Number.isFinite(Number(options.tokenPerSecond)) ? Number(options.tokenPerSecond) : null,
-        tokenCount: Number.isFinite(Number(options.tokenCount)) ? Number(options.tokenCount) : null,
+        tokenPerSecond: toFiniteNumber(options.tokenPerSecond, null),
+        tokenCount: toFiniteNumber(options.tokenCount, null),
         tokenSpeedSamples: [],
     };
     state.messages.push(entry);
@@ -13957,7 +14228,7 @@ async function maybeApplyGenerationDefaultsFromModel({ modelId, revision, modelS
             const file = await readOpfsModelFileByRelativePath(path);
             if (file) {
                 const text = await file.text();
-                configData = JSON.parse(text);
+                configData = safeJsonParse(text, null);
                 successfulPath = path;
                 break;
             }
@@ -14006,7 +14277,7 @@ async function maybeApplyGenerationDefaultsFromModel({ modelId, revision, modelS
     if (changed) {
         setLocalGenerationSettings(next);
         renderLlmDraftStatus();
-        showToast(t(I18N_KEYS.TOAST_MODEL_DEFAULTS_APPLIED, { model: modelId }), "info", 3000);
+        showToast(t(I18N_KEYS.TOAST_MODEL_DEFAULTS_APPLIED, { model: modelId }), "info", TOAST_MS.INFO);
     }
 
     bootstrapMap[bootstrapKey] = {
@@ -14031,9 +14302,9 @@ function getOpfsManifest() {
             modelId: isValidModelId(value.modelId) ? normalizeModelId(value.modelId) : "",
             fileUrl: String(value.fileUrl ?? ""),
             downloadedAt: String(value.downloadedAt ?? ""),
-            sizeBytes: Number.isFinite(Number(value.sizeBytes)) ? Number(value.sizeBytes) : null,
-            task: typeof value.task === "string" ? value.task : "-",
-            downloads: Number.isFinite(Number(value.downloads)) ? Number(value.downloads) : null,
+            sizeBytes: toFiniteNumber(value.sizeBytes, null),
+            task: asString(value.task, "-"),
+            downloads: toFiniteNumber(value.downloads, null),
             revision: typeof value.revision === "string" && value.revision.trim() ? value.revision.trim() : "main",
             downloadStatus: typeof value.downloadStatus === "string" && value.downloadStatus.trim()
                 ? value.downloadStatus.trim()
@@ -14135,6 +14406,11 @@ function showToast(message, kind = "info", duration = 3000, options = {}) {
     }, duration);
 }
 
+function showErrorToast(error, msg = "") {
+    const finalMsg = msg || getErrorMessage(error) || t(I18N_KEYS.DIALOG_ERROR_MESSAGE);
+    showToast(finalMsg, "error", TOAST_MS.ERROR);
+}
+
 function upsertOpfsManifestEntry(entry) {
     const normalizedFileName = normalizeOnnxFileName(entry?.fileName ?? "");
     if (!normalizedFileName) return;
@@ -14147,9 +14423,9 @@ function upsertOpfsManifestEntry(entry) {
         modelId: isValidModelId(entry?.modelId) ? normalizeModelId(entry.modelId) : "",
         fileUrl: String(entry?.fileUrl ?? ""),
         downloadedAt: String(entry?.downloadedAt || new Date().toISOString()),
-        sizeBytes: Number.isFinite(Number(entry?.sizeBytes)) ? Number(entry.sizeBytes) : null,
-        task: typeof entry?.task === "string" ? entry.task : "-",
-        downloads: Number.isFinite(Number(entry?.downloads)) ? Number(entry.downloads) : null,
+        sizeBytes: toFiniteNumber(entry?.sizeBytes, null),
+        task: asString(entry?.task, "-"),
+        downloads: toFiniteNumber(entry?.downloads, null),
         revision: typeof entry?.revision === "string" && entry.revision.trim() ? entry.revision.trim() : "main",
         downloadStatus: typeof entry?.downloadStatus === "string" && entry.downloadStatus.trim()
             ? entry.downloadStatus.trim()
@@ -14204,4 +14480,12 @@ function removeOpfsManifestEntriesByPrefix(prefixPath) {
 
 /* Bootstrap must run after module evaluation to avoid TDZ on later let/const declarations. */
 scheduleBootstrapApplication();
+
+export {
+    isSmolLM2Instruct,
+    detectStrictAnswerRequest,
+    isStrictAnswerCompliant,
+    shouldPreferMessagesPromptOnly,
+    buildForcedAnswerPrompt
+};
 

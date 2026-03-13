@@ -13,7 +13,21 @@
     <link rel="dns-prefetch" href="https://api.github.com">
     <link rel="dns-prefetch" href="https://huggingface.co">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
-    <link rel="modulepreload" href="./script/main.js">
+    <link rel="modulepreload" href="./script/bootstrap.js">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap">
+    <script id="lucid-early-init">
+        // [Lucid] Early language and theme initialization to prevent flash of content/direction
+        (function() {
+            try {
+                const lang = localStorage.getItem('lucid_language') || 'en';
+                document.documentElement.lang = lang;
+                const theme = localStorage.getItem('lucid_theme') || 'dark';
+                document.documentElement.setAttribute('data-theme', theme);
+                const scale = localStorage.getItem('lucid_font_scale') || '1';
+                document.documentElement.style.setProperty('--font-scale', scale);
+            } catch (e) {}
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -58,6 +72,7 @@
             --panel: rgba(10, 16, 34, 0.8);
             --border: rgba(133, 167, 218, 0.24);
             --font-scale: 1;
+            --scrollbar-thumb: rgba(148, 163, 184, 0.45);
         }
 
         html {
@@ -67,6 +82,7 @@
         :root[data-theme="light"] {
             --panel: rgba(255, 255, 255, 0.96);
             --border: rgba(100, 116, 139, 0.65);
+            --scrollbar-thumb: #cbd5e1;
         }
 
         :root[data-theme="oled"] {
@@ -77,6 +93,7 @@
         :root[data-theme="high-contrast"] {
             --panel: #000000;
             --border: #ffffff;
+            --scrollbar-thumb: #ffffff;
         }
 
         ::-webkit-scrollbar {
@@ -89,16 +106,8 @@
         }
 
         ::-webkit-scrollbar-thumb {
-            background: rgba(148, 163, 184, 0.45);
+            background: var(--scrollbar-thumb);
             border-radius: 99px;
-        }
-
-        :root[data-theme="light"] ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-        }
-
-        :root[data-theme="high-contrast"] ::-webkit-scrollbar-thumb {
-            background: #ffffff;
         }
 
         .llm-stream-cursor::after {
@@ -207,7 +216,12 @@
             box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
         }
     </style>
-    <script defer="defer" src="https://unpkg.com/lucide@0.454.0"></script>
+    <style type="text/tailwindcss">
+        .settings-tab-btn {
+            @apply inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4];
+        }
+    </style>
+    <script async src="./script/lucide.min.js"></script>
 </head>
 
 <body
@@ -402,37 +416,37 @@
                     class="w-[72px] md:w-[280px] shrink-0 border-r border-slate-700/70 bg-slate-900 p-3 md:p-4 overflow-y-auto light:bg-slate-100 light:border-slate-400 oled:bg-black oled:border-[#1f1f1f]"
                     data-i18n-aria-label="settings.menu_label">
                     <nav class="space-y-2" data-i18n-aria-label="settings.tabs_label"> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="settings-tab-btn"
                             data-settings-tab-btn="model" aria-selected="true" aria-controls="settings-panel-model"
                             data-i18n-aria-label="common.model_management" data-i18n-title="common.model_management"> <i
                                 data-lucide="box" class="w-5 h-5 shrink-0 pointer-events-none"></i>
                             <span class="sr-only" data-i18n="common.model_management"></span>
                         </button> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="settings-tab-btn"
                             data-settings-tab-btn="llm" aria-selected="false" aria-controls="settings-panel-llm"
                             data-i18n-aria-label="common.llm_settings" data-i18n-title="common.llm_settings"> <i
                                 data-lucide="sliders-horizontal" class="w-5 h-5 shrink-0 pointer-events-none"></i> <span
                                 class="sr-only" data-i18n="common.llm_settings"></span> </button> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="settings-tab-btn"
                             data-settings-tab-btn="profile" aria-selected="false" aria-controls="settings-panel-profile"
                             data-i18n-aria-label="common.profile" data-i18n-title="common.profile"> <i
                                 data-lucide="user-round" class="w-5 h-5 shrink-0 pointer-events-none"></i>
                             <span class="sr-only" data-i18n="common.profile"></span>
                         </button> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="settings-tab-btn"
                             data-settings-tab-btn="theme" aria-selected="false" aria-controls="settings-panel-theme"
                             data-i18n-aria-label="common.theme" data-i18n-title="common.theme"> <i data-lucide="palette"
                                 class="w-5 h-5 shrink-0 pointer-events-none"></i> <span class="sr-only"
                                 data-i18n="common.theme"></span>
                         </button> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="settings-tab-btn"
                             data-settings-tab-btn="language" aria-selected="false"
                             aria-controls="settings-panel-language" data-i18n-aria-label="common.language"
                             data-i18n-title="common.language">
                             <i data-lucide="languages" class="w-5 h-5 shrink-0 pointer-events-none"></i> <span
                                 class="sr-only" data-i18n="common.language"></span>
                         </button> <button type="button"
-                            class="inline-flex w-full min-h-[48px] items-center justify-center p-0 rounded-xl border border-slate-500/50 bg-slate-900/40 text-slate-300 transition-colors duration-150 hover:bg-slate-800/75 hover:border-sky-300/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/55 light:bg-slate-100 light:border-slate-400 light:text-slate-900 light:hover:bg-slate-200 light:hover:border-sky-600 oled:bg-black oled:border-[#2a2a2a] oled:text-[#c4c4c4] [&[aria-selected='true']]:bg-cyan-400/20 [&[aria-selected='true']]:border-cyan-400/80 [&[aria-selected='true']]:text-cyan-100 light:[&[aria-selected='true']]:bg-blue-100 light:[&[aria-selected='true']]:border-sky-600 light:[&[aria-selected='true']]:text-sky-900 oled:[&[aria-selected='true']]:bg-black oled:[&[aria-selected='true']]:border-slate-600 oled:[&[aria-selected='true']]:text-[#d4d4d4]"
+                            class="settings-tab-btn"
                             data-settings-tab-btn="backup" aria-selected="false" aria-controls="settings-panel-backup"
                             data-i18n-aria-label="common.backup_and_restore"
                             data-i18n-title="common.backup_and_restore"> <i data-lucide="hard-drive-upload"
@@ -464,7 +478,8 @@
                                     class="w-full bg-slate-950/70 light:bg-white light:border-slate-300 light:text-slate-900 oled:bg-[#111] oled:border-[#333] border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:border-cyan-400"
                                     data-i18n-placeholder="model.input_placeholder" autocomplete="off"> <button
                                     id="model-fetch-btn"
-                                    class="inline-flex items-center justify-center gap-2 bg-cyan-500/20 border border-cyan-300/40 hover:bg-cyan-500/35 rounded-xl px-5 py-3 text-sm font-semibold">
+                                    class="inline-flex items-center justify-center gap-2 bg-cyan-500/20 border border-cyan-300/40 hover:bg-cyan-500/35 rounded-xl px-5 py-3 text-sm font-semibold"
+                                    type="button">
                                     <i data-lucide="search-check" class="w-4 h-4"></i> <span id="model-fetch-btn-label"
                                         data-i18n="model.fetch_btn"></span> </button> </form>
 
@@ -524,7 +539,7 @@
                                         data-i18n-aria-label="model.download.quant_label" disabled="disabled">
                                         <option value="" data-i18n="model.download.quant_none"></option>
                                     </select> </div>
-                                <div class="flex flex-wrap gap-2"> <button id="download-start-btn"
+                                <div class="flex flex-wrap gap-2"> <button id="download-start-btn" type="button"
                                         class="inline-flex items-center gap-2 border border-cyan-300/35 hover:bg-cyan-500/15 rounded-lg px-3 py-2 text-xs disabled:opacity-50"
                                         disabled="disabled"> <i data-lucide="download" class="w-4 h-4"></i> <span
                                             id="download-start-btn-label" data-i18n="common.download"></span> </button>
@@ -877,22 +892,21 @@
                         <article
                             class="rounded-xl border border-slate-700/70 bg-slate-950/45 light:bg-white light:border-slate-200 oled:bg-[#0a0a0a] oled:border-[#1f1f1f] p-4 space-y-3">
                             <h2 id="font-scale-title"
-                                class="text-sm font-semibold text-cyan-100 light:text-sky-700 oled:text-[#eee]"
-                                data-i18n="settings.font_scale_title">폰트 크기</h2>
+                            class="text-sm font-semibold text-cyan-100 light:text-sky-700 oled:text-[#eee]"
+                            data-i18n="settings.font_scale_title"></h2>
                             <div class="space-y-2">
-                                <div class="flex items-center justify-between gap-2 text-xs">
-                                    <label for="font-scale-input"
-                                        class="text-slate-300 light:text-slate-600 oled:text-[#aaa]"
-                                        data-i18n="settings.font_scale_label">UI 폰트 크기</label>
-                                    <span id="font-scale-value"
-                                        class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">100%</span>
-                                </div>
-                                <input id="font-scale-input" type="range" min="0.75" max="1.5" step="0.05" value="1"
-                                    class="w-full">
-                                <p class="text-[0.6875rem] text-slate-400 light:text-slate-500 oled:text-[#888]"
-                                    data-i18n="settings.font_scale_hint">75% ~ 150% 범위에서 조절 가능합니다.</p>
+                            <div class="flex items-center justify-between gap-2 text-xs">
+                                <label for="font-scale-input"
+                                    class="text-slate-300 light:text-slate-600 oled:text-[#aaa]"
+                                    data-i18n="settings.font_scale_label"></label>
+                                <span id="font-scale-value"
+                                    class="text-cyan-100 light:text-sky-700 oled:text-[#eee]">100%</span>
                             </div>
-                        </article>
+                            <input id="font-scale-input" type="range" min="0.75" max="1.5" step="0.05" value="1"
+                                class="w-full">
+                            <p class="text-[0.6875rem] text-slate-400 light:text-slate-500 oled:text-[#888]"
+                                data-i18n="settings.font_scale_hint"></p>
+                            </div>                        </article>
                     </section>
                     <section id="settings-panel-language" data-settings-panel="language"
                         class="hidden h-full overflow-y-auto p-4 md:p-5 space-y-4"
@@ -1124,10 +1138,10 @@
             <div class="flex items-center justify-between mb-4">
                 <h2 id="shortcut-help-title"
                     class="text-base font-semibold text-slate-100 light:text-slate-900 oled:text-[#e0e0e0]"
-                    data-i18n="shortcut_help.title">키보드 단축키</h2>
+                    data-i18n="shortcut_help.title"></h2>
                 <button id="shortcut-help-close-btn" type="button"
                     class="rounded-lg p-1.5 hover:bg-slate-700/50 text-slate-400 hover:text-slate-200 transition-colors light:hover:bg-slate-200 light:text-slate-500 light:hover:text-slate-700"
-                    aria-label="Close">
+                    data-i18n-aria-label="common.close">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -1158,7 +1172,7 @@
                 </div>
                 <button id="changelog-modal-close-btn"
                     class="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-colors light:text-slate-500 light:hover:text-slate-700 light:hover:bg-slate-100"
-                    aria-label="Close">
+                    data-i18n-aria-label="common.close">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
