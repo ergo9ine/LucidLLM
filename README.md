@@ -3,7 +3,7 @@
 [한국어](docs/README.ko.md) | [English](README.md) | [日本語](docs/README.ja.md) | [简体中文](docs/README.zh-CN.md)
 
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
-![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0--next.1-yellow)
+![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0--next.6-yellow)
 ![WebGPU](https://img.shields.io/badge/WebGPU-Supported-green)
 ![PWA](https://img.shields.io/badge/PWA-Ready-brightgreen)
 
@@ -113,11 +113,15 @@ These models have been tested and verified to work correctly in LucidLLM:
 
 ```
 index.html → bootstrap.js (entry)
-               ├─ i18n.js           Translations (511 keys × 4 languages, ~2,700 lines)
-               ├─ shared-utils.js   Pure utilities & constants (50 exports, ~1,000 lines)
-               └─ main.js           Core: UI, state, OPFS, inference orchestration (~12,600 lines)
-                    ├─ drive-backup.js   AES-GCM encrypt/decrypt, gzip, Drive payload format (~300 lines)
-                    └─ worker.js         Web Worker — Transformers.js pipeline, OPFS fetch interception (~540 lines)
+               ├─ constants.js          Shared constants & enums (no imports, ~121 lines)
+               ├─ i18n-keys.js          i18n key definitions (~589 lines)
+               ├─ i18n.js              Translations (4 languages, ~217 lines) + locales/
+               ├─ shared-utils.js      Pure utilities & constants (50+ exports, ~583 lines)
+               ├─ shared-utils-i18n.js i18n-aware shared utilities (~41 lines)
+               └─ main.js              Core: UI, state, OPFS, inference orchestration (~12,829 lines)
+                    ├─ opfs-utils.js       OPFS file system utilities (~397 lines)
+                    ├─ drive-backup.js     AES-GCM encrypt/decrypt, gzip, Drive payload format (~267 lines)
+                    └─ worker.js           Web Worker — Transformers.js pipeline, OPFS fetch interception (~626 lines)
 ```
 
 - **No build step.** All source files are native ES Modules served directly
@@ -126,6 +130,7 @@ index.html → bootstrap.js (entry)
 - **`window.LucidApp`** exposes a public debug/API surface for console access
 - **Web Worker** handles model loading and inference in a separate thread; communicates via `postMessage` protocol with typed message enums (`WORKER_MSG`)
 - **`window.fetch` monkey-patch** in Worker intercepts Hugging Face URLs to serve from OPFS cache first
+- **`constants.js`** is a zero-import module isolating all shared constants to prevent circular dependencies
 
 ## 📋 Requirements
 
@@ -265,12 +270,16 @@ Access the app state and API via `window.LucidApp` in the browser console for de
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `script/bootstrap.js` | ~106 | Startup, early i18n, Service Worker registration |
-| `script/main.js` | ~12,600 | Core logic, state machine, UI rendering, OPFS management |
-| `script/i18n.js` | ~2,700 | 511 translation keys × 4 languages (ko/en/ja/zh-CN) |
-| `script/shared-utils.js` | ~1,000 | 50 pure utility functions and constants |
-| `script/worker.js` | ~540 | Web Worker for Transformers.js inference pipeline |
-| `script/drive-backup.js` | ~300 | AES-GCM encryption, gzip compression, Drive API helpers |
+| `script/bootstrap.js` | ~116 | Startup, early i18n, Service Worker registration |
+| `script/constants.js` | ~121 | Shared constants & enums (zero-import module) |
+| `script/i18n-keys.js` | ~589 | i18n key definitions (single source of truth) |
+| `script/i18n.js` | ~217 | Translation loader (ko/en/ja/zh-CN) + locales/ |
+| `script/shared-utils.js` | ~583 | 50+ pure utility functions and constants |
+| `script/shared-utils-i18n.js` | ~41 | i18n-aware shared utility wrappers |
+| `script/main.js` | ~12,829 | Core logic, state machine, UI rendering, OPFS management |
+| `script/opfs-utils.js` | ~397 | OPFS file system helpers and utilities |
+| `script/worker.js` | ~626 | Web Worker for Transformers.js inference pipeline |
+| `script/drive-backup.js` | ~267 | AES-GCM encryption, gzip compression, Drive API helpers |
 
 ## 🛠️ Tech Stack
 
@@ -278,17 +287,16 @@ Access the app state and API via `window.LucidApp` in the browser console for de
 |----------|------------|
 | **Language** | JavaScript (ES2020+ Modules) |
 | **Architecture** | Zero-build, Vanilla JS, No Framework, No npm dependencies |
-| **ML Framework** | Transformers.js v4.0.0-next.1 |
+| **ML Framework** | Transformers.js v4.0.0-next.6 |
 | **Model Format** | ONNX (with external data support) |
 | **Inference Backend** | WebGPU / WASM (automatic fallback) |
 | **Storage** | Origin Private File System (OPFS), localStorage |
 | **Encryption** | Web Crypto API (PBKDF2 + AES-GCM-256) |
 | **Compression** | CompressionStream API (Gzip) |
 | **Styling** | Tailwind CSS v3 (CDN) + Custom CSS Variables |
-| **Icons** | Lucide Icons (CDN) |
+| **Icons** | Lucide Icons (self-hosted) |
 | **Fonts** | Space Grotesk (Google Fonts) |
 | **Auth** | Google Identity Services (OAuth 2.0) |
-| **CDN** | jsDelivr, unpkg |
 | **Testing** | Vitest (unit), Playwright (E2E) |
 
 ## 🔒 Security & Privacy
@@ -303,15 +311,21 @@ Access the app state and API via `window.LucidApp` in the browser console for de
 ```
 LucidLLM/
 ├── index.html                  # Main HTML entry point (1,200+ lines)
-├── sw.js                       # Service Worker (PWA cache, v1.2.0)
+├── sw.js                       # Service Worker (PWA cache)
 ├── _headers                    # Cloudflare Pages COOP/COEP headers
 ├── script/
 │   ├── bootstrap.js            # App initialization & early i18n
+│   ├── constants.js            # Shared constants & enums (zero-import)
 │   ├── main.js                 # Core logic, state, UI rendering
+│   ├── i18n-keys.js            # i18n key definitions
 │   ├── i18n.js                 # i18n module (ko/en/ja/zh-CN)
 │   ├── shared-utils.js         # Shared utilities & global API
+│   ├── shared-utils-i18n.js    # i18n-aware utility wrappers
+│   ├── opfs-utils.js           # OPFS file system utilities
 │   ├── worker.js               # Web Worker for inference
-│   └── drive-backup.js         # Encrypted Google Drive backup
+│   ├── drive-backup.js         # Encrypted Google Drive backup
+│   ├── lucide.min.js           # Self-hosted Lucide icons
+│   └── locales/                # Language locale files
 ├── vendor/
 │   └── transformers/           # Self-hosted Transformers.js + ONNX Runtime WASM
 ├── test/                       # Vitest unit tests
@@ -322,7 +336,7 @@ LucidLLM/
 │   ├── compatibility.md        # Verified model list & QA criteria
 │   └── roadmap.md              # Feature roadmap
 ├── favicon.svg                 # App icon
-└── package.json                # NPM config (zero dependencies)
+└── package.json                # NPM config (zero app dependencies)
 ```
 
 ## 🤝 Contributing

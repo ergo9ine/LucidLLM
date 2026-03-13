@@ -3,7 +3,7 @@
 [한국어](README.ko.md) | [English](../README.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
 
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
-![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0--next.1-yellow)
+![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0--next.6-yellow)
 ![WebGPU](https://img.shields.io/badge/WebGPU-Supported-green)
 ![PWA](https://img.shields.io/badge/PWA-Ready-brightgreen)
 
@@ -113,11 +113,15 @@
 
 ```
 index.html → bootstrap.js (入口)
-               ├─ i18n.js           翻译 (511键 × 4种语言, ~2,700行)
-               ├─ shared-utils.js   纯工具函数 & 常量 (50个导出, ~1,000行)
-               └─ main.js           核心: UI, 状态, OPFS, 推理编排 (~12,600行)
-                    ├─ drive-backup.js   AES-GCM 加解密, gzip, Drive 载荷格式 (~300行)
-                    └─ worker.js         Web Worker — Transformers.js 流水线, OPFS fetch 拦截 (~540行)
+               ├─ constants.js          共享常量 & 枚举 (零导入模块, ~121行)
+               ├─ i18n-keys.js          i18n键定义 (~589行)
+               ├─ i18n.js              翻译加载器 (4种语言, ~217行) + locales/
+               ├─ shared-utils.js      纯工具函数 & 常量 (50个+导出, ~583行)
+               ├─ shared-utils-i18n.js i18n联动工具函数 (~41行)
+               └─ main.js              核心: UI, 状态, OPFS, 推理编排 (~12,829行)
+                    ├─ opfs-utils.js       OPFS文件系统工具 (~397行)
+                    ├─ drive-backup.js     AES-GCM 加解密, gzip, Drive 载荷格式 (~267行)
+                    └─ worker.js           Web Worker — Transformers.js 流水线, OPFS fetch 拦截 (~626行)
 ```
 
 - **零构建。** 所有源文件作为原生 ES 模块直接提供
@@ -126,6 +130,7 @@ index.html → bootstrap.js (入口)
 - **`window.LucidApp`** 提供控制台访问的公共调试/API 接口
 - **Web Worker** 在独立线程处理模型加载和推理，通过类型化消息枚举（`WORKER_MSG`）的 `postMessage` 协议通信
 - **Worker 内 `window.fetch` 猴子补丁**拦截 Hugging Face URL，优先从 OPFS 缓存提供服务
+- **`constants.js`** 是防止循环依赖的零导入共享常量模块
 
 ## 📋 系统要求
 
@@ -265,12 +270,16 @@ npx playwright test        # E2E 测试（Chromium，需下载真实模型）
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `script/bootstrap.js` | ~106 | 启动流程、初始 i18n、Service Worker 注册 |
-| `script/main.js` | ~12,600 | 核心逻辑、状态机、UI 渲染、OPFS 管理 |
-| `script/i18n.js` | ~2,700 | 511 个翻译键 × 4 种语言 (ko/en/ja/zh-CN) |
-| `script/shared-utils.js` | ~1,000 | 50 个纯工具函数和常量 |
-| `script/worker.js` | ~540 | Transformers.js 推理流水线 Web Worker |
-| `script/drive-backup.js` | ~300 | AES-GCM 加密、gzip 压缩、Drive API 辅助 |
+| `script/bootstrap.js` | ~116 | 启动流程、初始 i18n、Service Worker 注册 |
+| `script/constants.js` | ~121 | 共享常量 & 枚举（零导入模块） |
+| `script/i18n-keys.js` | ~589 | i18n 键定义（单一真实来源） |
+| `script/i18n.js` | ~217 | 翻译加载器 (ko/en/ja/zh-CN) + locales/ |
+| `script/shared-utils.js` | ~583 | 50个+纯工具函数和常量 |
+| `script/shared-utils-i18n.js` | ~41 | i18n 联动工具函数包装器 |
+| `script/main.js` | ~12,829 | 核心逻辑、状态机、UI 渲染、OPFS 管理 |
+| `script/opfs-utils.js` | ~397 | OPFS 文件系统助手和工具函数 |
+| `script/worker.js` | ~626 | Transformers.js 推理流水线 Web Worker |
+| `script/drive-backup.js` | ~267 | AES-GCM 加密、gzip 压缩、Drive API 辅助 |
 
 ## 🛠️ 技术栈
 
@@ -278,17 +287,16 @@ npx playwright test        # E2E 测试（Chromium，需下载真实模型）
 |------|------|
 | **语言** | JavaScript (ES2020+ Modules) |
 | **架构** | 零构建、原生 JS、无框架、零 npm 依赖 |
-| **ML框架** | Transformers.js v4.0.0-next.1 |
+| **ML框架** | Transformers.js v4.0.0-next.6 |
 | **模型格式** | ONNX（含外部数据支持） |
 | **推理后端** | WebGPU / WASM（自动切换） |
 | **存储** | Origin Private File System (OPFS)、localStorage |
 | **加密** | Web Crypto API (PBKDF2 + AES-GCM-256) |
 | **压缩** | CompressionStream API (Gzip) |
 | **样式** | Tailwind CSS v3 (CDN) + CSS 自定义属性 |
-| **图标** | Lucide Icons (CDN) |
+| **图标** | Lucide Icons (自托管) |
 | **字体** | Space Grotesk (Google Fonts) |
 | **认证** | Google Identity Services (OAuth 2.0) |
-| **CDN** | jsDelivr、unpkg |
 | **测试** | Vitest（单元测试）、Playwright（E2E） |
 
 ## 🔒 安全与隐私
@@ -303,15 +311,21 @@ npx playwright test        # E2E 测试（Chromium，需下载真实模型）
 ```
 LucidLLM/
 ├── index.html                  # 主 HTML 入口 (1,200+ 行)
-├── sw.js                       # Service Worker (PWA 缓存, v1.2.0)
+├── sw.js                       # Service Worker (PWA 缓存)
 ├── _headers                    # Cloudflare Pages COOP/COEP 头部
 ├── script/
 │   ├── bootstrap.js            # 应用初始化和初始 i18n
+│   ├── constants.js            # 共享常量 & 枚举（零导入模块）
 │   ├── main.js                 # 核心逻辑、状态、UI 渲染
+│   ├── i18n-keys.js            # i18n 键定义
 │   ├── i18n.js                 # 多语言模块 (ko/en/ja/zh-CN)
 │   ├── shared-utils.js         # 公共工具函数和全局 API
+│   ├── shared-utils-i18n.js    # i18n 联动工具函数包装器
+│   ├── opfs-utils.js           # OPFS 文件系统工具函数
 │   ├── worker.js               # 推理用 Web Worker
-│   └── drive-backup.js         # 加密的 Google Drive 备份
+│   ├── drive-backup.js         # 加密的 Google Drive 备份
+│   ├── lucide.min.js           # 自托管 Lucide 图标
+│   └── locales/                # 各语言本地化文件
 ├── vendor/
 │   └── transformers/           # 自托管 Transformers.js + ONNX Runtime WASM
 ├── test/                       # Vitest 单元测试
@@ -322,7 +336,7 @@ LucidLLM/
 │   ├── compatibility.md        # 已验证模型列表和 QA 标准
 │   └── roadmap.md              # 功能路线图
 ├── favicon.svg                 # 应用图标
-└── package.json                # NPM 配置（零依赖）
+└── package.json                # NPM 配置（应用层零依赖）
 ```
 
 ## 🤝 参与贡献

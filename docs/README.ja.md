@@ -3,7 +3,7 @@
 [한국어](README.ko.md) | [English](../README.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
 
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
-![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0--next.1-yellow)
+![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0--next.6-yellow)
 ![WebGPU](https://img.shields.io/badge/WebGPU-Supported-green)
 ![PWA](https://img.shields.io/badge/PWA-Ready-brightgreen)
 
@@ -113,11 +113,15 @@ LucidLLMで正常に動作することが確認されたモデルの一覧です
 
 ```
 index.html → bootstrap.js (エントリ)
-               ├─ i18n.js           翻訳 (511キー × 4言語, ~2,700行)
-               ├─ shared-utils.js   純粋ユーティリティ & 定数 (50エクスポート, ~1,000行)
-               └─ main.js           コア: UI, 状態, OPFS, 推論オーケストレーション (~12,600行)
-                    ├─ drive-backup.js   AES-GCM暗復号化, gzip, Driveペイロード形式 (~300行)
-                    └─ worker.js         Web Worker — Transformers.jsパイプライン, OPFS fetchインターセプト (~540行)
+               ├─ constants.js          共有定数 & 列挙型 (ゼロインポートモジュール, ~121行)
+               ├─ i18n-keys.js          i18nキー定義 (~589行)
+               ├─ i18n.js              翻訳ローダー (4言語, ~217行) + locales/
+               ├─ shared-utils.js      純粋ユーティリティ & 定数 (50個+エクスポート, ~583行)
+               ├─ shared-utils-i18n.js i18n連携ユーティリティ (~41行)
+               └─ main.js              コア: UI, 状態, OPFS, 推論オーケストレーション (~12,829行)
+                    ├─ opfs-utils.js       OPFSファイルシステムユーティリティ (~397行)
+                    ├─ drive-backup.js     AES-GCM暗復号化, gzip, Driveペイロード形式 (~267行)
+                    └─ worker.js           Web Worker — Transformers.jsパイプライン, OPFS fetchインターセプト (~626行)
 ```
 
 - **ビルド不要。** すべてのソースファイルがネイティブESモジュールとして直接サーブされます
@@ -126,6 +130,7 @@ index.html → bootstrap.js (エントリ)
 - **`window.LucidApp`**がコンソールアクセス用の公開デバッグ/APIインターフェースを提供します
 - **Web Worker**が別スレッドでモデルの読み込みと推論を処理し、型付きメッセージ列挙型（`WORKER_MSG`）を通じた`postMessage`プロトコルで通信します
 - **Worker内の`window.fetch`モンキーパッチ**がHugging Face URLをインターセプトし、OPFSキャッシュから優先サーブします
+- **`constants.js`**は循環依存を防ぐためのゼロインポート共有定数モジュールです
 
 ## 📋 システム要件
 
@@ -141,7 +146,7 @@ index.html → bootstrap.js (エントリ)
 ### ハードウェア推奨スペック
 
 | 項目 | 最小スペック | 推奨スペック |
-|------|--------------|--------------|
+|------|-------------|-------------|
 | **RAM** | 4 GB | 8 GB以上 |
 | **ストレージ** | モデルあたり100 MB〜5 GB | SSD推奨 |
 | **GPU** | 内蔵グラフィックス | WebGPU対応の外付けグラフィックス |
@@ -187,7 +192,7 @@ npx serve -s . -l 3000    # http://localhost:3000 で起動
 **設定 → LLM**で以下の項目を調整できます：
 
 | 設定 | デフォルト値 | 説明 |
-|------|--------------|------|
+|------|-------------|------|
 | **システムプロンプト** | "You are a helpful assistant." | AIの役割と性格を定義します |
 | **最大出力トークン** | 512 | 1回の応答で生成する最大長を制限します |
 | **コンテキストウィンドウ** | 8k | モデルが記憶できる会話の長さを設定します |
@@ -265,12 +270,16 @@ npx playwright test        # E2Eテスト（Chromium、実モデルダウンロ�
 
 | ファイル | 行数 | 役割 |
 |----------|------|------|
-| `script/bootstrap.js` | ~106 | 起動処理、初期i18n、Service Worker登録 |
-| `script/main.js` | ~12,600 | コアロジック、状態マシン、UIレンダリング、OPFS管理 |
-| `script/i18n.js` | ~2,700 | 511翻訳キー × 4言語 (ko/en/ja/zh-CN) |
-| `script/shared-utils.js` | ~1,000 | 50個の純粋ユーティリティ関数と定数 |
-| `script/worker.js` | ~540 | Transformers.js推論パイプラインWeb Worker |
-| `script/drive-backup.js` | ~300 | AES-GCM暗号化、gzip圧縮、Drive APIヘルパー |
+| `script/bootstrap.js` | ~116 | 起動処理、初期i18n、Service Worker登録 |
+| `script/constants.js` | ~121 | 共有定数 & 列挙型（ゼロインポートモジュール） |
+| `script/i18n-keys.js` | ~589 | i18nキー定義（単一の真実の情報源） |
+| `script/i18n.js` | ~217 | 翻訳ローダー (ko/en/ja/zh-CN) + locales/ |
+| `script/shared-utils.js` | ~583 | 50個+の純粋ユーティリティ関数と定数 |
+| `script/shared-utils-i18n.js` | ~41 | i18n連携ユーティリティラッパー |
+| `script/main.js` | ~12,829 | コアロジック、状態マシン、UIレンダリング、OPFS管理 |
+| `script/opfs-utils.js` | ~397 | OPFSファイルシステムヘルパーとユーティリティ |
+| `script/worker.js` | ~626 | Transformers.js推論パイプラインWeb Worker |
+| `script/drive-backup.js` | ~267 | AES-GCM暗号化、gzip圧縮、Drive APIヘルパー |
 
 ## 🛠️ 技術スタック
 
@@ -278,17 +287,16 @@ npx playwright test        # E2Eテスト（Chromium、実モデルダウンロ�
 |----------|------|
 | **言語** | JavaScript (ES2020+ Modules) |
 | **アーキテクチャ** | Zero-build, Vanilla JS, No Framework, npm依存関係ゼロ |
-| **MLフレームワーク** | Transformers.js v4.0.0-next.1 |
+| **MLフレームワーク** | Transformers.js v4.0.0-next.6 |
 | **モデル形式** | ONNX（外部データサポート含む） |
 | **推論バックエンド** | WebGPU / WASM (自動切り替え) |
 | **ストレージ** | Origin Private File System (OPFS), localStorage |
 | **暗号化** | Web Crypto API (PBKDF2 + AES-GCM-256) |
 | **圧縮** | CompressionStream API (Gzip) |
 | **スタイリング** | Tailwind CSS v3 (CDN) + Custom CSS Variables |
-| **アイコン** | Lucide Icons (CDN) |
+| **アイコン** | Lucide Icons (セルフホスト) |
 | **フォント** | Space Grotesk (Google Fonts) |
 | **認証** | Google Identity Services (OAuth 2.0) |
-| **CDN** | jsDelivr, unpkg |
 | **テスト** | Vitest（ユニット）、Playwright（E2E） |
 
 ## 🔒 セキュリティとプライバシー
@@ -303,15 +311,21 @@ npx playwright test        # E2Eテスト（Chromium、実モデルダウンロ�
 ```
 LucidLLM/
 ├── index.html                  # メインHTMLエントリーポイント (1,200行以上)
-├── sw.js                       # サービスワーカー (PWAキャッシュ, v1.2.0)
+├── sw.js                       # サービスワーカー (PWAキャッシュ)
 ├── _headers                    # Cloudflare Pages COOP/COEP ヘッダー
 ├── script/
 │   ├── bootstrap.js            # アプリ初期化と初期i18n
+│   ├── constants.js            # 共有定数 & 列挙型 (ゼロインポート)
 │   ├── main.js                 # コアロジック、状態、UIレンダリング
+│   ├── i18n-keys.js            # i18nキー定義
 │   ├── i18n.js                 # 多言語モジュール (ko/en/ja/zh-CN)
 │   ├── shared-utils.js         # 共通ユーティリティとグローバルAPI
+│   ├── shared-utils-i18n.js    # i18n連携ユーティリティラッパー
+│   ├── opfs-utils.js           # OPFSファイルシステムユーティリティ
 │   ├── worker.js               # 推論用Web Worker
-│   └── drive-backup.js         # 暗号化されたGoogleドライブバックアップ
+│   ├── drive-backup.js         # 暗号化されたGoogleドライブバックアップ
+│   ├── lucide.min.js           # セルフホスト版Lucideアイコン
+│   └── locales/                # 言語別ロケールファイル
 ├── vendor/
 │   └── transformers/           # セルフホスト版Transformers.js + ONNX Runtime WASM
 ├── test/                       # Vitestユニットテスト
@@ -322,7 +336,7 @@ LucidLLM/
 │   ├── compatibility.md        # 検証済みモデル一覧とQA基準
 │   └── roadmap.md              # 機能ロードマップ
 ├── favicon.svg                 # アプリアイコン
-└── package.json                # NPM設定（依存関係ゼロ）
+└── package.json                # NPM設定（アプリ依存関係ゼロ）
 ```
 
 ## 🤝 貢献について

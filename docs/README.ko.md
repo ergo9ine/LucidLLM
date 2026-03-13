@@ -3,7 +3,7 @@
 [한국어](README.ko.md) | [English](../README.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
 
 ![License](https://img.shields.io/github/license/ergo9ine/LucidLLM)
-![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0--next.1-yellow)
+![Transformers.js](https://img.shields.io/badge/Transformers.js-v4.0.0--next.6-yellow)
 ![WebGPU](https://img.shields.io/badge/WebGPU-Supported-green)
 ![PWA](https://img.shields.io/badge/PWA-Ready-brightgreen)
 
@@ -113,11 +113,15 @@ LucidLLM에서 정상 작동이 확인된 모델 목록입니다:
 
 ```
 index.html → bootstrap.js (엔트리)
-               ├─ i18n.js           번역 (511개 키 × 4개 언어, ~2,700줄)
-               ├─ shared-utils.js   순수 유틸리티 & 상수 (50개 export, ~1,000줄)
-               └─ main.js           코어: UI, 상태, OPFS, 추론 오케스트레이션 (~12,600줄)
-                    ├─ drive-backup.js   AES-GCM 암복호화, gzip, Drive 페이로드 포맷 (~300줄)
-                    └─ worker.js         웹 워커 — Transformers.js 파이프라인, OPFS fetch 가로채기 (~540줄)
+               ├─ constants.js          공용 상수 & 열거형 (무의존 모듈, ~121줄)
+               ├─ i18n-keys.js          i18n 키 정의 (~589줄)
+               ├─ i18n.js              번역 로더 (4개 언어, ~217줄) + locales/
+               ├─ shared-utils.js      순수 유틸리티 & 상수 (50개+ export, ~583줄)
+               ├─ shared-utils-i18n.js i18n 연동 유틸리티 (~41줄)
+               └─ main.js              코어: UI, 상태, OPFS, 추론 오케스트레이션 (~12,829줄)
+                    ├─ opfs-utils.js       OPFS 파일 시스템 유틸리티 (~397줄)
+                    ├─ drive-backup.js     AES-GCM 암복호화, gzip, Drive 페이로드 포맷 (~267줄)
+                    └─ worker.js           웹 워커 — Transformers.js 파이프라인, OPFS fetch 가로채기 (~626줄)
 ```
 
 - **빌드 단계 없음.** 모든 소스 파일이 네이티브 ES 모듈로 직접 서빙됩니다
@@ -126,6 +130,7 @@ index.html → bootstrap.js (엔트리)
 - **`window.LucidApp`**이 콘솔 접근을 위한 공개 디버그/API 인터페이스를 제공합니다
 - **웹 워커**가 별도 스레드에서 모델 로딩과 추론을 처리하며, 타입화된 메시지 열거형(`WORKER_MSG`)을 통한 `postMessage` 프로토콜로 통신합니다
 - **Worker 내 `window.fetch` 몽키패치**가 Hugging Face URL을 가로채 OPFS 캐시에서 먼저 서빙합니다
+- **`constants.js`**는 순환 의존성 방지를 위한 무의존(zero-import) 공용 상수 모듈입니다
 
 ## 📋 시스템 요구사항
 
@@ -265,12 +270,16 @@ npx playwright test        # E2E 테스트 (Chromium, 실제 모델 다운로드
 
 | 파일 | 줄 수 | 역할 |
 |------|-------|------|
-| `script/bootstrap.js` | ~106 | 초기화, 초기 i18n, 서비스 워커 등록 |
-| `script/main.js` | ~12,600 | 핵심 로직, 상태 머신, UI 렌더링, OPFS 관리 |
-| `script/i18n.js` | ~2,700 | 511개 번역 키 × 4개 언어 (ko/en/ja/zh-CN) |
-| `script/shared-utils.js` | ~1,000 | 50개 순수 유틸리티 함수 및 상수 |
-| `script/worker.js` | ~540 | Transformers.js 추론 파이프라인 웹 워커 |
-| `script/drive-backup.js` | ~300 | AES-GCM 암호화, gzip 압축, Drive API 헬퍼 |
+| `script/bootstrap.js` | ~116 | 초기화, 초기 i18n, 서비스 워커 등록 |
+| `script/constants.js` | ~121 | 공용 상수 & 열거형 (무의존 모듈) |
+| `script/i18n-keys.js` | ~589 | i18n 키 정의 (단일 진실 공급원) |
+| `script/i18n.js` | ~217 | 번역 로더 (ko/en/ja/zh-CN) + locales/ |
+| `script/shared-utils.js` | ~583 | 50개+ 순수 유틸리티 함수 및 상수 |
+| `script/shared-utils-i18n.js` | ~41 | i18n 연동 유틸리티 래퍼 |
+| `script/main.js` | ~12,829 | 핵심 로직, 상태 머신, UI 렌더링, OPFS 관리 |
+| `script/opfs-utils.js` | ~397 | OPFS 파일 시스템 헬퍼 및 유틸리티 |
+| `script/worker.js` | ~626 | Transformers.js 추론 파이프라인 웹 워커 |
+| `script/drive-backup.js` | ~267 | AES-GCM 암호화, gzip 압축, Drive API 헬퍼 |
 
 ## 🛠️ 기술 스택
 
@@ -278,17 +287,16 @@ npx playwright test        # E2E 테스트 (Chromium, 실제 모델 다운로드
 |------|------|
 | **언어** | JavaScript (ES2020+ Modules) |
 | **아키텍처** | Zero-build, Vanilla JS, No Framework, npm 의존성 제로 |
-| **ML 프레임워크** | Transformers.js v4.0.0-next.1 |
+| **ML 프레임워크** | Transformers.js v4.0.0-next.6 |
 | **모델 포맷** | ONNX (외부 데이터 지원) |
 | **추론 백엔드** | WebGPU / WASM (자동 전환) |
 | **스토리지** | Origin Private File System (OPFS), localStorage |
 | **암호화** | Web Crypto API (PBKDF2 + AES-GCM-256) |
 | **압축** | CompressionStream API (Gzip) |
 | **스타일링** | Tailwind CSS v3 (CDN) + Custom CSS Variables |
-| **아이콘** | Lucide Icons (CDN) |
+| **아이콘** | Lucide Icons (자체 호스팅) |
 | **폰트** | Space Grotesk (Google Fonts) |
 | **인증** | Google Identity Services (OAuth 2.0) |
-| **CDN** | jsDelivr, unpkg |
 | **테스트** | Vitest (단위), Playwright (E2E) |
 
 ## 🔒 보안 및 프라이버시
@@ -303,15 +311,21 @@ npx playwright test        # E2E 테스트 (Chromium, 실제 모델 다운로드
 ```
 LucidLLM/
 ├── index.html                  # 메인 HTML 엔트리 포인트 (1,200줄 이상)
-├── sw.js                       # 서비스 워커 (PWA 캐시, v1.2.0)
+├── sw.js                       # 서비스 워커 (PWA 캐시)
 ├── _headers                    # Cloudflare Pages COOP/COEP 헤더
 ├── script/
 │   ├── bootstrap.js            # 앱 초기화 및 초기 i18n
+│   ├── constants.js            # 공용 상수 & 열거형 (무의존 모듈)
 │   ├── main.js                 # 핵심 로직, 상태, UI 렌더링
+│   ├── i18n-keys.js            # i18n 키 정의
 │   ├── i18n.js                 # 다국어 모듈 (ko/en/ja/zh-CN)
 │   ├── shared-utils.js         # 공용 유틸리티 및 글로벌 API
+│   ├── shared-utils-i18n.js    # i18n 연동 유틸리티 래퍼
+│   ├── opfs-utils.js           # OPFS 파일 시스템 유틸리티
 │   ├── worker.js               # 추론 전용 웹 워커
-│   └── drive-backup.js         # 암호화된 구글 드라이브 백업
+│   ├── drive-backup.js         # 암호화된 구글 드라이브 백업
+│   ├── lucide.min.js           # 자체 호스팅 Lucide 아이콘
+│   └── locales/                # 언어별 로케일 파일
 ├── vendor/
 │   └── transformers/           # 자체 호스팅 Transformers.js + ONNX Runtime WASM
 ├── test/                       # Vitest 단위 테스트
@@ -322,7 +336,7 @@ LucidLLM/
 │   ├── compatibility.md        # 검증 모델 목록 및 QA 기준
 │   └── roadmap.md              # 기능 로드맵
 ├── favicon.svg                 # 앱 아이콘
-└── package.json                # NPM 설정 (의존성 제로)
+└── package.json                # NPM 설정 (앱 의존성 제로)
 ```
 
 ## 🤝 기여하기
